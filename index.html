@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0d24" />
+    <title>星光宠物纪念馆</title>
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <!-- 加载页 -->
+    <div id="loader">
+      <svg class="paw" viewBox="0 0 100 100" aria-hidden="true">
+        <ellipse cx="50" cy="66" rx="23" ry="18" />
+        <ellipse cx="22" cy="42" rx="8" ry="11" transform="rotate(-20 22 42)" />
+        <ellipse cx="40" cy="26" rx="8" ry="11" transform="rotate(-6 40 26)" />
+        <ellipse cx="60" cy="26" rx="8" ry="11" transform="rotate(6 60 26)" />
+        <ellipse cx="78" cy="42" rx="8" ry="11" transform="rotate(20 78 42)" />
+      </svg>
+      <h1 data-t="brand"></h1>
+      <p class="sub" data-t="subtitle"></p>
+      <div class="bar"><i id="progress"></i></div>
+      <p class="step" id="load-step"></p>
+      <button id="btn-enter" class="primary hidden" data-t="enter"></button>
+    </div>
+
+    <!-- 常驻界面 -->
+    <div id="hud" class="hidden">
+      <div class="brand">
+        <svg class="paw" viewBox="0 0 100 100" aria-hidden="true">
+          <ellipse cx="50" cy="66" rx="23" ry="18" />
+          <ellipse cx="22" cy="42" rx="8" ry="11" transform="rotate(-20 22 42)" />
+          <ellipse cx="40" cy="26" rx="8" ry="11" transform="rotate(-6 40 26)" />
+          <ellipse cx="60" cy="26" rx="8" ry="11" transform="rotate(6 60 26)" />
+          <ellipse cx="78" cy="42" rx="8" ry="11" transform="rotate(20 78 42)" />
+        </svg>
+        <span data-t="brand"></span>
+      </div>
+      <div class="top-right">
+        <button id="btn-sound"></button>
+        <button id="btn-quality"></button>
+        <button id="btn-help" data-t="help"></button>
+      </div>
+      <div class="bottom-bar">
+        <div class="group">
+          <button data-tp="gate" data-t="tpGate"></button>
+          <button data-tp="hall" data-t="tpHall"></button>
+          <button data-tp="memorial" data-t="tpMemorial"></button>
+        </div>
+        <button id="btn-search" data-t="search"></button>
+        <button id="btn-lantern" class="primary" data-t="lantern"></button>
+      </div>
+      <div id="hint"></div>
+      <div id="joystick"><i id="stick"></i></div>
+    </div>
+    <div id="tooltip"></div>
+    <div id="toast"></div>
+
+    <!-- 宠物详情 -->
+    <aside id="detail">
+      <button class="close" id="detail-close" aria-label="close">×</button>
+      <div class="photo"><img id="detail-photo" alt="" /></div>
+      <h2 id="detail-name"></h2>
+      <p class="meta" id="detail-meta"></p>
+      <p class="meta" id="detail-dates"></p>
+      <blockquote id="detail-message"></blockquote>
+      <div class="offer">
+        <button id="btn-flower"><span data-t="detailFlower"></span><b id="count-flower"></b></button>
+        <button id="btn-candle"><span data-t="detailCandle"></span><b id="count-candle"></b></button>
+      </div>
+      <h3 data-t="detailComments"></h3>
+      <ul class="messages" id="detail-comments"></ul>
+      <form id="detail-form">
+        <input id="detail-input" maxlength="80" autocomplete="off" />
+        <button class="primary" data-t="detailSend"></button>
+      </form>
+    </aside>
+
+    <!-- 弹窗 -->
+    <div class="modal" id="modal-lantern">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 data-t="lanternTitle"></h2>
+        <p data-t="lanternDesc"></p>
+        <form id="lantern-form">
+          <input id="lantern-input" maxlength="24" autocomplete="off" />
+          <button class="primary" data-t="lanternGo"></button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal" id="modal-guestbook">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 data-t="guestbookTitle"></h2>
+        <ul class="messages" id="guestbook-list"></ul>
+        <form id="guestbook-form">
+          <input id="guestbook-input" maxlength="80" autocomplete="off" />
+          <button class="primary" data-t="guestbookSend"></button>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal" id="modal-search">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 data-t="searchTitle"></h2>
+        <input id="search-input" autocomplete="off" />
+        <ul class="results" id="search-results"></ul>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

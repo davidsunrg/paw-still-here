@@ -1,0 +1,179 @@
+import * as THREE from 'three';
+import type { Pet } from '../data/pets';
+import { canvasTexture, drawPortrait, FONT, makeCanvas } from './textures';
+
+export interface PhotoEntry {
+  pet: Pet;
+  center: THREE.Vector3;
+  normal: THREE.Vector3;
+  rotY: number;
+  w: number;
+  h: number;
+  /** 点击后镜头停在相框前多远 */
+  focusDist: number;
+}
+
+/** 把一批朝向任意的矩形合并进一个几何体 */
+class QuadBatch {
+  private pos: number[] = [];
+  private uv: number[] = [];
+  private idx: number[] = [];
+  private n = 0;
+
+  /** uv: [u0, vBottom, u1, vTop] */
+  quad(center: THREE.Vector3, rotY: number, w: number, h: number, uv: [number, number, number, number]) {
+    const rx = Math.cos(rotY) * (w / 2);
+    const rz = -Math.sin(rotY) * (w / 2);
+    const { x, y, z } = center;
+    const hh = h / 2;
+    this.pos.push(
+      x - rx, y - hh, z - rz,
+      x + rx, y - hh, z + rz,
+      x + rx, y + hh, z + rz,
+      x - rx, y + hh, z - rz,
+    );
+    const [u0, v0, u1, v1] = uv;
+    this.uv.push(u0, v0, u1, v0, u1, v1, u0, v1);
+    const b = this.n * 4;
+    this.idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    this.n++;
+  }
+
+  geometry() {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setIndex(this.idx);
+    g.computeBoundingSphere();
+    return g;
+  }
+}
+
+/**
+ * 所有宠物照片共用一张图集和一个网格：
+ * 每只宠物在图集里占一格，照片墙和纪念柜里的相框都引用同一格。
+ */
+export class PhotoBatch {
+  static readonly CELL = 204;
+  static readonly COLS = 10;
+  static readonly SIZE = 2048;
+
+  readonly entries: PhotoEntry[] = [];
+  mesh?: THREE.Mesh;
+  private quads = new QuadBatch();
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private texture: THREE.CanvasTexture;
+  private cellOf = new Map<string, number>();
+
+  constructor(pets: Pet[]) {
+    [this.canvas, this.ctx] = makeCanvas(PhotoBatch.SIZE, PhotoBatch.SIZE);
+    this.texture = canvasTexture(this.canvas);
+    const { CELL, COLS } = PhotoBatch;
+    pets.forEach((pet, i) => {
+      this.cellOf.set(pet.id, i);
+      const x = (i % COLS) * CELL;
+      const y = Math.floor(i / COLS) * CELL;
+      drawPortrait(this.ctx, x, y, CELL, pet);
+      if (pet.photoUrl) this.loadPhoto(pet.photoUrl, x, y);
+    });
+  }
+
+  /** 真实照片加载完成后，以「裁剪填满」的方式覆盖占位画像 */
+  private loadPhoto(url: string, x: number, y: number) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const { CELL } = PhotoBatch;
+      const s = Math.min(img.width, img.height);
+      this.ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, x, y, CELL, CELL);
+      this.texture.needsUpdate = true;
+    };
+    img.src = url;
+  }
+
+  add(pet: Pet, center: THREE.Vector3, rotY: number, w: number, h: number, focusDist: number) {
+    const { CELL, COLS, SIZE } = PhotoBatch;
+    const i = this.cellOf.get(pet.id) ?? 0;
+    const inset = 2;
+    const cx = (i % COLS) * CELL;
+    const cy = Math.floor(i / COLS) * CELL;
+    this.quads.quad(center, rotY, w, h, [
+      (cx + inset) / SIZE,
+      1 - (cy + CELL - inset) / SIZE,
+      (cx + CELL - inset) / SIZE,
+      1 - (cy + inset) / SIZE,
+    ]);
+    this.entries.push({
+      pet,
+      center: center.clone(),
+      normal: new THREE.Vector3(Math.sin(rotY), 0, Math.cos(rotY)),
+      rotY,
+      w,
+      h,
+      focusDist,
+    });
+  }
+
+  build(parent: THREE.Object3D) {
+    const mat = new THREE.MeshBasicMaterial({ map: this.texture, color: 0xd8d2cc });
+    this.mesh = new THREE.Mesh(this.quads.geometry(), mat);
+    this.mesh.frustumCulled = false;
+    parent.add(this.mesh);
+  }
+
+  /** 由射线命中的三角面序号反查是哪张照片 */
+  entryOfFace(faceIndex: number) {
+    return this.entries[Math.floor(faceIndex / 2)];
+  }
+}
+
+/** 相框下方的小名牌，同样合并成一张图集 + 一个网格 */
+export class LabelBatch {
+  private static readonly CW = 256;
+  private static readonly CH = 64;
+  private static readonly W = 2048;
+  private static readonly H = 1024;
+
+  private quads = new QuadBatch();
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private count = 0;
+
+  constructor() {
+    [this.canvas, this.ctx] = makeCanvas(LabelBatch.W, LabelBatch.H);
+  }
+
+  add(text: string, center: THREE.Vector3, rotY: number, w: number, h: number) {
+    const { CW, CH, W, H } = LabelBatch;
+    const cols = W / CW;
+    if (this.count >= cols * (H / CH)) return;
+    const x = (this.count % cols) * CW;
+    const y = Math.floor(this.count / cols) * CH;
+    this.count++;
+
+    const ctx = this.ctx;
+    const g = ctx.createLinearGradient(0, y, 0, y + CH);
+    g.addColorStop(0, '#e9d3a2');
+    g.addColorStop(1, '#c9a868');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, CW, CH);
+    ctx.strokeStyle = 'rgba(90,60,20,0.55)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x + 3, y + 3, CW - 6, CH - 6);
+    ctx.fillStyle = '#3d2a14';
+    ctx.font = `600 30px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + CW / 2, y + CH / 2 + 2, CW - 20);
+
+    this.quads.quad(center, rotY, w, h, [x / W, 1 - (y + CH) / H, (x + CW) / W, 1 - y / H]);
+  }
+
+  build(parent: THREE.Object3D) {
+    const mat = new THREE.MeshBasicMaterial({ map: canvasTexture(this.canvas), color: 0xc8c0b4 });
+    const mesh = new THREE.Mesh(this.quads.geometry(), mat);
+    mesh.frustumCulled = false;
+    parent.add(mesh);
+  }
+}

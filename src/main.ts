@@ -1,0 +1,251 @@
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { CONFIG, ZONES } from './config';
+import type { Pet } from './data/pets';
+import { store } from './data/store';
+import { STR } from './strings';
+import { AudioSystem } from './systems/AudioSystem';
+import { Guide } from './systems/Guide';
+import { Interaction } from './systems/Interaction';
+import { Player } from './systems/Player';
+import { UI } from './ui/UI';
+import './ui/style.css';
+import type { PhotoEntry } from './world/Batches';
+import { pathX } from './world/Outdoor';
+import { World } from './world/World';
+
+const canvas = document.getElementById('scene') as HTMLCanvasElement;
+
+// ---------- 渲染器 ----------
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 900);
+
+const composer = new EffectComposer(
+  renderer,
+  new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType, samples: 4 }),
+);
+composer.addPass(new RenderPass(scene, camera));
+// 只有亮度超过 1 的自发光物体（灯、烛火、孔明灯）会产生辉光
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.62, 0.7, 1.0));
+composer.addPass(new OutputPass());
+
+// ---------- 世界、玩家与各系统 ----------
+const world = new World(scene);
+const player = new Player(camera, canvas, world.colliders);
+const audio = new AudioSystem();
+const guide = new Guide(scene);
+let interaction: Interaction | null = null;
+let entered = false;
+let blocked = false;
+let quality: 'high' | 'low' = 'high';
+
+const ui = new UI({
+  onEnter() {
+    entered = true;
+    void audio.start().then(() => audio.setMuted(false));
+  },
+  onTeleport(target) {
+    guide.clear();
+    if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
+    else if (target === 'hall') player.teleport(0, -2.2, 0);
+    else player.teleport(0, ZONES.memFront - 2.5, 0);
+  },
+  onLantern(text) {
+    const from = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw))
+      .multiplyScalar(2.4)
+      .add(player.pos)
+      .setY(1.25);
+    world.sky.launch(from, text);
+    store.addLantern();
+    audio.chime(true);
+  },
+  onToggleSound() {
+    audio.setMuted(!audio.muted);
+    return audio.muted;
+  },
+  onToggleQuality() {
+    quality = quality === 'high' ? 'low' : 'high';
+    applyQuality();
+    return quality;
+  },
+  onDetailClosed() {
+    player.release();
+    interaction?.setHighlight(null);
+  },
+  onOffering(pet, kind) {
+    world.addOffering(pet, kind);
+    audio.chime(kind === 'candle');
+  },
+  onGuide(pet) {
+    ui.closeAll();
+    const entry = cabinetEntry(pet);
+    guide.show(world.routeTo(pet, player.pos), () => {
+      ui.toast(STR.guideArrive(pet.name));
+      if (entry) openPet(entry);
+    });
+    ui.toast(STR.guideToast(pet.name));
+  },
+  onGoto(pet) {
+    ui.closeAll();
+    guide.clear();
+    const entry = cabinetEntry(pet);
+    const slot = world.slots.get(pet.id);
+    if (!entry || !slot) return;
+    player.teleport(slot.frame.x, slot.cabinetZ + 1.7, 0);
+    openPet(entry);
+  },
+  onBlockingChange(b) {
+    blocked = b;
+    player.enabled = !b;
+    if (b) clearHover();
+  },
+});
+
+world.hooks.guestbook = () => ui.openGuestbook();
+world.hooks.reception = () => ui.openSearch();
+
+/** 宠物在纪念柜里的那张相框（照片墙上的不算） */
+function cabinetEntry(pet: Pet) {
+  const slot = world.slots.get(pet.id);
+  return world.photos.entries.find((e) => e.pet === pet && slot && e.center.equals(slot.frame));
+}
+
+function openPet(entry: PhotoEntry) {
+  player.focus(entry.center, entry.normal, entry.focusDist);
+  ui.openDetail(entry.pet);
+  interaction?.setHighlight(entry);
+}
+
+// ---------- 悬停与点击 ----------
+const mouse = { x: 0, y: 0, inside: false, isMouse: false };
+
+function clearHover() {
+  ui.setTooltip(null);
+  canvas.classList.remove('pointing');
+  if (!ui.detailOpen) interaction?.setHighlight(null);
+}
+
+canvas.addEventListener('pointermove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+  mouse.inside = true;
+  mouse.isMouse = e.pointerType === 'mouse';
+});
+canvas.addEventListener('pointerleave', () => {
+  mouse.inside = false;
+  clearHover();
+});
+canvas.addEventListener('pointerdown', () => canvas.classList.add('dragging'));
+window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
+
+player.onTap = (x, y) => {
+  if (!entered || !interaction) return;
+  if (ui.detailOpen) {
+    ui.closeDetail();
+    return;
+  }
+  if (blocked) return;
+  const hit = interaction.pick(x, y);
+  if (!hit) return;
+  if (hit.kind === 'pet') openPet(hit.entry);
+  else hit.item.onClick();
+};
+
+function updateHover() {
+  if (!interaction || !entered || blocked || !mouse.inside || !mouse.isMouse || player.dragging) return;
+  const hit = interaction.pick(mouse.x, mouse.y);
+  if (!hit) {
+    clearHover();
+    return;
+  }
+  ui.setTooltip(hit.label, mouse.x, mouse.y);
+  canvas.classList.add('pointing');
+  interaction.setHighlight(hit.kind === 'pet' ? hit.entry : null);
+}
+
+ui.bindJoystick((x, y) => player.stick.set(x, y));
+
+// ---------- 画质与尺寸 ----------
+function pixelRatio() {
+  return Math.min(window.devicePixelRatio, quality === 'high' ? 1.5 : 1);
+}
+
+function applyQuality() {
+  const pr = pixelRatio();
+  renderer.setPixelRatio(pr);
+  composer.setPixelRatio(pr);
+  if (world.moonLight) world.moonLight.castShadow = quality === 'high';
+  world.setLightBudget(quality === 'high' ? CONFIG.lights.pool : CONFIG.lights.poolLow);
+  resize();
+}
+
+function resize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  composer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+// ---------- 主循环 ----------
+const clock = new THREE.Clock();
+let viewShift = 0;
+
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  player.update(dt);
+  world.update(dt, t, camera, pixelRatio());
+  guide.update(t, player.pos);
+  interaction?.update(t);
+  updateHover();
+
+  // 详情面板打开时，把画面主体让到面板左侧
+  const targetShift = ui.detailWidth / 2;
+  viewShift += (targetShift - viewShift) * (1 - Math.exp(-dt * 6));
+  if (viewShift > 0.5) camera.setViewOffset(window.innerWidth, window.innerHeight, viewShift, 0, window.innerWidth, window.innerHeight);
+  else if (camera.view) camera.clearViewOffset();
+
+  if (quality === 'high') composer.render(dt);
+  else renderer.render(scene, camera);
+}
+
+// ---------- 启动 ----------
+async function boot() {
+  quality = ui.isTouch ? 'low' : 'high';
+  ui.setQualityLabel(quality);
+  player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
+
+  const steps = world.steps();
+  for (let i = 0; i < steps.length; i++) {
+    const [key, run] = steps[i];
+    ui.setProgress(i / steps.length, STR.loadingSteps[key]);
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    run();
+  }
+  interaction = new Interaction(camera, world);
+  applyQuality();
+  ui.setProgress(1, '');
+  renderer.setAnimationLoop(frame);
+  // 等第一帧（着色器编译）结束后再显示入口按钮
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
+  ui.ready();
+
+  if (import.meta.env.DEV) {
+    Object.assign(window, { __memorial: { player, world, ui, camera, renderer } });
+  }
+}
+
+void boot();
