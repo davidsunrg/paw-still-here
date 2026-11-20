@@ -5,13 +5,12 @@ import type { Section, Species } from '../data/pets';
  * 访客能看到的字都在这里，包括场景里的字、示例宠物的名字和寄语。
  */
 export const en = {
-  /** 这门语言的排版：html 的 lang、字体、标题的字间距（相对中文的倍数）、石柱上寄语一行最多几个字符 */
+  /** 这门语言的排版：html 的 lang、字体、标题的字间距（相对中文的倍数） */
   style: {
     lang: 'en',
     serif: "'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif",
     sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     tracking: 0.2,
-    pillarLine: 26,
   },
 
   brand: 'Paw Still Here',
@@ -26,7 +25,7 @@ export const en = {
     url: 'https://pawstillhere.com/',
     title: 'Paw Still Here · A quiet place to remember your pet',
     description:
-      "As long as they're remembered, they're still with us. Walk through a quiet memorial under the night sky, visit their courtyard, leave a flower, light a candle, or write them a letter.",
+      "As long as they're remembered, they're still with us. Walk through a quiet memorial under the night sky, stop at their photo, leave a flower, light a candle, or write them a letter.",
   },
   loading: 'Lighting the stars…',
   loadingSteps: {
@@ -37,14 +36,14 @@ export const en = {
     lantern: 'Folding the paper lanterns…',
     hall: 'Setting up the lobby…',
     gallery: 'Hanging the frames…',
-    space: 'Sweeping the courtyard…',
+    shrine: 'Dusting the little shelves…',
     cinema: 'Dimming the theater lights…',
     cave: 'Filling the river in the cave…',
     finish: 'Almost there…',
   },
   enter: 'Enter',
-  hintDesktop: 'WASD or click the ground to move · Drag to look around · Scroll to zoom · Shift to run · Click a frame to visit',
-  hintTouch: 'Left stick or tap the ground to move · Swipe on the right to look around · Tap a frame to visit',
+  hintDesktop: 'WASD or click the ground to move · Drag to look around · Scroll to zoom · Shift to run · Click a photo to visit them',
+  hintTouch: 'Left stick or tap the ground to move · Swipe on the right to look around · Tap a photo to visit them',
 
   soundOn: 'Sound: on',
   soundOff: 'Sound: off',
@@ -65,7 +64,7 @@ export const en = {
   /** 右墙两个入口之间的一行字 */
   wallTitleRight: 'Stay a while.',
 
-  tipPet: 'Visit their courtyard',
+  tipPet: 'Visit them',
   tipLetters: 'Read the letters written to them',
   tipBench: 'Sit for a while',
   /** 纪念树：点树 */
@@ -107,7 +106,7 @@ export const en = {
   /** 来历：这件事在很多地方意味着什么（放在怎么做之前） */
   fireLore: 'Giving a letter to the fire is an old way of sending words you cannot deliver by hand.',
   fireDesc: 'Write down what you want to say and give it to the fire. Your words rise as sparks into the night sky.',
-  fireNote: 'A burned letter is not saved. We only remember that you wrote to them. To keep a letter, leave it in their courtyard instead.',
+  fireNote: 'A burned letter is not saved. We only remember that you wrote to them. To keep a letter, leave it beside their photo instead.',
   firePlaceholder: 'What you want to tell them…',
   fireFor: (name: string) => `This letter is for ${name}`,
   fireGo: 'Give it to the fire',
@@ -139,15 +138,20 @@ export const en = {
     toy: (name: string) => `You brought ${name} a toy`,
     letter: (name: string) => `Your letter is now beside ${name}`,
   },
-  shrineHint: 'Use the icons below to leave something for them · Walk out of the courtyard or press Esc to go back',
-  shrineHintTouch: 'Use the icons below to leave something for them · Walk out of the courtyard to go back',
-  spaceLeave: 'Back to the frame',
+  shrineHint: 'Drag to look around · Esc to go back',
+  shrineHintTouch: 'Drag to look around · Tap outside to go back',
+  shrineLeave: 'Back',
+  /** 相册 */
+  albumLabel: 'Photos',
+  photoPrev: 'Previous photo',
+  photoNext: 'Next photo',
+  photoOf: (i: number, n: number) => `Photo ${i} of ${n}`,
   riteRiver: 'Float a river lantern',
   riteFire: 'Burn a letter',
 
   /**
-   * 信：每一封都挂在纪念树上（树上的一块木牌）。写给某一只的，同时留在它的小院里。
-   * 底部的按钮、弹窗的标题和说明；只看写给某一只的时候的标题、回到全部的按钮；小院里的按钮
+   * 信：每一封都挂在纪念树上（树上的一块木牌）。写给某一只的，同时留在它的小龛里。
+   * 底部的按钮、弹窗的标题和说明；只看写给某一只的时候的标题、回到全部的按钮；单宠物视角里的按钮
    */
   letters: 'Letters',
   lettersTitle: 'Letters on the tree',
@@ -166,7 +170,7 @@ export const en = {
   letterTo: (name: string) => `To ${name}`,
   letterToAll: 'To all the little ones here',
   letterMine: 'Yours',
-  /** 每封信右上角：去它的小院看看 */
+  /** 每封信右上角：去看看它 */
   letterVisit: (name: string) => `Visit ${name}`,
   /** 每封信下面：爱心（给看不见图标的人念的）、回一句、回的话有几条、输入框、发送、举报、举报之后的一行字 */
   letterHeart: 'Send a heart',

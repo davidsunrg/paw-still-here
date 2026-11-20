@@ -135,11 +135,11 @@ export function sofa(w: World, cx: number, cz: number, rot: number, width: numbe
   w.collide(cx, cz, sx, sz);
 }
 
-/** 长椅；seated 为 false 时不登记座位（模拟访客不会来坐） */
-export function bench(w: World, cx: number, cz: number, rot: number, width = 1.8, seated = true) {
+/** 长椅 */
+export function bench(w: World, cx: number, cz: number, rot: number, width = 1.8) {
   const { kit } = w;
   const P = placer(cx, cz, rot);
-  if (seated) seats(w, P, rot, width / 4, 0.02, 0.485);
+  seats(w, P, rot, width / 4, 0.02, 0.485);
   const wood = CONFIG.colors.woodLight;
   const dark = 0x33333b;
   const b = (lx: number, y: number, lz: number, sx: number, sy: number, sz: number, c: number) => {

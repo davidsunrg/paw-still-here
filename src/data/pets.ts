@@ -17,7 +17,7 @@ export interface Pet {
   passedDate: string;
   /** 真实照片地址；为空时使用程序生成的占位画像 */
   photoUrl?: string;
-  /** 相册里另外的照片地址（不含上面那张）。小院的墙上会挂出来 */
+  /** 相册里另外的照片地址（不含上面那张）。打开它的小龛时挂在主相框两侧 */
   photos?: string[];
   /** 主人寄语 */
   message: string;
@@ -141,17 +141,16 @@ export interface Shot {
 }
 
 /**
- * 一只宠物相册里除了主照片之外的几张，最多 CONFIG.space.album.angles.length 张。
+ * 一只宠物相册里除了主照片之外的几张，张数不限。
  * 填了 photos 的用它的真实照片；只有一张真实照片的没有相册；
  * 示例宠物用几张不同的占位画像，每只两到四张。
  */
 export function albumOf(pet: Pet): Shot[] {
-  const A = CONFIG.space.album;
-  const max = A.angles.length;
-  if (pet.photos?.length) return pet.photos.slice(0, max).map((url, i) => ({ url, variant: 1 + (i % A.variants) }));
+  const A = CONFIG.shrine.album;
+  if (pet.photos?.length) return pet.photos.map((url, i) => ({ url, variant: 1 + (i % A.variants) }));
   if (pet.photoUrl) return [];
   const n = Number(pet.id.replace(/\D/g, '')) || 0;
   const [lo, hi] = A.sample;
-  const count = Math.min(max, A.variants, lo + (n % (hi - lo + 1)));
+  const count = Math.min(A.variants, lo + (n % (hi - lo + 1)));
   return Array.from({ length: count }, (_, i) => ({ variant: 1 + ((n + i) % A.variants) }));
 }

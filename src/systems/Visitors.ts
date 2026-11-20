@@ -44,6 +44,9 @@ export class Crowd {
   limit: number;
   /** 「独自参观」时整个隐藏 */
   hidden = false;
+  /** 访客在看某一只宠物的小龛时，其他人慢慢淡出，不挡在镜头和小龛之间 */
+  away = false;
+  private show = 1;
 
   private batch: AvatarBatch;
   private poses: AvatarPose[];
@@ -67,6 +70,7 @@ export class Crowd {
     if (this.hidden) return;
 
     const k = 1 - Math.exp(-dt * 10);
+    this.show += ((this.away ? 0 : 1) - this.show) * (1 - Math.exp(-dt * 5));
     for (let i = 0; i < this.max; i++) {
       const s = i < this.limit ? states[i] : undefined;
       const p = this.poses[i];
@@ -94,7 +98,7 @@ export class Crowd {
       p.stride += (Math.min(1, speed / 1.6) * 0.8 - p.stride) * k;
       p.sit += ((s.posture === 'sit' ? 1 : 0) - p.sit) * (1 - Math.exp(-dt * 3.5));
       p.bow += ((s.bowed ? 0.3 : 0) - p.bow) * (1 - Math.exp(-dt * 3));
-      p.alpha = s.alpha;
+      p.alpha = s.alpha * this.show;
       p.scale = 1;
       p.color = s.color;
       this.batch.set(i, p, t);

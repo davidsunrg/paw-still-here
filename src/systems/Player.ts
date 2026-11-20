@@ -55,19 +55,21 @@ interface Goal {
   stuck: number;
 }
 
-/**
- * 一块圆形的活动范围（宠物的专属小院）：四周是弧墙，只有朝 +Z 的缺口可以走出去一小段。
- * 设置之后，小人和镜头都被限制在里面，不再使用主场景的边界。
- */
-export interface Area {
-  x: number;
-  z: number;
-  /** 弧墙内侧的半径 */
-  r: number;
-  /** 缺口向两侧各张开多少弧度 */
-  gap: number;
-  /** 从缺口最远能走出多远 */
-  out: number;
+/** 单宠物特写 */
+interface Focus {
+  /** 镜头的位置和朝向 */
+  cam: THREE.Vector3;
+  yaw: number;
+  /** 正对目标时的朝向、离目标多远；turn 是拖动后绕着目标转过的角度，turnTo 是它要去的值 */
+  base: number;
+  dist: number;
+  turn: number;
+  turnTo: number;
+  /** 镜头转的时候能不能到某个位置（除了不进墙之外的限制） */
+  allow?: (x: number, z: number) => boolean;
+  /** 小人站到哪里、面向哪里 */
+  stand: THREE.Vector3;
+  look: THREE.Vector3;
 }
 
 /** 一块矩形的活动范围（影厅）：墙本身有碰撞，这里只是代替主场景的边界 */
@@ -94,8 +96,6 @@ export class Player {
   fade = 1;
   /** 打开面板时暂停移动 */
   enabled = true;
-  /** 不为空时，小人只能在这块范围里活动 */
-  area: Area | null = null;
   /** 不为空时，小人在这个矩形里活动，不再使用主场景的边界 */
   room: Room | null = null;
   /**
@@ -116,6 +116,10 @@ export class Player {
   /** 镜头想要的距离，和避开遮挡之后实际的距离 */
   private dist = CAM.dist;
   private boom = CAM.dist;
+  /** 单宠物特写：focus 不为空时镜头推到小龛前，blend 是特写镜头占的比重 */
+  private focus: Focus | null = null;
+  private lastFocus: Focus | null = null;
+  private blend = 0;
   private goal: Goal | null = null;
   /** 坐着的时候，记着站起来要回到哪里 */
   private seat: { x: number; z: number } | null = null;
@@ -125,6 +129,9 @@ export class Player {
   private down = { x: 0, y: 0, t: 0, multi: false };
 
   private pivot = new THREE.Vector3();
+  private orbit = new THREE.Vector3();
+  private qa = new THREE.Quaternion();
+  private qb = new THREE.Quaternion();
   private euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
   constructor(
@@ -160,6 +167,11 @@ export class Player {
       last.x = e.clientX;
       last.y = e.clientY;
       if (!this.enabled) return;
+      if (this.focus) {
+        // 特写时左右拖动：镜头绕着小龛转，像把它拿在手里左右转着看
+        if (e.pointerId === this.lookId && this.pointers.size === 1) this.turnFocus(-dx * 0.005);
+        return;
+      }
       if (this.pointers.size >= 2) {
         // 双指缩放
         const span = this.pinchSpan();
@@ -186,10 +198,20 @@ export class Player {
     dom.addEventListener(
       'wheel',
       (e) => {
-        if (this.enabled) this.zoom(Math.exp(THREE.MathUtils.clamp(e.deltaY, -120, 120) * 0.0016));
+        if (this.enabled && !this.focus) this.zoom(Math.exp(THREE.MathUtils.clamp(e.deltaY, -120, 120) * 0.0016));
       },
       { passive: true },
     );
+  }
+
+  /** 特写镜头绕目标转 by 弧度；转到头或者镜头会进墙就不再转 */
+  private turnFocus(by: number) {
+    const f = this.focus;
+    if (!f) return;
+    const to = THREE.MathUtils.clamp(f.turnTo + by, -CAM.focusTurn, CAM.focusTurn);
+    const x = f.look.x + Math.sin(f.base + to) * f.dist;
+    const z = f.look.z + Math.cos(f.base + to) * f.dist;
+    if (!this.blocked(x, z) && (f.allow?.(x, z) ?? true)) f.turnTo = to;
   }
 
   private pinchSpan() {
@@ -215,6 +237,7 @@ export class Player {
    * 实在过不去就停下（如果已经离得不远，仍然算到了）。键盘、摇杆、打开面板都会取消。
    */
   walkTo(x: number, z: number, radius = 0.15, done?: () => void) {
+    if (this.focus) return;
     this.goal = { x, z, radius, done, stuck: 0 };
   }
 
@@ -264,6 +287,10 @@ export class Player {
     return this.seat !== null;
   }
 
+  get focused() {
+    return this.focus !== null;
+  }
+
   /** 小人面朝的方向（水平单位向量） */
   forward(out = new THREE.Vector3()) {
     return out.set(-Math.sin(this.facing), 0, -Math.cos(this.facing));
@@ -276,8 +303,10 @@ export class Player {
 
   /** 把小人放到某处；yaw / pitch 是镜头的朝向，小人默认面向同一个方向 */
   teleport(x: number, z: number, yaw: number, pitch = CAM.pitch, facing = yaw) {
+    this.focus = this.lastFocus = null;
     this.goal = null;
     this.seat = null;
+    this.blend = 0;
     this.pos.set(x, 0, z);
     this.yaw = yaw;
     this.facing = facing;
@@ -286,18 +315,41 @@ export class Player {
     this.stride = 0;
   }
 
+  /**
+   * 单宠物特写：镜头平滑推到目标正前方 dist 米处，小人留在原地、面向它。
+   */
+  focusOn(target: THREE.Vector3, normal: THREE.Vector3, dist: number, allow = this.focus?.allow) {
+    const yaw = Math.atan2(normal.x, normal.z);
+    const cam = target.clone().addScaledVector(normal, dist);
+    cam.y = Math.max(0.95, target.y);
+    // 小人留在原地（特写时它是淡出的），只转身面向目标
+    const stand = this.focus?.stand ?? this.pos.clone();
+    const turn = this.focus?.turn ?? 0;
+    this.focus = { cam, yaw, base: yaw, dist, turn, turnTo: this.focus?.turnTo ?? 0, allow, stand, look: target.clone() };
+    this.goal = null;
+    this.seat = null;
+  }
+
+  /** 打开另一只宠物：镜头从正面重新开始 */
+  refocus(target: THREE.Vector3, normal: THREE.Vector3, dist: number, allow?: (x: number, z: number) => boolean) {
+    this.focus = null;
+    this.focusOn(target, normal, dist, allow);
+  }
+
+  /** 结束特写：小人留在原地，镜头回到它身后 */
+  release() {
+    if (!this.focus) return;
+    this.lastFocus = this.focus;
+    this.yaw = this.focus.base;
+    this.pitch = CAM.pitch;
+    this.focus = null;
+  }
+
   /** 小人能不能站在 (x, z) */
   blocked(x: number, z: number) {
     const r = CONFIG.player.radius;
     for (const c of this.colliders) {
       if (x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r) return true;
-    }
-    const a = this.area;
-    if (a) {
-      const dx = x - a.x;
-      const dz = z - a.z;
-      const open = Math.abs(Math.atan2(dx, dz)) < a.gap;
-      return Math.hypot(dx, dz) > (open ? a.r + a.out : a.r - r);
     }
     const m = this.room;
     if (m) return x < m.minX || x > m.maxX || z < m.minZ || z > m.maxZ;
@@ -317,6 +369,20 @@ export class Player {
 
   private move(dt: number) {
     const { walk, run } = CONFIG.player;
+    const f = this.focus;
+    if (f) {
+      // 走到小龛旁边站好，然后转身面向它
+      const dx = f.stand.x - this.pos.x;
+      const dz = f.stand.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 0.04) {
+        const speed = Math.min(Math.max(walk, d * 1.6), d / dt);
+        return this.step(dx / d, dz / d, speed, dt, false);
+      }
+      const to = Math.atan2(-(f.look.x - this.pos.x), -(f.look.z - this.pos.z));
+      this.facing = angleLerp(this.facing, to, 1 - Math.exp(-dt * 6));
+      return 0;
+    }
     if (!this.enabled || this.riding) {
       this.goal = null;
       // 在船上仍然可以用键盘转头
@@ -367,20 +433,6 @@ export class Player {
     for (const c of this.colliders) {
       if (c.tall) t = Math.min(t, segmentEnter(c, CAM.pad, x0, z0, x1, z1));
     }
-    // 小院里：镜头不穿出弧墙（朝缺口的方向除外）
-    const a = this.area;
-    if (a && horizontal > 1e-3) {
-      const px = x0 - a.x;
-      const pz = z0 - a.z;
-      const rr = a.r - CAM.pad;
-      const c = px * px + pz * pz - rr * rr;
-      if (c < 0) {
-        const b = px * dirX + pz * dirZ;
-        const s = -b + Math.sqrt(b * b - c);
-        const open = Math.abs(Math.atan2(px + dirX * s, pz + dirZ * s)) < a.gap;
-        if (!open) t = Math.min(t, s / horizontal);
-      }
-    }
     let max = want * t;
     // 仰视时镜头不能钻到地面以下
     const sinP = Math.sin(this.pitch);
@@ -402,12 +454,35 @@ export class Player {
     const room = this.clearance(backX, backZ, Math.min(this.dist, this.boomLimit));
     // 被挡住时立刻拉近，离开遮挡后慢慢恢复
     this.boom = room < this.boom ? room : this.boom + (room - this.boom) * (1 - Math.exp(-dt * 4));
-    this.camera.position.set(
+    this.orbit.set(
       this.pivot.x + backX * cp * this.boom,
       this.pivot.y - Math.sin(this.pitch) * this.boom,
       this.pivot.z + backZ * cp * this.boom,
     );
-    this.camera.quaternion.setFromEuler(this.euler.set(this.pitch, this.yaw, 0));
+    this.qa.setFromEuler(this.euler.set(this.pitch, this.yaw, 0));
+
+    // 特写镜头和跟随镜头之间平滑过渡
+    this.blend += ((this.focus ? 1 : 0) - this.blend) * (1 - Math.exp(-dt * 4.5));
+    if (!this.focus && this.blend < 0.002) {
+      this.blend = 0;
+      this.lastFocus = null;
+    }
+    if (this.focus) {
+      const c = this.focus;
+      c.turn += (c.turnTo - c.turn) * (1 - Math.exp(-dt * 14));
+      c.yaw = c.base + c.turn;
+      c.cam.x = c.look.x + Math.sin(c.yaw) * c.dist;
+      c.cam.z = c.look.z + Math.cos(c.yaw) * c.dist;
+    }
+    const f = this.focus ?? this.lastFocus;
+    if (f && this.blend > 0) {
+      this.qb.setFromEuler(this.euler.set(0, f.yaw, 0));
+      this.camera.position.lerpVectors(this.orbit, f.cam, this.blend);
+      this.camera.quaternion.slerpQuaternions(this.qa, this.qb, this.blend);
+    } else {
+      this.camera.position.copy(this.orbit);
+      this.camera.quaternion.copy(this.qa);
+    }
 
     const near = this.camera.position.distanceTo(this.pivot);
     this.fade = THREE.MathUtils.smoothstep(near, CAM.fadeNear, CAM.fadeFar);

@@ -183,7 +183,7 @@ function luminance(hex: string) {
 
 /**
  * 相册里另外几张占位画像的画法：换一个背景，宠物换个位置、大小和歪头的角度。
- * 第 0 张是照片墙上那张正面像，不在这里。这里有几种，CONFIG.space.album.variants 就填几。
+ * 第 0 张是照片墙上那张正面像，不在这里。这里有几种，CONFIG.shrine.album.variants 就填几。
  */
 interface Pose {
   scale: number;
@@ -414,8 +414,8 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
 }
 
 /** 详情面板使用的大图 */
-export function portraitDataURL(pet: Pet, size = 360) {
+export function portraitDataURL(pet: Pet, size = 360, variant = 0) {
   const [c, ctx] = makeCanvas(size, size);
-  drawPortrait(ctx, 0, 0, size, pet);
+  drawPortrait(ctx, 0, 0, size, pet, variant);
   return c.toDataURL('image/jpeg', 0.9);
 }

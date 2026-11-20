@@ -1,4 +1,4 @@
-import { petById, PETS, SECTIONS, type Pet } from '../data/pets';
+import { albumOf, petById, PETS, SECTIONS, type Pet } from '../data/pets';
 import { store, type Letter, type OfferKind, type RiteKind } from '../data/store';
 import { applyLocaleStyle, STR } from '../i18n';
 import { portraitDataURL } from '../world/textures';
@@ -19,9 +19,9 @@ export interface UIHooks {
   /** 切换「独自参观」，返回切换后是否隐藏其他访客 */
   onToggleSolo(): boolean;
   onDetailClosed(): void;
-  /** 访客在它的小院里放了一件礼物或一封信（数据已保存） */
+  /** 访客往它的小龛里放了一件礼物（数据已保存） */
   onOffering(pet: Pet, kind: OfferKind): void;
-  /** 在它的小院里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
+  /** 在单宠物视角里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
   onRite(kind: RiteKind, pet: Pet): void;
   /** 访客在码头放下了一盏河灯；pet 是写在灯上的那只宠物，没有选就是 null */
   onRiverLantern(pet: Pet | null): void;
@@ -29,14 +29,14 @@ export interface UIHooks {
   onBurnLetter(pet: Pet): void;
   /**
    * 访客写了一封信（数据已保存）：树上多一块木牌。pet 是写给谁的，没有选就是 null；
-   * here 是访客此刻正在这只宠物的小院里（信会落在石阶上）
+   * here 是访客此刻正开着这只宠物的小龛（信会落在台面上）
    */
   onLetter(pet: Pet | null, here: boolean): void;
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
-  /** 中途下船 */
   /** 坐在船上时点「放河灯」 */
   onRideLantern(): void;
+  /** 中途下船 */
   onRideLeave(): void;
   /** 有面板打开时需要暂停走动 */
   onBlockingChange(blocked: boolean): void;
@@ -63,6 +63,9 @@ export class UI {
   private toastTimer = 0;
   private hintTimer = 0;
   private shrineHinted = false;
+  /** 当前这只宠物的照片：第 0 张是主照片；thumb 是缩略图，full 是点开后的大图（用到才画） */
+  private shots: Array<{ thumb: string; full: () => string }> = [];
+  private shot = 0;
   private ritePet: Record<PickKind, Pet | null> = { river: null, fire: null, lantern: null, post: null };
   /** 信的弹窗现在只看写给哪一只的；null 是看全部 */
   private lettersPet: Pet | null = null;
@@ -126,15 +129,34 @@ export class UI {
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        // 先收起弹窗，再离开小院
+        // 先收起弹窗，再退出单宠物视角
         if (this.modalOpen) this.closeModals();
         else this.closeDetail();
+        return;
+      }
+      // 看大图时左右键翻照片
+      if ($('modal-photos').classList.contains('open')) {
+        if (e.key === 'ArrowLeft') this.stepPhoto(-1);
+        else if (e.key === 'ArrowRight') this.stepPhoto(1);
+        return;
       }
     });
 
-    // 宠物的小院
-    $('detail-close').addEventListener('click', () => this.closeDetail());
+    // 单宠物视角
     $('btn-leave').addEventListener('click', () => this.closeDetail());
+    // 相册的大图：两侧的箭头、左右滑动
+    $('album').setAttribute('aria-label', STR.albumLabel);
+    $('photo-prev').setAttribute('aria-label', STR.photoPrev);
+    $('photo-next').setAttribute('aria-label', STR.photoNext);
+    $('photo-prev').addEventListener('click', () => this.stepPhoto(-1));
+    $('photo-next').addEventListener('click', () => this.stepPhoto(1));
+    let swipeX: number | null = null;
+    $('photo-view').addEventListener('pointerdown', (e) => (swipeX = e.clientX));
+    $('photo-view').addEventListener('pointerup', (e) => {
+      const dx = swipeX === null ? 0 : e.clientX - swipeX;
+      swipeX = null;
+      if (Math.abs(dx) > 40) this.stepPhoto(dx < 0 ? 1 : -1);
+    });
     document.querySelectorAll<HTMLElement>('[data-offer]').forEach((b) =>
       b.addEventListener('click', () => this.offer(b.dataset.offer as OfferKind)),
     );
@@ -151,7 +173,7 @@ export class UI {
       else store.addGuestbook(text);
       input.value = '';
       const here = pet !== null && pet === this.pet;
-      // 在它的小院里写的：收起弹窗，让访客看到信落在石阶上；别的时候收起写信的那一块，新写的这封排在最前面
+      // 正开着它的小龛时写的：收起弹窗，让访客看到信落在台面上；别的时候收起写信的那一块，新写的这封排在最前面
       if (here) this.closeModals();
       else {
         this.showCompose(false);
@@ -276,27 +298,22 @@ export class UI {
     return this.pet !== null;
   }
 
-  /** 资料面板在桌面端占据的宽度，用来把画面主体让到左边 */
-  get detailWidth() {
-    return this.pet && window.innerWidth > 640 ? $('detail').offsetWidth : 0;
-  }
-
   private get modalOpen() {
     return document.querySelector('.modal.open') !== null;
   }
 
-  /** 只有弹窗会暂停走动；在小院里（资料面板开着）照常可以走 */
+  /** 只有弹窗算「挡住」；单宠物视角里小人本来就站着不动，点击另有处理 */
   private notify() {
     this.hooks.onBlockingChange(this.modalOpen);
   }
 
-  /** 进出小院时把画面暗下去 / 亮起来 */
   /** 船开了 / 下船：底部换成（换回）船上的按钮 */
   setRiding(on: boolean) {
     document.body.classList.toggle('in-ride', on);
     if (!on) $('hint').classList.remove('show');
   }
 
+  /** 换地方时把画面暗下去 / 亮起来 */
   veil(on: boolean) {
     $('fade').classList.toggle('on', on);
   }
@@ -310,6 +327,7 @@ export class UI {
 
   closeModals() {
     document.querySelectorAll('.modal.open').forEach((m) => m.classList.remove('open'));
+    document.querySelectorAll('#album .on').forEach((b) => b.classList.remove('on'));
     (document.activeElement as HTMLElement | null)?.blur?.();
     this.notify();
   }
@@ -325,15 +343,15 @@ export class UI {
     this.closeModals();
     this.pet = pet;
     $('detail-name').textContent = pet.name;
-    $('detail-meta').textContent = [STR.species[pet.species], pet.breed].filter(Boolean).join(' · ');
+    const dates = `${pet.birthDate ?? '?'} — ${pet.passedDate}`;
+    $('detail-meta').textContent = [STR.species[pet.species], pet.breed, dates].filter(Boolean).join(' · ');
     $('detail-address').textContent = STR.address(pet.floor, pet.section, pet.cell);
-    $('detail-dates').textContent = `${pet.birthDate ?? '?'} — ${pet.passedDate}`;
     $('detail-message').textContent = pet.message;
     this.renderCounts();
+    this.renderAlbum(pet);
     $('detail').classList.add('open');
-    $('detail').scrollTop = 0;
     document.body.classList.add('in-shrine');
-    // 操作提示只在第一次走进小院时出现
+    // 操作提示只在第一次打开小龛时出现
     if (!this.shrineHinted) {
       this.shrineHinted = true;
       const el = $('hint');
@@ -349,7 +367,7 @@ export class UI {
     if (!this.pet) return;
     this.pet = null;
     $('detail').classList.remove('open');
-    document.body.classList.remove('in-shrine');
+    document.body.classList.remove('in-shrine', 'has-album');
     $('hint').classList.remove('show');
     (document.activeElement as HTMLElement | null)?.blur?.();
     this.hooks.onDetailClosed();
@@ -396,7 +414,54 @@ export class UI {
     return url;
   }
 
-  /** 在小院里点石阶上的信：看写给这只宠物的 */
+  /** 右侧那一列缩略图：主照片加相册里的几张；只有一张照片的不显示 */
+  private renderAlbum(pet: Pet) {
+    const make = (url: string | undefined, variant: number) => {
+      let big = url;
+      return { thumb: url ?? portraitDataURL(pet, 144, variant), full: () => (big ??= portraitDataURL(pet, 900, variant)) };
+    };
+    this.shots = [make(pet.photoUrl, 0), ...albumOf(pet).map((s) => make(s.url, s.variant))];
+    const strip = $('album');
+    strip.replaceChildren();
+    strip.scrollTop = 0;
+    const many = this.shots.length > 1;
+    document.body.classList.toggle('has-album', many);
+    if (!many) return;
+    this.shots.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.setAttribute('aria-label', STR.photoOf(i + 1, this.shots.length));
+      const img = document.createElement('img');
+      img.src = s.thumb;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.draggable = false;
+      b.append(img);
+      b.addEventListener('click', () => this.openPhoto(i));
+      strip.append(b);
+    });
+  }
+
+  private openPhoto(i: number) {
+    this.showPhoto(i);
+    this.openModal('modal-photos');
+  }
+
+  private stepPhoto(dir: number) {
+    const n = this.shots.length;
+    if (n) this.showPhoto((this.shot + dir + n) % n);
+  }
+
+  private showPhoto(i: number) {
+    const n = this.shots.length;
+    this.shot = i;
+    $<HTMLImageElement>('photo-view').src = this.shots[i].full();
+    $<HTMLImageElement>('photo-view').alt = STR.photoOf(i + 1, n);
+    $('photo-count').textContent = `${i + 1} / ${n}`;
+    [...$('album').children].forEach((b, j) => b.classList.toggle('on', j === i));
+    $('album').children[i]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** 在小龛里点那摞信：看写给这只宠物的 */
   openPetLetters() {
     if (this.pet) this.openLetters(this.pet);
   }
@@ -451,7 +516,7 @@ export class UI {
       return e;
     };
     const li = el('li');
-    // 头：它的头像和名字（没有写给某一只的，是一个爪印）、什么时候写的，右边可以去它的小院
+    // 头：它的头像和名字（没有写给某一只的，是一个爪印）、什么时候写的，右边可以去看它
     const pet = item.petId ? petById.get(item.petId) : undefined;
     const head = el('div', 'head');
     if (pet) {
@@ -469,7 +534,7 @@ export class UI {
     const when = [timeLabel(item.time), item.mine ? STR.letterMine : ''].filter(Boolean).join(' · ');
     if (when) who.append(el('small', '', when));
     head.append(who);
-    // 已经在看写给它的信（多半就在它的小院里），就不用再去了
+    // 已经在看写给它的信（多半就开着它的小龛），就不用再去了
     if (pet && pet !== this.lettersPet) {
       const visit = el('button', 'visit', STR.letterVisit(pet.name));
       visit.type = 'button';

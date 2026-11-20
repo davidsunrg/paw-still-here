@@ -4,7 +4,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG } from './config';
-import type { Pet } from './data/pets';
+import { PETS, type Pet } from './data/pets';
 import { prefs, store } from './data/store';
 import { STR } from './i18n';
 import { AudioSystem } from './systems/AudioSystem';
@@ -98,15 +98,16 @@ const ui = new UI({
     return prefs.solo;
   },
   onDetailClosed() {
-    if (inSpace) leaveSpace();
+    player.release();
+    world.shrine.close();
   },
   onOffering(pet, kind) {
-    world.space.drop(kind);
+    world.shrine.drop(kind);
     world.gallery.refresh(pet);
     audio.chime(kind === 'candle');
   },
   onRite(kind, pet) {
-    // 在它的小院里选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
+    // 在它的小龛前选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
     ui.closeAll();
     guide.clear();
     travel(kind === 'river' ? toDock : toFire);
@@ -125,20 +126,20 @@ const ui = new UI({
     audio.chime(true);
   },
   onLetter(pet, here) {
-    // 写了一封信：树上多一块自己的木牌；写给某一只的，它相框下面的数字跟着变，人在它的小院里时信落在石阶上
+    // 写了一封信：树上多一块自己的木牌；写给某一只的，它相框下面的数字跟着变，正开着它的小龛时信落在台面上
     world.tree.setOwn(store.ownLetters());
     if (pet) world.gallery.refresh(pet);
-    if (here) world.space.drop('letter');
+    if (here) world.shrine.drop('letter');
     audio.chime(false);
   },
   onGuide(pet) {
     ui.closeAll();
     const entry = frameOf(pet);
-    // 在别的小院里找它：先回到刚才的相框前，再沿着光点走
+    // 在影厅或河边找它：先回到大厅，再沿着光点走
     travel(() => {
       guide.show(world.routeTo(pet, player.pos), () => {
         ui.toast(STR.guideArrive(pet.name));
-        if (entry) enterSpace(entry);
+        if (entry) openPet(entry);
       });
       ui.toast(STR.guideToast(pet.name));
     });
@@ -147,7 +148,7 @@ const ui = new UI({
     ui.closeAll();
     guide.clear();
     const entry = frameOf(pet);
-    if (entry) enterSpace(entry);
+    if (entry) visit(entry);
   },
   onRideLantern() {
     if (inRide && player.riding) ui.openRite('river');
@@ -240,10 +241,43 @@ function frameOf(pet: Pet) {
   return world.slots.get(pet.id)?.entry;
 }
 
-// ---------- 进出宠物的小院 ----------
-/** 是否在某只宠物的小院里；home 是出来以后回到哪里 */
-let inSpace = false;
-let home: { x: number; z: number; yaw: number } | null = null;
+// ---------- 单宠物视角 ----------
+/** 镜头离小龛中心多远，才能让它完整地出现在资料面板以外的画面里 */
+let selfShow = 1;
+function shrineDistance() {
+  const { d, view } = CONFIG.shrine;
+  const t = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const aspect = window.innerWidth / window.innerHeight;
+  const byHeight = view.body[1] / view.fill[1] / t + d / 2;
+  const byWidth = view.body[0] / view.fill[0] / (t * aspect) + d / 2;
+  // 画面够宽就把打开的两扇门也框进来，但不让柜身因此缩得太小
+  const withDoors = Math.min(view.doors[0] / 0.96 / (t * aspect) + view.doors[1], byHeight * view.shrink);
+  return Math.max(byHeight, byWidth, withDoors);
+}
+
+/** 进入单宠物视角：这一格展开成小龛，镜头推到它正前方，小人走到旁边站好 */
+function openPet(entry: PhotoEntry) {
+  ui.openDetail(entry.pet);
+  world.shrine.open(entry);
+  player.refocus(world.shrine.center, entry.normal, shrineDistance(), (x, z) => world.shrine.inside(x, z));
+  interaction?.setHighlight(null);
+  marker.hide();
+}
+
+/** 直接去看这只宠物：就在它附近时原地打开；离得远（或者在影厅、河边）时，画面暗一下，来到它的相框前 */
+function visit(entry: PhotoEntry) {
+  const { center, normal } = entry;
+  const near = !inCinema && !inRide && !pending && Math.hypot(player.pos.x - center.x, player.pos.z - center.z) < 5;
+  if (near) return openPet(entry);
+  transition(() => {
+    if (inCinema) exitCinema();
+    if (inRide) exitRide();
+    player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
+    openPet(entry);
+  });
+}
+
+// ---------- 换地方 ----------
 /** 画面正在暗下去：暗到底的那一刻要做的事。期间又有新的去向时，以最后一个为准 */
 let pending: (() => void) | null = null;
 
@@ -258,48 +292,7 @@ function transition(mid: () => void) {
     pending = null;
     run();
     ui.veil(false);
-  }, CONFIG.space.fade * 1000);
-}
-
-function exitSpace() {
-  inSpace = false;
-  world.space.close();
-  player.area = null;
-}
-
-/** 走进这只宠物的小院；出来时回到这张相框前 */
-function enterSpace(entry: PhotoEntry) {
-  const { center, normal } = entry;
-  let back = { x: center.x + normal.x * 1.5, z: center.z + normal.z * 1.5, yaw: Math.atan2(normal.x, normal.z) };
-  // 相框前站不下人时，回到进来之前站的地方（已经在别的小院里，就沿用上一次的）
-  // （在影厅里找它时，就回到影厅的入口前）
-  const { area, room } = player;
-  player.area = player.room = null;
-  const free = !player.blocked(back.x, back.z);
-  player.area = area;
-  player.room = room;
-  if (!free) back = (inSpace ? home : null) ?? (inCinema ? CINEMA_BACK : inRide ? CAVE_BACK : { x: player.pos.x, z: player.pos.z, yaw: player.facing });
-  interaction?.setHighlight(null);
-  marker.hide();
-  transition(() => {
-    if (inCinema) exitCinema();
-    if (inRide) exitRide();
-    home = back;
-    inSpace = true;
-    world.space.open(entry.pet);
-    player.area = world.space.area;
-    const { spawn } = world.space;
-    player.teleport(spawn.x, spawn.z, spawn.yaw, spawn.pitch, spawn.facing);
-    ui.openDetail(entry.pet);
-  });
-}
-
-/** 从小院回到相框前 */
-function leaveSpace() {
-  transition(() => {
-    exitSpace();
-    if (home) player.teleport(home.x, home.z, home.yaw);
-  });
+  }, CONFIG.fade * 1000);
 }
 
 // ---------- 进出影厅 ----------
@@ -317,7 +310,6 @@ function enterCinema() {
   if (inCinema) return;
   marker.hide();
   transition(() => {
-    if (inSpace) exitSpace();
     inCinema = true;
     player.room = CINEMA_ROOM;
     player.teleport(CINEMA_SPAWN.x, CINEMA_SPAWN.z, CINEMA_SPAWN.yaw, CINEMA_SPAWN.pitch, CINEMA_SPAWN.facing);
@@ -354,7 +346,6 @@ function enterRide(side: 'lobby' | 'gate') {
   marker.hide();
   guide.clear();
   transition(() => {
-    if (inSpace) exitSpace();
     if (inCinema) exitCinema();
     inRide = true;
     world.ride.solo = prefs.solo;
@@ -454,15 +445,10 @@ function updateRide(dt: number, t: number) {
   }
 }
 
-/** 去别的地方：如果正在小院、影厅或船上（或正在进出），先让画面暗下去再过去 */
+/** 去别的地方：如果正在影厅或船上（或正在进出），先让画面暗下去再过去 */
 function travel(dest: () => void) {
-  if (!inSpace && !inCinema && !inRide && !pending) return dest();
+  if (!inCinema && !inRide && !pending) return dest();
   transition(() => {
-    if (inSpace) {
-      exitSpace();
-      // 先回到相框前；dest 自己会换地方的话，这一步不影响它
-      if (home) player.teleport(home.x, home.z, home.yaw);
-    }
     if (inCinema) exitCinema();
     if (inRide) exitRide();
     dest();
@@ -472,7 +458,7 @@ function travel(dest: () => void) {
 /** 坐下后镜头慢慢转去的方向；访客自己拖动视角或站起来就不再转 */
 let swing: number | null = null;
 
-/** 坐着时小人比站着高出多少（长椅和沙发的坐面高度不一样） */
+/** 坐着时小人比站着高出多少（沙发、影厅座椅、船上的坐面高度不一样） */
 let seatLift = 0;
 
 /** 走到座位前坐下 */
@@ -508,6 +494,13 @@ window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 
 player.onTap = (x, y) => {
   if (!entered || !interaction || blocked || pending || player.riding) return;
+  if (ui.detailOpen) {
+    // 单宠物视角里：点信可以读信，点小龛本身不做事，点外面退出
+    const part = world.shrine.pick(x, y, camera);
+    if (part === 'letter') ui.openPetLetters();
+    else if (!part) ui.closeDetail();
+    return;
+  }
   const hit = interaction.pick(x, y);
   if (!hit) {
     // 没点到东西：点的是地面，让小人走过去
@@ -520,11 +513,11 @@ player.onTap = (x, y) => {
   marker.hide();
   if (hit.kind === 'pet') {
     const { entry } = hit;
-    if (!hit.far) return enterSpace(entry);
-    // 离得远：先走到相框前，到了再进去
+    if (!hit.far) return openPet(entry);
+    // 离得远：先走到相框前，到了再打开
     const x = entry.center.x + entry.normal.x * 1.5;
     const z = entry.center.z + entry.normal.z * 1.5;
-    player.walkTo(x, z, 0.3, () => enterSpace(entry));
+    player.walkTo(x, z, 0.3, () => openPet(entry));
     marker.show(x, world.heightAt(x, z), z);
   } else if (hit.far) {
     player.walkTo(hit.at.x, hit.at.z, 2.4, hit.item.onClick);
@@ -533,6 +526,13 @@ player.onTap = (x, y) => {
 
 function updateHover() {
   if (!interaction || !entered || blocked || !mouse.inside || !mouse.isMouse || player.dragging) return;
+  if (ui.detailOpen) {
+    // 单宠物视角里只有那摞信可以点
+    if (world.shrine.pick(mouse.x, mouse.y, camera) !== 'letter') return clearHover();
+    ui.setTooltip(STR.tipLetters, mouse.x, mouse.y);
+    canvas.classList.add('pointing');
+    return;
+  }
   const hit = interaction.pick(mouse.x, mouse.y);
   if (!hit) {
     clearHover();
@@ -560,6 +560,7 @@ function applyQuality() {
   if (world.moonLight) world.moonLight.castShadow = quality === 'high';
   world.setLightBudget(quality === 'high' ? CONFIG.lights.pool : CONFIG.lights.poolLow);
   if (crowd) crowd.limit = quality === 'high' ? CONFIG.visitors.count : CONFIG.visitors.countLow;
+  if (world.shrine) world.shrine.dusty = quality === 'high';
   resize();
 }
 
@@ -570,12 +571,14 @@ function resize() {
   composer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // 窗口变化后重新计算镜头距离，保证小龛仍然完整可见
+  const entry = world.shrine?.entry;
+  if (entry && player.focused) player.focusOn(world.shrine.center, entry.normal, shrineDistance());
 }
 window.addEventListener('resize', resize);
 
 // ---------- 主循环 ----------
 const clock = new THREE.Clock();
-let viewShift = 0;
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -589,47 +592,35 @@ function frame() {
   pose.facing = player.facing;
   pose.phase = player.phase;
   pose.stride = player.stride;
-  // 坐在长椅上
+  // 坐下以后，镜头慢慢转到座位朝的方向
   if (swing !== null) {
     if (!player.seated || player.dragging) swing = null;
     else player.yaw += Math.atan2(Math.sin(swing - player.yaw), Math.cos(swing - player.yaw)) * (1 - Math.exp(-dt * 2.5));
   }
   pose.sit += ((player.seated ? 1 : 0) - pose.sit) * (1 - Math.exp(-dt * 3.5));
   pose.y += seatLift * pose.sit;
-  // 站在它的石柱前时微微低头
-  const front = world.space.front;
-  const bowing = inSpace && !player.seated && player.stride < 0.1 && Math.hypot(player.pos.x - front.x, player.pos.z - front.z) < 1.6;
-  pose.bow += ((bowing ? 0.3 : 0) - pose.bow) * (1 - Math.exp(-dt * 4));
   avatar.set(0, pose, t);
-  avatar.opacity = player.fade;
+  // 看小龛的时候自己的小人也淡出，画面里只留小龛
+  selfShow += ((ui.detailOpen ? 0 : 1) - selfShow) * (1 - Math.exp(-dt * 5));
+  avatar.opacity = player.fade * selfShow;
   avatar.commit();
   if (!player.walking) marker.hide();
   marker.update(dt, t);
+  if (crowd) crowd.away = ui.detailOpen;
   crowd?.update(dt, t);
   world.update(dt, t, camera, player.pos, pixelRatio());
   guide.update(t, player.pos);
   interaction?.update(t);
-  // 从缺口走出小院，就回到相框前
-  if (inSpace && !pending) {
-    const { area } = world.space;
-    if (Math.hypot(player.pos.x - area.x, player.pos.z - area.z) > area.r + CONFIG.space.leave) ui.closeDetail();
-  }
   // 走进大厅右墙的门厅就进影厅；在影厅里走进后门的门厅就回大厅
   if (!pending && entered) {
     if (inCinema) {
       if (inCinemaExit(player.pos.x, player.pos.z)) leaveCinema();
-    } else if (!inSpace && !inRide && inCinemaDoor(player.pos.x, player.pos.z)) enterCinema();
-    else if (!inSpace && !inRide && inCaveDoor(player.pos.x, player.pos.z)) enterRide('lobby');
-    else if (!inSpace && !inRide && inGateDoor(player.pos.x, player.pos.z)) enterRide('gate');
+    } else if (!inRide && inCinemaDoor(player.pos.x, player.pos.z)) enterCinema();
+    else if (!inRide && inCaveDoor(player.pos.x, player.pos.z)) enterRide('lobby');
+    else if (!inRide && inGateDoor(player.pos.x, player.pos.z)) enterRide('gate');
   }
   updateDiscovery();
   updateHover();
-
-  // 资料面板打开时，把画面主体让到面板左侧
-  const targetShift = ui.detailWidth / 2;
-  viewShift += (targetShift - viewShift) * (1 - Math.exp(-dt * 6));
-  if (viewShift > 0.5) camera.setViewOffset(window.innerWidth, window.innerHeight, viewShift, 0, window.innerWidth, window.innerHeight);
-  else if (camera.view) camera.clearViewOffset();
 
   if (quality === 'high') composer.render(dt);
   else renderer.render(scene, camera);
@@ -650,9 +641,8 @@ async function boot() {
     run();
   }
   interaction = new Interaction(camera, world, player.pos);
-  world.space.hooks.letters = () => ui.openPetLetters();
+  world.shrine.reflect(renderer);
   world.tree.setOwn(store.ownLetters());
-  world.space.hooks.bench = () => sitDown(world.space.seat);
   // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
   crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);
   crowd.hidden = prefs.solo;

@@ -64,19 +64,19 @@
     <div id="tooltip"></div>
     <div id="toast"></div>
 
-    <!-- 宠物的小院：一侧的资料，下方的礼物栏 -->
+    <!-- 单宠物视角：顶部的资料，左上角的返回，下方的礼物栏，右侧的相册 -->
+    <div id="shrine-shade"></div>
+    <button id="btn-leave"><i aria-hidden="true">‹</i><span data-t="shrineLeave"></span></button>
     <aside id="detail">
-      <button class="close" id="detail-close" aria-label="close">×</button>
       <h2 id="detail-name"></h2>
       <p class="meta" id="detail-meta"></p>
       <p class="meta" id="detail-address"></p>
-      <p class="meta" id="detail-dates"></p>
       <blockquote id="detail-message"></blockquote>
-      <div class="rites" id="detail-rites">
+      <!-- 去放河灯、去烧信、读信：入口先收起来，不展示 -->
+      <div class="rites" id="detail-rites" hidden>
         <button id="btn-rite-river" data-t="riteRiver"></button>
         <button id="btn-rite-fire" data-t="riteFire"></button>
         <button id="btn-rite-letters" data-t="riteLetters"></button>
-        <button id="btn-leave" data-t="spaceLeave"></button>
       </div>
     </aside>
 
@@ -120,6 +120,8 @@
         <span data-t="giftLetter"></span><b></b>
       </button>
     </div>
+    <!-- 相册：右侧一列缩略图，点开是大图 -->
+    <div id="album"></div>
 
     <!-- 弹窗 -->
     <div class="modal" id="modal-lantern">
@@ -209,6 +211,13 @@
       </div>
     </div>
 
+    <div class="modal" id="modal-photos">
+      <button class="close" data-close aria-label="close">×</button>
+      <button class="photo-nav" id="photo-prev">‹</button>
+      <img id="photo-view" alt="" draggable="false" />
+      <button class="photo-nav" id="photo-next">›</button>
+      <div id="photo-count"></div>
+    </div>
     <div class="modal" id="modal-search">
       <div class="card">
         <button class="close" data-close aria-label="close">×</button>

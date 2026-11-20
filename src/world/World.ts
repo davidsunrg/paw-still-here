@@ -15,7 +15,7 @@ import { Kit } from './Kit';
 import { buildOutdoor } from './Outdoor';
 import { buildRiver, type River } from './River';
 import { MOON_DIR, Sky } from './Sky';
-import { Space } from './Space';
+import { Shrine } from './Shrine';
 import { TREE_POS, TREE_SPAN, type Tree } from './Tree';
 
 export interface Collider {
@@ -86,7 +86,7 @@ export class World {
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
   bonfire!: Bonfire;
-  space!: Space;
+  shrine!: Shrine;
   gallery!: Gallery;
   cinema!: Cinema;
   tree!: Tree;
@@ -111,7 +111,7 @@ export class World {
       ['lantern', () => buildLanternTerrace(this)],
       ['hall', () => buildHall(this)],
       ['gallery', () => (this.gallery = buildGallery(this))],
-      ['space', () => (this.space = new Space(this))],
+      ['shrine', () => (this.shrine = new Shrine(this))],
       ['cinema', () => (this.cinema = buildCinema(this))],
       ['cave', () => {
         buildGateEntrance(this);

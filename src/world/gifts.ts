@@ -26,7 +26,7 @@ function mat(color: number) {
 }
 
 const FLAME = new THREE.Color(0xffb45a);
-/** 照片墙石台上的烛火很小，需要更亮才看得见；小院里是近看，太亮会糊成一团光 */
+/** 照片墙石台上的烛火很小，需要更亮才看得见；小龛里是近看，太亮会糊成一团光 */
 const FAR_GLOW = 3.2;
 const NEAR_GLOW = 1.5;
 const flameMat = new THREE.MeshBasicMaterial();

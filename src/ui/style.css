@@ -388,7 +388,7 @@ body.touch #joystick {
   display: block;
 }
 
-/* 进出小院时盖在画面上的一层夜色 */
+/* 换地方（进出影厅、山洞）时盖在画面上的一层夜色 */
 #fade {
   position: fixed;
   inset: 0;
@@ -401,35 +401,32 @@ body.touch #joystick {
   opacity: 1;
 }
 
-/* ---------- 宠物的小院 ---------- */
-:root {
-  --panel: 300px;
-}
+/* ---------- 单宠物视角 ---------- */
+/* 资料不占一块面板：几行字浮在画面顶部正中，不挡点击 */
 #detail {
   position: fixed;
-  z-index: 30;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(var(--panel), 100vw);
-  justify-content: center;
-  padding: 22px 22px calc(22px + env(safe-area-inset-bottom));
-  background: var(--glass-strong);
-  border-left: 1px solid var(--line);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  transform: translateX(104%);
-  visibility: hidden;
-  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s 0.45s;
-  overflow-y: auto;
+  /* 压在常驻界面（z 10）下面，暗色渐变不盖住右上角的按钮 */
+  z-index: 9;
+  top: calc(58px + env(safe-area-inset-top));
+  left: 50%;
+  width: min(560px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -10px);
+  transition: opacity 0.4s, transform 0.4s, visibility 0s 0.4s;
 }
 #detail.open {
-  transform: none;
+  opacity: 1;
   visibility: visible;
-  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translate(-50%, 0);
+  transition: opacity 0.5s 0.35s, transform 0.5s 0.35s;
 }
 .close {
   position: absolute;
@@ -443,47 +440,95 @@ body.touch #joystick {
   z-index: 2;
 }
 #detail h2 {
-  margin: 0 0 4px;
-  text-align: center;
+  margin: 0;
   font-family: var(--serif);
   font-size: 26px;
+  line-height: 1.2;
   letter-spacing: calc(0.16em * var(--tracking));
   padding-left: calc(0.16em * var(--tracking));
   color: var(--warm-soft);
 }
 #detail .meta {
   margin: 0;
-  text-align: center;
   color: var(--ink-dim);
   font-size: 13px;
 }
+/* 地址在相框下面的名牌上已经有格号，这里不重复 */
+#detail-address {
+  display: none;
+}
 #detail blockquote {
-  margin: 14px 0 4px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--line);
+  margin: 4px 0 0;
   font-family: var(--serif);
+  font-style: italic;
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.5;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
-.rites {
+#detail blockquote::before {
+  content: '\201C';
+}
+#detail blockquote::after {
+  content: '\201D';
+}
+/* 看小龛时四角压暗一点，视线收到中间 */
+#shrine-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 46%, transparent 42%, rgba(6, 4, 3, 0.55) 100%);
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+body.in-shrine #shrine-shade {
+  opacity: 1;
+  transition: opacity 0.6s 0.3s;
+}
+/* 返回：左上角，进了单宠物视角就顶替站名的位置 */
+#btn-leave {
+  position: fixed;
+  z-index: 31;
+  top: calc(14px + env(safe-area-inset-top));
+  left: 16px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 6px 10px;
+  font-size: 13px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s, visibility 0s 0.4s;
 }
-.rites button {
-  border-radius: 14px;
-  padding: 10px;
+#btn-leave i {
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+  margin-top: -2px;
+}
+body.in-shrine #btn-leave {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.5s 0.35s;
+}
+.brand {
+  transition: opacity 0.4s;
+}
+body.in-shrine .brand {
+  opacity: 0;
 }
 
-/* 走进宠物的小院后，收起底部的传送栏，换成礼物栏 */
-body.in-shrine .bottom-bar {
+/* 进入单宠物视角后，收起底部的传送栏和摇杆，换成礼物栏 */
+body.in-shrine .bottom-bar,
+body.in-shrine #joystick,
+body.in-shrine #stick-zone {
   display: none;
 }
 body.in-shrine #hint {
-  left: calc((100vw - var(--panel)) / 2);
   bottom: calc(122px + env(safe-area-inset-bottom));
 }
 /* 船开了以后：收起底部的传送栏，换成「下船」 */
@@ -537,7 +582,7 @@ body.in-ride #ride-bar {
 #shrine-bar {
   position: fixed;
   z-index: 31;
-  left: calc((100vw - var(--panel)) / 2);
+  left: 50%;
   bottom: calc(22px + env(safe-area-inset-bottom));
   display: flex;
   gap: 10px;
@@ -599,6 +644,91 @@ body.in-shrine #shrine-bar {
   color: var(--warm);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+/* 相册：右侧竖着的一列缩略图，多了可以上下滚 */
+#album {
+  position: fixed;
+  z-index: 31;
+  top: 50%;
+  right: 16px;
+  max-height: min(52vh, 400px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(14px, -50%);
+  transition: opacity 0.4s, transform 0.4s, visibility 0s 0.4s;
+}
+#album::-webkit-scrollbar {
+  display: none;
+}
+body.has-album #album {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+  transition: opacity 0.5s 0.4s, transform 0.5s 0.4s;
+}
+#album button {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: none;
+  border: 1px solid var(--line);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  opacity: 0.82;
+  transition: opacity 0.2s, border-color 0.2s;
+}
+#album button:hover,
+#album button.on {
+  opacity: 1;
+  border-color: var(--warm);
+}
+#album img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* 相册的大图 */
+#modal-photos {
+  background: rgba(6, 7, 20, 0.86);
+  gap: 14px;
+}
+#photo-view {
+  max-width: min(78vw, 900px);
+  max-height: 80vh;
+  border-radius: 10px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+.photo-nav {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0 0 3px;
+  font-size: 24px;
+  line-height: 1;
+}
+#photo-count {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 body.touch .close {
   width: 44px;
@@ -1009,44 +1139,23 @@ button:disabled {
   .bottom-bar {
     gap: 6px;
   }
-  /* 小屏幕上只留一条：名字和几个按钮。种类、日期、寄语都刻在石柱上，不再重复 */
   #detail {
-    top: calc(54px + env(safe-area-inset-top));
-    bottom: auto;
-    left: 10px;
-    right: 10px;
-    width: auto;
-    padding: 10px 14px 12px;
-    gap: 6px;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    transform: translateY(calc(-100% - 80px));
+    top: calc(52px + env(safe-area-inset-top));
+    gap: 2px;
   }
   #detail h2 {
-    font-size: 20px;
-    margin: 0;
+    font-size: 21px;
   }
-  #detail .meta,
-  #detail blockquote {
-    display: none;
-  }
-  .rites {
-    flex-direction: row;
-    margin-top: 2px;
-    gap: 6px;
-  }
-  /* 小屏幕上放不下四个：读信从下面礼物栏的「信」进去 */
-  #btn-rite-letters {
-    display: none;
-  }
-  .rites button {
-    flex: 1;
-    padding: 7px 4px;
+  #detail .meta {
     font-size: 12px;
-    border-radius: 12px;
+  }
+  #detail blockquote {
+    font-size: 13px;
+  }
+  #btn-leave {
+    left: 10px;
   }
   body.in-shrine #hint {
-    left: 50%;
     bottom: calc(154px + env(safe-area-inset-bottom));
   }
   #shrine-bar {
@@ -1058,6 +1167,36 @@ button:disabled {
   #shrine-bar button {
     width: 56px;
     height: 58px;
+  }
+  #album {
+    right: 8px;
+    top: 46%;
+    max-height: 38vh;
+    gap: 6px;
+  }
+  #album button {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+  }
+  /* 窄屏上大图占满宽度，箭头压在图的两侧 */
+  #modal-photos {
+    padding: 12px;
+  }
+  #photo-view {
+    max-width: 100%;
+  }
+  .photo-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1;
+  }
+  #photo-prev {
+    left: 8px;
+  }
+  #photo-next {
+    right: 8px;
   }
   #loader h1 {
     font-size: 26px;
