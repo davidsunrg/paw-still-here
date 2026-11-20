@@ -30,17 +30,17 @@ const HUE = {
 
 /**
  * 照洞壁和洞顶的大灯：在河道上走了多远的地方、偏离中线多少（正数在右手边）、多高、颜色、亮度。
- * 灯本身看不见，只看得到它照亮的那一片洞壁和水面。
+ * 灯本身看不见。洞厅很宽，灯挂得高、离洞壁远：洞壁和水面上只落下很淡的一层光，不会照出一块块亮斑。
  */
 type Light = [s: number, side: number, y: number, color: number, intensity: number];
 const LIGHTS: Light[] = [
-  [6, -17, 8, HUE.amber, 150],
-  [26, 22, 9, HUE.honey, 120],
-  [46, -23, 9, HUE.ember, 120],
-  [56, 2, 19, HUE.pale, 70],
-  [66, 23, 9, HUE.pale, 90],
-  [84, -22, 9, HUE.honey, 110],
-  [98, 14, 8, HUE.moon, 90],
+  [6, -17, 17, HUE.amber, 150],
+  [26, 22, 18, HUE.honey, 120],
+  [46, -23, 18, HUE.ember, 120],
+  [56, 2, 30, HUE.pale, 70],
+  [66, 23, 18, HUE.pale, 90],
+  [84, -22, 18, HUE.honey, 110],
+  [98, 14, 10, HUE.moon, 90],
 ];
 
 /** 露天的一段从哪里开始（横截面里第一个洞顶高度为 0 的地方） */
@@ -793,7 +793,9 @@ export class CaveRide {
     sign.rotation.y = st.dir > 0 ? Math.PI : 0;
     w.scene.add(sign);
     for (const s of [-1, 1]) kit.glowBox(cx + s * (wide / 2 - 0.3), ST.ledge + 2.1, Z(ST.top - 0.05), 0.14, 0.2, 0.1, C.warm, 2.2);
-    w.pointLight(cx, ST.ledge + 2.2, Z(ST.top - 1.4), 7, 8);
+    // 门口的灯：挂在门楣那一侧、不高，光是从门口横着照出来的，站在石台上的人身上才有光
+    // （洞里很暗，灯在头顶正上方的话只照得亮地面，人是一团黑）
+    w.pointLight(cx, ST.ledge + 1.9, Z(ST.top - 0.3), 10, 11);
 
     // 码头：一块块木板，东侧一排木桩，隔几根挂一盏灯
     const boards = Math.round((ST.foot - ST.end) / 0.65);
@@ -837,7 +839,8 @@ export class CaveRide {
     scene.add(water);
 
     // 洞壁和洞顶：一整张粗糙的大面片。横截面是半个椭圆，每个顶点往里外随机挪一点，显出岩石的棱面
-    const SEG = 14;
+    // 洞厅很宽，一圈多分几段，棱面才不会大得像一堵堵平墙
+    const SEG = 24;
     const gap = size * 0.9;
     const s0 = -gap * 2;
     const pos: number[] = [];
