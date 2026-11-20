@@ -27,7 +27,7 @@ interface Slab {
 }
 
 /**
- * 三个区每一格的位置，按地址顺序排列。
+ * 两个区每一格的位置，按地址顺序排列。
  * 格号按列编：面向墙从左到右，每列从上到下；所以绕着大厅顺时针走，格号是连着的。
  */
 function layout(): { cells: Cell[]; slabs: Slab[] } {
@@ -46,31 +46,20 @@ function layout(): { cells: Cell[]; slabs: Slab[] } {
   const outer = G.backInner + (G.backCols - 1) * G.pitch;
   for (let c = 0; c < G.backCols; c++) column('B', c, -outer + c * G.pitch, backZ, 0);
   for (let c = 0; c < G.backCols; c++) column('B', G.backCols + c, G.backInner + c * G.pitch, backZ, 0);
-  // C 区：进门右手，从后墙一端排回大门；正中几列让给影厅入口，格号跨过入口连着编
-  const half = (G.sideCols - G.doorCols) / 2;
-  for (let c = 0; c < half * 2; c++) {
-    const pos = c < half ? c : c + G.doorCols;
-    column('C', c, hw - T / 2, zc - (side - pos) * G.pitch, -Math.PI / 2);
-  }
 
   const sideLen = G.sideCols * G.pitch + 0.5;
-  const halfLen = half * G.pitch + 0.5;
-  /** C 区入口两侧各一段石板，中心离墙的正中多远 */
-  const halfMid = ((G.doorCols + half) * G.pitch) / 2;
   const backLen = G.backCols * G.pitch + 0.5;
   const backMid = (G.backInner + outer) / 2;
   const slabs: Slab[] = [
     { x: -hw + T / 2, z: zc, len: sideLen, rotY: Math.PI / 2 },
     { x: -backMid, z: backZ, len: backLen, rotY: 0 },
     { x: backMid, z: backZ, len: backLen, rotY: 0 },
-    { x: hw - T / 2, z: zc - halfMid, len: halfLen, rotY: -Math.PI / 2 },
-    { x: hw - T / 2, z: zc + halfMid, len: halfLen, rotY: -Math.PI / 2 },
   ];
   return { cells, slabs };
 }
 
 /**
- * 大厅三面墙上的照片墙：石板上一格一格的相框，每格下面一条小石台和一块带格号的名牌。
+ * 大厅两面墙上的照片墙：石板上一格一格的相框，每格下面一条小石台和一块带格号的名牌。
  * 住了宠物的格子有照片、有灯；空格子是一块素面石板，只有格号。
  * 返回的 refresh 在有人为某只宠物放下礼物之后调用，更新它石台上的痕迹。
  */

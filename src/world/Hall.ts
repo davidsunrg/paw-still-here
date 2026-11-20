@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
 import { STR } from '../i18n';
+import { buildCaveEntrance } from './Cave';
 import { buildCinemaEntrance } from './Cinema';
 import { buildFloorMap } from './FloorMap';
-import { archWall, plant, sofa, wallStrip } from './parts';
+import { archWall, doorWall, plant, sofa, wallStrip } from './parts';
 import { buildTree } from './Tree';
 import { pawTexture, plankTexture, textMesh } from './textures';
 import type { World } from './World';
 
-/** 大厅：正中是纪念树，三面墙是照片墙（见 Gallery.ts），门墙两侧是接待台和电梯，右墙正中是影厅入口（见 Cinema.ts） */
+/** 大厅：正中是纪念树，左墙和正面墙是照片墙（见 Gallery.ts），门墙两侧是接待台和电梯，右墙是影厅和河的入口（见 Cinema.ts、Cave.ts） */
 export function buildHall(w: World) {
   const { kit, scene } = w;
   const C = CONFIG.colors;
@@ -33,10 +34,22 @@ export function buildHall(w: World) {
   // ---------- 墙 ----------
   archWall(w, ZONES.hallFront, CONFIG.hall.w + T, CONFIG.hall.doorHalf, CONFIG.hall.doorSpring, true);
   archWall(w, ZONES.hallBack, CONFIG.hall.w + T, L.backDoorHalf, L.backDoorSpring);
-  // 左墙是一整面；右墙正中是影厅的入口
+  // 左墙是一整面；右墙不挂照片，开着两个门洞：靠大门一侧是影厅，靠后墙一侧是河
   kit.box(-hw, H / 2, zc, T, H, d + T, C.wall);
   w.collide(-hw, zc, T, d + T, true);
+  const theater = CONFIG.cinema.door;
+  const cave = CONFIG.cave.door;
+  doorWall(w, hw, -d - T / 2, T / 2, [
+    { z: theater.z, half: theater.half, h: theater.h },
+    { z: cave.z, half: cave.half, spring: cave.spring },
+  ]);
   buildCinemaEntrance(w);
+  buildCaveEntrance(w);
+  // 两个门洞之间的墙面上的一行字，和左墙的那一行对着
+  const stay = textMesh(STR.wallTitleRight, { height: 0.4, color: '#6b4a2e', maxWidth: 4.6 });
+  stay.position.set(hw - T / 2 - 0.02, 2.55, (theater.z + cave.z) / 2);
+  stay.rotation.y = -Math.PI / 2;
+  scene.add(stay);
   for (const sx of [-1, 1]) {
     wallStrip(kit, sx * hw, zc, 0, d + T);
     for (const z of [ZONES.hallFront, ZONES.hallBack]) {
@@ -67,7 +80,7 @@ export function buildHall(w: World) {
     }
   }
   w.pointLight(0, 4.3, -3.4, 30, 22);
-  // 三面照片墙前的灯
+  // 两侧墙和正面墙前的灯
   for (const s of [-1, 1]) {
     w.pointLight(s * 8, 3.4, zc, 34, 22);
     w.pointLight(s * 6.4, 3.4, ZONES.hallBack + 3.5, 24, 18);

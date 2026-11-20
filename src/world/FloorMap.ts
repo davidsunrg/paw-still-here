@@ -54,13 +54,22 @@ function mapTexture() {
   const hw = L.w / 2;
   const zc = -L.d / 2;
   line(-hw, 0, -hw, -L.d, 4, DIM);
-  // 右墙正中是影厅的入口：墙线在这里断开，外面画出门厅
-  const door = CONFIG.cinema.door;
-  line(hw, 0, hw, zc + door.half, 4, DIM);
-  line(hw, zc - door.half, hw, -L.d, 4, DIM);
-  ctx.strokeStyle = DIM;
+  // 右墙上是影厅和河的入口：墙线在门洞处断开，外面画出门洞后面的那一小段
+  const doors = [
+    { ...CONFIG.cinema.door, name: STR.map.cinema },
+    { ...CONFIG.cave.door, name: STR.map.cave },
+  ];
+  let from = 0;
   ctx.lineWidth = 3;
-  ctx.strokeRect(X(hw), Y(zc - door.half), door.depth * s, door.half * 2 * s);
+  for (const door of doors) {
+    line(hw, from, hw, door.z + door.half, 4, DIM);
+    from = door.z - door.half;
+    ctx.strokeStyle = DIM;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(X(hw), Y(door.z - door.half), door.depth * s, door.half * 2 * s);
+    text(door.name, X(hw) - 22, Y(door.z), 30, INK, 'right');
+  }
+  line(hw, from, hw, -L.d, 4, DIM);
   line(-hw, -L.d, hw, -L.d, 4, DIM);
   line(-hw, 0, -L.doorHalf, 0, 4, DIM);
   line(L.doorHalf, 0, hw, 0, 4, DIM);
@@ -68,26 +77,17 @@ function mapTexture() {
   text(STR.map.closed, W / 2, Y(-L.d) - 30, 31, DIM);
   text(STR.map.entrance, W / 2, Y(0) + 34, 34);
 
-  // 三个区，和每个区两头的格号
+  // 两个区，和每个区两头的格号
   const sideHalf = (G.sideCols * G.pitch) / 2;
-  /** C 区正中让给影厅入口的那一段，半长 */
-  const gapHalf = (G.doorCols * G.pitch) / 2;
   const outer = G.backInner + G.backCols * G.pitch - G.pitch / 2;
   const inner = G.backInner - G.pitch / 2;
   const in1 = 0.45;
   line(-hw + in1, zc + sideHalf, -hw + in1, zc - sideHalf, 10);
-  line(hw - in1, zc + sideHalf, hw - in1, zc + gapHalf, 10);
-  line(hw - in1, zc - gapHalf, hw - in1, zc - sideHalf, 10);
   line(-outer, -L.d + in1, -inner, -L.d + in1, 10);
   line(inner, -L.d + in1, outer, -L.d + in1, 10);
-  const [n1, n2, n3] = SECTION_CELLS;
+  const [n1, n2] = SECTION_CELLS;
   text(STR.sectionName('A'), X(-hw) + 34, Y(zc) - 20, 30, INK, 'left');
   text(STR.map.cells(n1), X(-hw) + 34, Y(zc) + 22, 29, DIM, 'left');
-  // C 区的名字写在靠后墙的那一半旁边，正中留给影厅
-  const cy = Y(zc - (gapHalf + sideHalf) / 2);
-  text(STR.sectionName('C'), X(hw) - 34, cy - 20, 30, INK, 'right');
-  text(STR.map.cells(n3), X(hw) - 34, cy + 22, 29, DIM, 'right');
-  text(STR.map.cinema, X(hw) - 34, Y(zc), 30, INK, 'right');
   text(`${STR.sectionName('B')}  ${STR.map.cells(n2)}`, W / 2, Y(-L.d) + 52, 36);
   // 格号从哪头开始：顺着大厅顺时针走，格号越来越大
   text('1', X(-hw) + 34, Y(zc + sideHalf) - 12, 26, DIM, 'left');
@@ -95,8 +95,6 @@ function mapTexture() {
   // 正面墙两头的格号往里收一点，不和侧墙的格号叠在一起
   text('1', X(-outer) + 70, Y(-L.d) + 52, 26, DIM, 'left');
   text(String(n2), X(outer) - 70, Y(-L.d) + 52, 26, DIM, 'right');
-  text('1', X(hw) - 34, Y(zc - sideHalf) + 12, 26, DIM, 'right');
-  text(String(n3), X(hw) - 34, Y(zc + sideHalf) - 12, 26, DIM, 'right');
 
   // 纪念树和两侧的沙发
   ctx.strokeStyle = INK;

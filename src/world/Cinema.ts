@@ -25,7 +25,7 @@ const COL = {
 
 /** 大厅右墙朝里的墙面，和入口的中心 */
 const HALL_FACE = CONFIG.hall.w / 2 - T / 2;
-const DOOR_Z = -CONFIG.hall.d / 2;
+const DOOR_Z = D.z;
 /** 门厅：从墙的外侧往外 depth 米 */
 const LOBBY_X0 = CONFIG.hall.w / 2 + T / 2;
 
@@ -51,24 +51,13 @@ function curtain(w: World, x: number, z: number, alongX: boolean, width: number,
 }
 
 /**
- * 大厅右墙：正中留出影厅的门洞，门洞上方是发光的招牌，后面是一小段挂着帘子的门厅。
- * 由 Hall 在砌墙时调用（代替一整面右墙）。
+ * 影厅在大厅右墙上的入口：门框、门洞上方发光的招牌、后面一小段挂着帘子的门厅。
+ * 门洞本身由 Hall 在砌墙时留出来。
  */
 export function buildCinemaEntrance(w: World) {
   const { kit } = w;
   const C = CONFIG.colors;
-  const H = CONFIG.wallH;
   const x = CONFIG.hall.w / 2;
-  const d = CONFIG.hall.d;
-
-  // 门洞两侧的墙，和门洞上方的一段
-  const zMin = -d - T / 2;
-  const zMax = T / 2;
-  for (const [a, b] of [[zMin, DOOR_Z - D.half], [DOOR_Z + D.half, zMax]]) {
-    kit.box(x, H / 2, (a + b) / 2, T, H, b - a, C.wall);
-    w.collide(x, (a + b) / 2, T, b - a, true);
-  }
-  kit.box(x, (D.h + H) / 2, DOOR_Z, T, H - D.h, D.half * 2, C.wall);
 
   // 门框
   const fx = HALL_FACE - 0.05;

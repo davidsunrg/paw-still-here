@@ -61,6 +61,8 @@ export const en = {
   search: 'Find a pet',
 
   wallTitle: 'Still here.',
+  /** 右墙两个入口之间的一行字 */
+  wallTitleRight: 'Stay a while.',
   treeLabel: 'The Remembering Tree',
 
   tipPet: 'Visit their courtyard',
@@ -77,6 +79,11 @@ export const en = {
   tipSeat: 'Take this seat',
   cinemaExit: 'Lobby',
   cinemaIdle: 'Take any seat',
+  /** 思念之河：洞口上方木牌的两行字、鼠标悬停的提示、还没开放时点了之后的一行字 */
+  caveSign: 'The River of Longing',
+  caveSub: 'By boat, through the cave, to the dock',
+  tipCave: 'The River of Longing · not open yet',
+  caveSoon: 'The boat is not ready yet. It will be soon.',
 
   tipFire: 'Burn a letter for them',
   fireHint: 'By the campfire you can write a letter and burn it for them',
@@ -143,6 +150,7 @@ export const en = {
     reception: 'Front desk',
     elevator: 'Elevator',
     cinema: 'Theater',
+    cave: 'River',
     entrance: 'Entrance',
     closed: 'Gallery · not open yet',
     here: 'You are here',

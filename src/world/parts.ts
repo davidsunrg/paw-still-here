@@ -57,6 +57,49 @@ export function archWall(
   }
 }
 
+/** 墙上的一个门洞：中心在 z、半宽 half。给了 spring 就是拱门（从 spring 起弧），否则是高 h 的方门 */
+export interface Opening {
+  z: number;
+  half: number;
+  h?: number;
+  spring?: number;
+}
+
+/** 沿 Z 方向的一面墙（墙体中心在 x 处，从 z0 到 z1），上面开几个落地的门洞 */
+export function doorWall(w: World, x: number, z0: number, z1: number, openings: Opening[]) {
+  const H = CONFIG.wallH;
+  const T = CONFIG.wallT;
+  const list = [...openings].sort((a, b) => a.z - b.z);
+  const s = new THREE.Shape();
+  s.moveTo(z0, 0);
+  let from = z0;
+  for (const o of list) {
+    s.lineTo(o.z - o.half, 0);
+    if (o.spring !== undefined) {
+      s.lineTo(o.z - o.half, o.spring);
+      s.absarc(o.z, o.spring, o.half, Math.PI, 0, true);
+    } else {
+      s.lineTo(o.z - o.half, o.h ?? 2.6);
+      s.lineTo(o.z + o.half, o.h ?? 2.6);
+    }
+    s.lineTo(o.z + o.half, 0);
+    w.collide(x, (from + o.z - o.half) / 2, T, o.z - o.half - from, true);
+    from = o.z + o.half;
+  }
+  w.collide(x, (from + z1) / 2, T, z1 - from, true);
+  s.lineTo(z1, 0);
+  s.lineTo(z1, H);
+  s.lineTo(z0, H);
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: T, bevelEnabled: false, curveSegments: 20 });
+  // 画的时候横轴是 z：转过来让它沿着 Z 方向立着
+  geo.translate(0, 0, -T / 2).rotateY(-Math.PI / 2);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: CONFIG.colors.wall, roughness: 0.85 }));
+  mesh.position.x = x;
+  mesh.castShadow = mesh.receiveShadow = true;
+  w.scene.add(mesh);
+}
+
 /** 墙顶的暖色灯带 */
 export function wallStrip(kit: Kit, x: number, z: number, lenX: number, lenZ: number) {
   kit.glowBox(x, CONFIG.wallH + 0.04, z, Math.max(lenX, 0.07), 0.07, Math.max(lenZ, 0.07), CONFIG.colors.warm, 2.2);

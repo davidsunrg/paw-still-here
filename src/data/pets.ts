@@ -4,8 +4,8 @@ import { STR } from '../i18n';
 /** 物种的代号；显示名在语言文件里 */
 export type Species = 'cat' | 'dog' | 'rabbit' | 'hamster' | 'bird';
 
-/** 大厅照片墙的三个区：进门左手是 A，正对面是 B，右手是 C。以后展区开放，字母往后接着排 */
-export const SECTIONS = ['A', 'B', 'C'] as const;
+/** 大厅照片墙的两个区：进门左手是 A，正对面是 B（右手那面墙是影厅和河的入口）。以后展区开放，字母往后接着排 */
+export const SECTIONS = ['A', 'B'] as const;
 export type Section = (typeof SECTIONS)[number];
 
 export interface Pet {
@@ -44,8 +44,8 @@ export interface Pet {
 export const CUSTOM_PETS: Array<Partial<Pet> & Pick<Pet, 'name' | 'species' | 'passedDate' | 'message'>> = [];
 
 const G = CONFIG.gallery;
-/** 三个区各有多少格，顺序和 SECTIONS 一致 */
-export const SECTION_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows, (G.sideCols - G.doorCols) * G.rows];
+/** 每个区各有多少格，顺序和 SECTIONS 一致 */
+export const SECTION_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows];
 
 /** 可复现的伪随机数 */
 export function mulberry32(seed: number) {

@@ -152,6 +152,7 @@ world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
 world.hooks.lantern = () => ui.openLantern();
 world.hooks.cinema = () => enterCinema();
+world.hooks.cave = () => ui.toast(STR.caveSoon);
 world.hooks.sit = (seats) => {
   // 坐到这张沙发上离自己近的那一边
   const d = (s: { x: number; z: number }) => Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
