@@ -17,13 +17,15 @@ const COL = {
   water: 0x08202c,
 };
 
-/** 沿途的灯用到的颜色：都是灯笼和烛火那样的暖色，只有靠近洞口的地方带一点月光的冷调 */
+/** 沿途的灯用到的颜色：都是灯笼和烛火那样的暖色，中段和靠近洞口的地方带一点淡淡的月光 */
 const HUE = {
   amber: 0xffa850,
   honey: 0xffc070,
   ember: 0xff9058,
   candle: 0xffd9a0,
   moon: 0xa8b8d8,
+  /** 更淡的月光：洞厅中段的洞顶和一侧洞壁，免得一路都是橙色 */
+  pale: 0xc6d0e6,
 };
 
 /**
@@ -35,8 +37,8 @@ const LIGHTS: Light[] = [
   [6, -17, 8, HUE.amber, 300],
   [26, 22, 9, HUE.honey, 320],
   [46, -23, 9, HUE.ember, 320],
-  [56, 2, 19, HUE.candle, 200],
-  [66, 23, 9, HUE.amber, 320],
+  [56, 2, 19, HUE.pale, 190],
+  [66, 23, 9, HUE.pale, 240],
   [84, -22, 9, HUE.honey, 300],
   [98, 14, 8, HUE.moon, 220],
 ];
