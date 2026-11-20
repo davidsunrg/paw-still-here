@@ -54,6 +54,7 @@
           <button data-tp="lantern" data-t="tpLantern"></button>
           <button data-tp="hall" data-t="tpHall"></button>
         </div>
+        <button id="btn-letters" data-t="letters"></button>
         <button id="btn-search" data-t="search"></button>
       </div>
       <div id="hint"></div>
@@ -74,6 +75,7 @@
       <div class="rites" id="detail-rites">
         <button id="btn-rite-river" data-t="riteRiver"></button>
         <button id="btn-rite-fire" data-t="riteFire"></button>
+        <button id="btn-rite-letters" data-t="riteLetters"></button>
         <button id="btn-leave" data-t="spaceLeave"></button>
       </div>
     </aside>
@@ -139,15 +141,31 @@
       </div>
     </div>
 
-    <div class="modal" id="modal-letter">
-      <div class="card">
+    <!-- 信：读树上所有的信（或者只看写给某一只的），也可以写一封 -->
+    <div class="modal" id="modal-letters">
+      <div class="card wide">
         <button class="close" data-close aria-label="close">×</button>
-        <h2 id="letter-title"></h2>
-        <ul class="messages" id="letter-list"></ul>
-        <form id="letter-form" class="stack">
-          <textarea id="letter-input" maxlength="300" rows="4"></textarea>
-          <button class="primary" data-t="letterSend"></button>
+        <h2 id="letters-title"></h2>
+        <p id="letters-desc" data-t="lettersDesc"></p>
+        <div class="tabs">
+          <button type="button" id="letters-all" data-t="lettersAll"></button>
+          <button type="button" id="letters-pet" class="hidden"></button>
+          <button type="button" id="letters-mine" data-t="letterMine"></button>
+          <button type="button" id="post-open" data-t="letterWrite"></button>
+        </div>
+        <form id="post-form" class="stack hidden">
+          <textarea id="post-input" maxlength="300" rows="3"></textarea>
+          <div class="chosen hidden" id="post-chosen">
+            <span id="post-chosen-name"></span>
+            <button type="button" id="post-change" data-t="riverChange"></button>
+          </div>
+          <div class="picker" id="post-picker">
+            <input id="post-search" autocomplete="off" />
+            <ul class="results" id="post-results"></ul>
+          </div>
+          <button class="primary" id="post-go" data-t="letterSend"></button>
         </form>
+        <ul class="messages letters" id="letters-list"></ul>
       </div>
     </div>
 
@@ -184,18 +202,6 @@
         <textarea id="fire-input" maxlength="300" rows="4"></textarea>
         <p class="note" data-t="fireNote"></p>
         <button class="primary go" id="fire-go" data-t="fireGo" disabled></button>
-      </div>
-    </div>
-
-    <div class="modal" id="modal-guestbook">
-      <div class="card">
-        <button class="close" data-close aria-label="close">×</button>
-        <h2 data-t="guestbookTitle"></h2>
-        <ul class="messages" id="guestbook-list"></ul>
-        <form id="guestbook-form">
-          <input id="guestbook-input" maxlength="80" autocomplete="off" />
-          <button class="primary" data-t="guestbookSend"></button>
-        </form>
       </div>
     </div>
 

@@ -2,7 +2,7 @@ import { STR } from '../i18n';
 import { petById, type Pet } from './pets';
 
 /**
- * 数据层：礼物、信、留言簿、孔明灯目前保存在 localStorage。
+ * 数据层：礼物、信（以及对信的爱心、回的话、举报）、孔明灯目前保存在 localStorage。
  * 以后接后端时，只需要替换这个文件里的读写实现。
  */
 
@@ -41,11 +41,49 @@ interface Rite {
   time: number;
 }
 
+/**
+ * 访客对信做过的事：送过爱心的、举报后不再显示的、回的话。
+ * 用信的编号记（见 letterId），信本身的存法不变。
+ */
+interface Social {
+  hearts: string[];
+  hidden: string[];
+  replies: Record<string, Message[]>;
+}
+
 interface State {
   pets: Record<string, PetRecord>;
   guestbook: Message[];
   lanterns: number;
   rites: Record<RiteKind, Rite[]>;
+  social: Social;
+}
+
+/** 列表里的一封信：自己写的和示例的都是这个样子 */
+export interface Letter extends Message {
+  id: string;
+  petName?: string;
+  /** 是不是这位访客自己写的 */
+  mine: boolean;
+  hearts: number;
+  hearted: boolean;
+  replies: Message[];
+}
+
+/** 每封信最多留多少条回的话 */
+const REPLY_CAP = 50;
+
+function social(raw: unknown): Social {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const ids = (list: unknown) => (Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []);
+  const replies: Record<string, Message[]> = {};
+  if (s.replies && typeof s.replies === 'object') {
+    for (const [id, list] of Object.entries(s.replies as Record<string, unknown>)) {
+      const items = messages(list).slice(-REPLY_CAP);
+      if (items.length) replies[id] = items;
+    }
+  }
+  return { hearts: ids(s.hearts), hidden: ids(s.hidden), replies };
 }
 
 function rites(list: unknown): Rite[] {
@@ -85,7 +123,7 @@ function migrateV1(old: Record<string, unknown>): State {
     for (let i = 0; i < count(r.candles); i++) gifts.push({ kind: 'candle', v: i % GIFT_VARIANTS.candle, time: 0 });
     pets[id] = { gifts, letters: messages(r.comments, id) };
   }
-  return { pets, guestbook: messages(old.guestbook), lanterns: count(old.lanterns), rites: { river: [], fire: [] } };
+  return { pets, guestbook: messages(old.guestbook), lanterns: count(old.lanterns), rites: { river: [], fire: [] }, social: social(null) };
 }
 
 function normalize(s: Record<string, unknown>): State {
@@ -104,6 +142,7 @@ function normalize(s: Record<string, unknown>): State {
     guestbook: messages(s.guestbook),
     lanterns: Math.max(0, Math.floor(Number(s.lanterns) || 0)),
     rites: { river: rites(r.river), fire: rites(r.fire) },
+    social: social(s.social),
   };
 }
 
@@ -121,7 +160,7 @@ function load(): State {
   } catch {
     // 数据损坏或无法访问 localStorage 时，从空状态开始
   }
-  return { pets: {}, guestbook: [], lanterns: 0, rites: { river: [], fire: [] } };
+  return { pets: {}, guestbook: [], lanterns: 0, rites: { river: [], fire: [] }, social: social(null) };
 }
 
 const state = load();
@@ -152,7 +191,29 @@ function presetLetters(pet: Pet): Message[] {
   const n = seed(pet);
   if (n % 3 !== 0) return [];
   const pool = STR.sample.letters;
-  return Array.from({ length: 1 + (n % 2) }, (_, i) => ({ text: pool[(n + i * 3) % pool.length], time: 0 }));
+  // n 是 3 的倍数，先除以 3 再挑：不然只会挑到其中的两三句
+  return Array.from({ length: 1 + (n % 2) }, (_, i) => ({ text: pool[(n / 3 + i * 5) % pool.length], time: 0 }));
+}
+
+/** 示例的信自带几颗爱心：按编号算出来的固定数字 */
+function presetHearts(id: string) {
+  let h = 7;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 9973;
+  return 1 + (h % 14);
+}
+
+function letter(id: string, m: Message, mine: boolean): Letter {
+  const s = state.social;
+  const hearted = s.hearts.includes(id);
+  return {
+    ...m,
+    id,
+    petName: m.petId ? petById.get(m.petId)?.name : undefined,
+    mine,
+    hearted,
+    hearts: (mine ? 0 : presetHearts(id)) + (hearted ? 1 : 0),
+    replies: s.replies[id] ?? [],
+  };
 }
 
 export const store = {
@@ -183,10 +244,6 @@ export const store = {
     save();
     return gift;
   },
-  /** 写给这只宠物的信，最新的在前 */
-  letters(pet: Pet): Message[] {
-    return [...(state.pets[pet.id]?.letters ?? [])].reverse().concat(presetLetters(pet));
-  },
   addLetter(pet: Pet, text: string) {
     record(pet.id).letters.push({ text, time: Date.now(), petId: pet.id });
     save();
@@ -195,15 +252,57 @@ export const store = {
     state.guestbook.push({ text, time: Date.now() });
     save();
   },
-  /** 全馆最新留言：留言簿 + 写给各宠物的信，按时间倒序 */
-  recent(limit = 40): Array<Message & { petName?: string }> {
-    const all: Array<Message & { petName?: string }> = [...state.guestbook];
+  /**
+   * 挂在纪念树上的信：写给各只宠物的，加上写给这里所有小家伙的（原来的留言簿）。
+   * 自己写的排在前面（新的在前），后面是示例的；举报过的不再出现。传了 pet 就只看写给它的。
+   */
+  feed(pet?: Pet, limit = 80): Letter[] {
+    const own: Letter[] = [];
+    const preset: Letter[] = [];
+    if (!pet) for (const m of state.guestbook) own.push(letter(`g:${m.time}`, m, true));
     for (const [id, r] of Object.entries(state.pets)) {
-      for (const c of r.letters) all.push({ ...c, petName: petById.get(id)?.name });
+      if (pet && id !== pet.id) continue;
+      for (const m of r.letters) own.push(letter(`p:${id}:${m.time}`, { ...m, petId: id }, true));
     }
-    all.sort((a, b) => b.time - a.time);
-    const samples = STR.sample.guestbook.map((text) => ({ text, time: 0 }));
-    return [...all, ...samples].slice(0, limit);
+    own.sort((a, b) => b.time - a.time);
+    if (!pet) STR.sample.guestbook.forEach((text, i) => preset.push(letter(`sg:${i}`, { text, time: 0 }, false)));
+    for (const p of pet ? [pet] : petById.values()) {
+      presetLetters(p).forEach((m, i) => preset.push(letter(`sp:${p.id}:${i}`, { ...m, petId: p.id }, false)));
+    }
+    const hidden = new Set(state.social.hidden);
+    const shown = (l: Letter) => !hidden.has(l.id);
+    if (pet) return [...own, ...preset].filter(shown).slice(0, limit);
+    // 看全部的时候：示例的信按编号打散，不让同一只宠物的排在一起；
+    // 示例宠物的信是从几句话里挑的，同一句话只留一封，列表里不出现一模一样的
+    preset.sort((a, b) => presetHearts(`o${a.id}`) - presetHearts(`o${b.id}`));
+    const texts = new Set<string>();
+    // 先去重再去掉举报过的：不然举报了一封，另一只宠物那封一模一样的又补上来
+    const unique = preset.filter((l) => !texts.has(l.text) && texts.add(l.text)).filter(shown);
+    return [...own.filter(shown), ...unique].slice(0, limit);
+  },
+  /** 这位访客自己写过多少封（纪念树上有几块是自己的木牌） */
+  ownLetters() {
+    return state.guestbook.length + Object.values(state.pets).reduce((n, r) => n + r.letters.length, 0);
+  },
+  /** 给一封信送一颗爱心，再点一次收回；返回现在是不是送着 */
+  toggleHeart(id: string) {
+    const { hearts } = state.social;
+    const i = hearts.indexOf(id);
+    if (i >= 0) hearts.splice(i, 1);
+    else hearts.push(id);
+    save();
+    return i < 0;
+  },
+  addReply(id: string, text: string) {
+    const list = (state.social.replies[id] ??= []);
+    list.push({ text, time: Date.now() });
+    if (list.length > REPLY_CAP) list.shift();
+    save();
+  },
+  /** 举报一封信：没有后端，只是在这位访客这里不再显示 */
+  report(id: string) {
+    if (!state.social.hidden.includes(id)) state.social.hidden.push(id);
+    save();
   },
   /** 记下做过一次室外仪式（放河灯 / 烧信）。河灯可以不写给某一只，这时 petId 记空字符串 */
   addRite(kind: RiteKind, pet: Pet | null) {

@@ -91,7 +91,7 @@ export function buildHall(w: World) {
   scene.add(wallTitle);
 
   // ---------- 纪念树和两侧的沙发 ----------
-  buildTree(w);
+  w.tree = buildTree(w);
   for (const s of [-1, 1]) {
     kit.box(s * (L.sofaX - 0.5), 0.055, zc, 2.6, 0.03, 3.8, 0x6f5560);
     kit.box(s * (L.sofaX - 0.5), 0.062, zc, 2.2, 0.03, 3.4, 0x86697a);
@@ -164,13 +164,6 @@ export function buildHall(w: World) {
   logo.position.set(gx, 0.62, gz);
   logo.rotation.y = Math.PI;
   scene.add(logo);
-  // 留言簿
-  const [bx, bkz] = deskAt(180, 0.02);
-  kit.box(bx - 0.14, 1.115, bkz, 0.27, 0.03, 0.34, 0xfaf4e6, 0.06);
-  kit.box(bx + 0.14, 1.115, bkz, 0.27, 0.03, 0.34, 0xf3ecdb, -0.06);
-  kit.box(bx, 1.105, bkz, 0.6, 0.02, 0.37, 0x7b3f3f);
-  kit.cyl(bx + 0.42, 1.13, bkz + 0.05, 0.012, 0.16, 0x2b2b33);
-  w.proxy(bx, 1.16, bkz, 0.75, 0.2, 0.5, STR.tipGuestbook, () => w.hooks.guestbook());
   // 台灯
   const [tx, tz] = deskAt(141);
   kit.cyl(tx, 1.1, tz, 0.09, 0.03, 0x2b2b33);

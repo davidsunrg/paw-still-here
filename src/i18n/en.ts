@@ -69,7 +69,9 @@ export const en = {
   tipPet: 'Visit their courtyard',
   tipLetters: 'Read the letters written to them',
   tipBench: 'Sit for a while',
-  tipGuestbook: 'Open the guestbook',
+  /** 纪念树：点树、点树前那本摊开的本子 */
+  tipTree: 'Read the letters on the tree',
+  tipGuestbook: 'Write a letter',
   tipReception: 'Front desk · Find a pet',
   tipDock: 'Float a river lantern',
   tipLantern: 'Release a sky lantern',
@@ -138,12 +140,37 @@ export const en = {
   riteRiver: 'Float a river lantern',
   riteFire: 'Burn a letter',
 
+  /**
+   * 信：每一封都挂在纪念树上（树上的一块木牌）。写给某一只的，同时留在它的小院里。
+   * 底部的按钮、弹窗的标题和说明；只看写给某一只的时候的标题、回到全部的按钮；小院里的按钮
+   */
+  letters: 'Letters',
+  lettersTitle: 'Letters on the tree',
+  lettersDesc: 'Every letter left here hangs on the Remembering Tree. Read them, or leave one of your own.',
   letterTitle: (name: string) => `Letters to ${name}`,
+  lettersAll: 'All letters',
+  riteLetters: 'Letters to them',
+  /** 写一封：输入框里的提示、选好了写给谁、按钮、写完之后的一行字（没有写给某一只的） */
   letterPlaceholder: 'Take your time. What do you want to tell them…',
-  letterSend: 'Leave it beside them',
+  letterFor: (name: string) => `This letter is for ${name}`,
+  letterWrite: 'Write a letter',
+  letterSend: 'Leave this letter',
+  letterToast: 'Your letter is on the tree',
   letterEmpty: 'No letters here yet. Yours can be the first.',
-  /** 留言列表里，一封信是写给谁的 */
+  /** 列表里，一封信是写给谁的；没有写给某一只的；自己写的 */
   letterTo: (name: string) => `To ${name}`,
+  letterToAll: 'To all the little ones here',
+  letterMine: 'Yours',
+  /** 每封信右上角：去它的小院看看 */
+  letterVisit: (name: string) => `Visit ${name}`,
+  /** 每封信下面：爱心（给看不见图标的人念的）、回一句、回的话有几条、输入框、发送、举报、举报之后的一行字 */
+  letterHeart: 'Send a heart',
+  letterReply: 'Reply',
+  letterReplies: (n: number) => (n === 1 ? '1 reply' : `${n} replies`),
+  replyPlaceholder: 'A few kind words back…',
+  replySend: 'Send',
+  letterReport: 'Report',
+  reportToast: 'Thank you for telling us. You will not see that letter again.',
 
   /** 物种的显示名 */
   species: { cat: 'Cat', dog: 'Dog', rabbit: 'Rabbit', hamster: 'Hamster', bird: 'Bird' } as Record<Species, string>,
@@ -179,10 +206,6 @@ export const en = {
   lanternDefault: 'Remembered, and still with us',
   lanternToast: 'Your lantern is rising. Look up',
 
-  guestbookTitle: 'Guestbook',
-  guestbookPlaceholder: 'Leave a line for all the little ones here…',
-  guestbookSend: 'Write',
-
   searchTitle: 'Find a pet',
   searchPlaceholder: 'Name, breed or section…',
   searchEmpty: 'Nothing found. Try another name.',
@@ -190,8 +213,6 @@ export const en = {
   searchGoto: 'Go there',
   guideToast: (name: string) => `Follow the lights on the ground to find ${name}`,
   guideArrive: (name: string) => `${name} is right here`,
-
-  commentToast: 'Your note has been left',
 
   /**
    * 示例宠物的内容。各个列表的条数不要改：示例宠物是用固定的随机数从里面挑的，
@@ -245,8 +266,14 @@ export const en = {
       'I washed your little bowl and put it away. I cannot throw it out.',
       'It is the day you came home to us again. Happy birthday.',
       'Thank you for being my little alarm clock all these years.',
+      'Your leash still hangs by the door. I touch it on my way out.',
+      'It rained today. I thought of how you watched the window.',
+      'I found one of your toys under the sofa and sat with it for a while.',
+      'The neighbors still ask about you. Everyone remembers you.',
+      'I planted the flowers you used to sniff. They came up this spring.',
+      'Some evenings I still save you the last bite.',
     ],
-    /** 留言簿里默认展示的几条留言 */
+    /** 写给这里所有小家伙的信（没有写给某一只的），示例的几封 */
     guestbook: [
       'Thank you for this place. It is good to have somewhere to come and remember.',
       'Every little one here is remembered by someone. That is a lovely thing.',

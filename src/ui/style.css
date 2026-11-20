@@ -611,13 +611,163 @@ form.stack button {
   align-self: flex-end;
   padding: 9px 20px;
 }
-#modal-letter .messages li {
+/* 信：一封一封的列表，每封下面是爱心、回的话、举报 */
+.card.wide {
+  width: min(520px, 100%);
+  max-height: 88vh;
+}
+/* 筛选：全部 / 写给它的 / 自己写的；最右边是「写一封」 */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tabs button {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.tabs button.on {
+  color: #2a1c10;
+  background: var(--warm-soft);
+  border-color: transparent;
+}
+.tabs #post-open {
+  margin-left: auto;
+  color: var(--warm-soft);
+  border-color: var(--warm);
+}
+.tabs #post-open.on {
+  color: #2a1c10;
+}
+.letters > li {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.letters .head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.letters .avatar {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--line);
+}
+.letters .avatar.paw {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 196, 122, 0.12);
+}
+.letters .avatar.paw svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--warm);
+}
+.letters .who {
+  flex: 1;
+  min-width: 0;
+}
+.letters .who b {
+  display: block;
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--warm-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.letters .who small {
+  margin: 0;
+}
+.letters .visit {
+  flex: none;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+#post-form .picker .results {
+  max-height: 18vh;
+}
+.letters {
+  flex: 1;
+}
+.letters > li .text {
   font-family: var(--serif);
   line-height: 1.8;
   white-space: pre-wrap;
 }
-#modal-letter .messages {
-  max-height: 34vh;
+.letters .acts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.letters .acts button {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--ink-dim);
+}
+.letters .acts button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+}
+.letters .acts .heart.on {
+  color: #ff9a9a;
+}
+.letters .acts .report {
+  margin-left: auto;
+  opacity: 0.6;
+}
+body.touch .letters .acts button {
+  padding: 8px 12px;
+}
+.letters .thread {
+  margin-top: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.letters .replies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.letters .replies li {
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+.letters .replies li small {
+  display: inline;
+  margin-left: 8px;
+}
+.letters .thread form {
+  margin: 0;
+}
+.letters .thread input {
+  flex: 1;
+  min-width: 0;
+}
+.letters .thread form button {
+  padding: 6px 14px;
+  font-size: 12px;
 }
 
 #detail h3,
@@ -847,6 +997,9 @@ button:disabled {
   .bottom-bar .group button {
     padding: 6px 7px;
   }
+  .bottom-bar {
+    gap: 6px;
+  }
   /* 小屏幕上只留一条：名字和几个按钮。种类、日期、寄语都刻在石柱上，不再重复 */
   #detail {
     top: calc(54px + env(safe-area-inset-top));
@@ -873,6 +1026,10 @@ button:disabled {
     margin-top: 2px;
     gap: 6px;
   }
+  /* 小屏幕上放不下四个：读信从下面礼物栏的「信」进去 */
+  #btn-rite-letters {
+    display: none;
+  }
   .rites button {
     flex: 1;
     padding: 7px 4px;
@@ -895,5 +1052,19 @@ button:disabled {
   }
   #loader h1 {
     font-size: 26px;
+  }
+}
+
+/* 很窄的手机：底部一排七个按钮再收一点，不超出屏幕 */
+@media (max-width: 400px) {
+  .bottom-bar {
+    gap: 4px;
+  }
+  .bottom-bar button {
+    padding: 7px 7px;
+    font-size: 11px;
+  }
+  .bottom-bar .group button {
+    padding: 6px 5px;
   }
 }

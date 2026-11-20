@@ -123,6 +123,13 @@ const ui = new UI({
     world.river.launch(pet?.name ?? '');
     audio.chime(true);
   },
+  onLetter(pet, here) {
+    // 写了一封信：树上多一块自己的木牌；写给某一只的，它相框下面的数字跟着变，人在它的小院里时信落在石阶上
+    world.tree.setOwn(store.ownLetters());
+    if (pet) world.gallery.refresh(pet);
+    if (here) world.space.drop('letter');
+    audio.chime(false);
+  },
   onGuide(pet) {
     ui.closeAll();
     const entry = frameOf(pet);
@@ -151,7 +158,8 @@ const ui = new UI({
   },
 });
 
-world.hooks.guestbook = () => ui.openGuestbook();
+world.hooks.guestbook = () => ui.openLetters(null, true);
+world.hooks.tree = () => ui.openLetters();
 world.hooks.reception = () => ui.openSearch();
 world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
@@ -639,7 +647,8 @@ async function boot() {
     run();
   }
   interaction = new Interaction(camera, world, player.pos);
-  world.space.hooks.letters = () => ui.openLetters();
+  world.space.hooks.letters = () => ui.openPetLetters();
+  world.tree.setOwn(store.ownLetters());
   world.space.hooks.bench = () => sitDown(world.space.seat);
   // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
   crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);
