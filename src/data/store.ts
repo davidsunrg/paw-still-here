@@ -205,9 +205,9 @@ export const store = {
     const samples = STR.sample.guestbook.map((text) => ({ text, time: 0 }));
     return [...all, ...samples].slice(0, limit);
   },
-  /** 记下为某只宠物做过一次室外仪式（放河灯 / 烧信） */
-  addRite(kind: RiteKind, pet: Pet) {
-    state.rites[kind].push({ petId: pet.id, time: Date.now() });
+  /** 记下做过一次室外仪式（放河灯 / 烧信）。河灯可以不写给某一只，这时 petId 记空字符串 */
+  addRite(kind: RiteKind, pet: Pet | null) {
+    state.rites[kind].push({ petId: pet?.id ?? '', time: Date.now() });
     save();
   },
   riteCount(kind: RiteKind, pet: Pet) {

@@ -115,7 +115,7 @@ class RiverLanterns {
     }
   }
 
-  /** 从码头放下一盏写着名字的河灯 */
+  /** 从码头放下一盏河灯；name 是写在灯上的名字，可以是空的 */
   launch(name: string) {
     const users = this.items.filter((l) => l.label);
     if (users.length >= RV.maxUserLanterns) this.remove(users[0]);
@@ -198,7 +198,7 @@ class RiverLanterns {
 }
 
 export interface River {
-  /** 从码头放下一盏写着名字的河灯 */
+  /** 从码头放下一盏河灯；name 是写在灯上的名字，可以是空的 */
   launch(name: string): void;
 }
 

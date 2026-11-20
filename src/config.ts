@@ -139,6 +139,15 @@ export const CONFIG = {
     burnTime: 4.8,
   },
 
+  /**
+   * 孔明灯平台：在步道右侧（+x 方向），隔着步道正对篝火。radius 是石台半径，gap 是石台边缘到步道边缘的距离。
+   */
+  lanternTerrace: {
+    z: 15,
+    radius: 2.3,
+    gap: 0.8,
+  },
+
   /** 模拟的其他访客 */
   visitors: {
     /** 同时在场的人数：高画质 / 低画质 */

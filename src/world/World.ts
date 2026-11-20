@@ -4,6 +4,7 @@ import { PETS, type Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
+import { buildLanternTerrace } from './LanternTerrace';
 import { buildGallery, type Gallery } from './Gallery';
 import { tickFlames } from './gifts';
 import { buildHall } from './Hall';
@@ -73,7 +74,7 @@ export class World {
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击留言簿 / 接待台 / 沙发时触发；sit 收到的是这张沙发上的座位 */
-  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, sit: (_seats: Seat[]) => {} };
+  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, sit: (_seats: Seat[]) => {} };
   /** 访客脚下的地面高度，目前只有桥面高出地面 */
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
@@ -96,6 +97,7 @@ export class World {
       ['outdoor', () => buildOutdoor(this)],
       ['river', () => (this.river = buildRiver(this))],
       ['fire', () => (this.bonfire = buildBonfire(this))],
+      ['lantern', () => buildLanternTerrace(this)],
       ['hall', () => buildHall(this)],
       ['gallery', () => (this.gallery = buildGallery(this))],
       ['space', () => (this.space = new Space(this))],

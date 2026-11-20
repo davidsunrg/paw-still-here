@@ -20,6 +20,7 @@ import type { PhotoEntry } from './world/Batches';
 import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
+import { LANTERN_LAUNCH, LANTERN_SPOT } from './world/LanternTerrace';
 import { DOCK_SPOT, routeToDock } from './world/River';
 import { World } from './world/World';
 
@@ -69,12 +70,13 @@ const ui = new UI({
       if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
       else if (target === 'river') toDock();
       else if (target === 'fire') toFire();
+      else if (target === 'lantern') toLantern();
       else player.teleport(0, -2.2, 0);
     });
   },
   onLantern(text) {
-    // 孔明灯从小人面前升起
-    world.sky.launch(inFront(1.3, 1.2), text);
+    // 孔明灯从平台的桌面上方升起
+    world.sky.launch(LANTERN_LAUNCH.clone(), text);
     store.addLantern();
     audio.chime(true);
   },
@@ -115,7 +117,7 @@ const ui = new UI({
   },
   onRiverLantern(pet) {
     store.addRite('river', pet);
-    world.river.launch(pet.name);
+    world.river.launch(pet?.name ?? '');
     audio.chime(true);
   },
   onGuide(pet) {
@@ -147,6 +149,7 @@ world.hooks.guestbook = () => ui.openGuestbook();
 world.hooks.reception = () => ui.openSearch();
 world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
+world.hooks.lantern = () => ui.openLantern();
 world.hooks.sit = (seats) => {
   // 坐到这张沙发上离自己近的那一边
   const d = (s: { x: number; z: number }) => Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
@@ -171,11 +174,23 @@ function toFire() {
   player.teleport(FIRE_SPOT.x, FIRE_SPOT.z, FIRE_SPOT.yaw, FIRE_SPOT.pitch, FIRE_SPOT.facing);
 }
 
+/** 小人站到孔明灯平台的桌前，面向桌子 */
+function toLantern() {
+  seen.lantern = true;
+  player.teleport(LANTERN_SPOT.x, LANTERN_SPOT.z, LANTERN_SPOT.yaw, LANTERN_SPOT.pitch, LANTERN_SPOT.facing);
+}
+
 /** 第一次沿步道走近室外的纪念地点时，用一行小字和地上的光点告诉访客这里可以做什么 */
-const seen = { river: false, fire: false };
+const seen = { river: false, fire: false, lantern: false };
+/** 上一条提示是什么时候出的。篝火和孔明灯平台隔着步道相对，两条提示错开，不互相盖掉 */
+let hintedAt = -Infinity;
+const HINT_GAP = 8;
 function updateDiscovery() {
   if (!entered || blocked) return;
+  const now = clock.elapsedTime;
+  if (now - hintedAt < HINT_GAP) return;
   const near = (spot: { x: number; z: number }, r: number) => Math.hypot(player.pos.x - spot.x, player.pos.z - spot.z) < r;
+  const here = () => new THREE.Vector3(player.pos.x, 0, player.pos.z);
   if (!seen.river && near(DOCK_SPOT, 9)) {
     seen.river = true;
     ui.whisper(STR.riverHint);
@@ -183,9 +198,13 @@ function updateDiscovery() {
   } else if (!seen.fire && near(FIRE_SPOT, 7)) {
     seen.fire = true;
     ui.whisper(STR.fireHint);
-    const here = new THREE.Vector3(player.pos.x, 0, player.pos.z);
-    if (!guide.active) guide.show([here, new THREE.Vector3(FIRE_SPOT.x, 0, FIRE_SPOT.z)], () => {});
-  }
+    if (!guide.active) guide.show([here(), new THREE.Vector3(FIRE_SPOT.x, 0, FIRE_SPOT.z)], () => {});
+  } else if (!seen.lantern && near(LANTERN_SPOT, 7)) {
+    seen.lantern = true;
+    ui.whisper(STR.lanternHint);
+    if (!guide.active) guide.show([here(), new THREE.Vector3(LANTERN_SPOT.x, 0, LANTERN_SPOT.z)], () => {});
+  } else return;
+  hintedAt = now;
 }
 
 /** 宠物在照片墙上的那张相框 */

@@ -2,7 +2,10 @@ import { PETS, SECTIONS, type Pet } from '../data/pets';
 import { store, type Message, type OfferKind, type RiteKind } from '../data/store';
 import { applyLocaleStyle, STR } from '../i18n';
 
-export type TeleportTarget = 'gate' | 'river' | 'fire' | 'hall';
+export type TeleportTarget = 'gate' | 'river' | 'fire' | 'lantern' | 'hall';
+
+/** 带「选一只宠物」的三个弹窗：河灯、烧信、孔明灯。只有烧信必须选 */
+type PickKind = RiteKind | 'lantern';
 
 export interface UIHooks {
   onEnter(): void;
@@ -19,8 +22,8 @@ export interface UIHooks {
   onOffering(pet: Pet, kind: OfferKind): void;
   /** 在它的小院里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
   onRite(kind: RiteKind, pet: Pet): void;
-  /** 访客在码头放下了一盏写着这只宠物名字的河灯 */
-  onRiverLantern(pet: Pet): void;
+  /** 访客在码头放下了一盏河灯；pet 是写在灯上的那只宠物，没有选就是 null */
+  onRiverLantern(pet: Pet | null): void;
   /** 访客把写给这只宠物的信投进了篝火（信的内容不保存，所以这里不传） */
   onBurnLetter(pet: Pet): void;
   onGuide(pet: Pet): void;
@@ -44,7 +47,7 @@ export class UI {
   private toastTimer = 0;
   private hintTimer = 0;
   private shrineHinted = false;
-  private ritePet: Record<RiteKind, Pet | null> = { river: null, fire: null };
+  private ritePet: Record<PickKind, Pet | null> = { river: null, fire: null, lantern: null };
   private tooltip = $('tooltip');
 
   constructor(private hooks: UIHooks) {
@@ -60,7 +63,8 @@ export class UI {
     $<HTMLInputElement>('lantern-input').placeholder = STR.lanternPlaceholder;
     $<HTMLInputElement>('guestbook-input').placeholder = STR.guestbookPlaceholder;
     $<HTMLInputElement>('search-input').placeholder = STR.searchPlaceholder;
-    $<HTMLInputElement>('river-search').placeholder = STR.riverPlaceholder;
+    $<HTMLInputElement>('river-search').placeholder = STR.pickOptional;
+    $<HTMLInputElement>('lantern-search').placeholder = STR.pickOptional;
     $<HTMLInputElement>('fire-search').placeholder = STR.riverPlaceholder;
     $<HTMLTextAreaElement>('fire-input').placeholder = STR.firePlaceholder;
     $('btn-sound').textContent = STR.soundOff;
@@ -86,7 +90,6 @@ export class UI {
         hooks.onTeleport(b.dataset.tp as TeleportTarget);
       }),
     );
-    $('btn-lantern').addEventListener('click', () => this.openModal('modal-lantern', 'lantern-input'));
     $('btn-search').addEventListener('click', () => this.openSearch());
 
     // 弹窗：点遮罩或关闭按钮收起
@@ -130,17 +133,18 @@ export class UI {
       $(`btn-rite-${kind}`).addEventListener('click', () => {
         if (this.pet) hooks.onRite(kind, this.pet);
       });
+    }
+    for (const kind of ['river', 'fire', 'lantern'] as const) {
       $(`${kind}-search`).addEventListener('input', () => this.renderRitePicker(kind));
       $(`${kind}-change`).addEventListener('click', () => this.chooseRitePet(kind, null));
     }
     $('river-go').addEventListener('click', () => {
       const pet = this.ritePet.river;
-      if (!pet) return;
       this.closeModals();
       hooks.onRiverLantern(pet);
-      this.toast(STR.riverToast(pet.name));
+      this.toast(pet ? STR.riverToast(pet.name) : STR.riverToastPlain);
     });
-    $('fire-input').addEventListener('input', () => this.updateRiteGo('fire'));
+    $('fire-input').addEventListener('input', () => this.updateRiteGo());
     $('fire-go').addEventListener('click', () => {
       const pet = this.ritePet.fire;
       const input = $<HTMLTextAreaElement>('fire-input');
@@ -156,7 +160,8 @@ export class UI {
     $('lantern-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const input = $<HTMLInputElement>('lantern-input');
-      const text = input.value.trim() || STR.lanternDefault;
+      // 写了字就用这句话；没写但选了宠物，就写它的名字；都没有，用默认的那一句
+      const text = input.value.trim() || this.ritePet.lantern?.name || STR.lanternDefault;
       input.value = '';
       this.closeModals();
       hooks.onLantern(text);
@@ -427,35 +432,49 @@ export class UI {
   // ---------- 河灯与烧信 ----------
 
   /**
-   * 打开放河灯 / 烧信的弹窗。两个弹窗的结构相同：先选一只宠物，再确认。
+   * 打开放河灯 / 烧信的弹窗。烧信要先选一只宠物；河灯可以不选。
    * 从单宠物视角过来时已经选好了宠物。
    */
   openRite(kind: RiteKind, pet: Pet | null = null) {
     $<HTMLInputElement>(`${kind}-search`).value = '';
     if (kind === 'fire') $<HTMLTextAreaElement>('fire-input').value = '';
     this.chooseRitePet(kind, pet);
-    this.openModal(`modal-${kind}`, pet ? (kind === 'fire' ? 'fire-input' : undefined) : `${kind}-search`);
+    this.openModal(`modal-${kind}`, kind === 'fire' ? (pet ? 'fire-input' : 'fire-search') : undefined);
   }
 
-  private chooseRitePet(kind: RiteKind, pet: Pet | null) {
+  /** 打开放孔明灯的弹窗：写一句话，也可以选一只宠物 */
+  openLantern() {
+    $<HTMLInputElement>('lantern-input').value = '';
+    $<HTMLInputElement>('lantern-search').value = '';
+    this.chooseRitePet('lantern', null);
+    this.openModal('modal-lantern', 'lantern-input');
+  }
+
+  private chooseRitePet(kind: PickKind, pet: Pet | null) {
     this.ritePet[kind] = pet;
     $(`${kind}-chosen`).classList.toggle('hidden', !pet);
     $(`${kind}-picker`).classList.toggle('hidden', !!pet);
-    if (pet) $(`${kind}-chosen-name`).textContent = (kind === 'river' ? STR.riverFor : STR.fireFor)(pet.name);
-    else this.renderRitePicker(kind);
-    this.updateRiteGo(kind);
+    const chosen = { river: STR.riverFor, fire: STR.fireFor, lantern: STR.lanternFor }[kind];
+    if (pet) $(`${kind}-chosen-name`).textContent = chosen(pet.name);
+    else {
+      $<HTMLInputElement>(`${kind}-search`).value = '';
+      this.renderRitePicker(kind);
+    }
+    if (kind === 'fire') this.updateRiteGo();
   }
 
-  /** 选好了宠物（烧信还要写了内容）才能确认 */
-  private updateRiteGo(kind: RiteKind) {
-    const written = kind === 'river' || $<HTMLTextAreaElement>('fire-input').value.trim().length > 0;
-    $<HTMLButtonElement>(`${kind}-go`).disabled = !this.ritePet[kind] || !written;
+  /** 烧信要选好了宠物、写了内容才能确认 */
+  private updateRiteGo() {
+    const written = $<HTMLTextAreaElement>('fire-input').value.trim().length > 0;
+    $<HTMLButtonElement>('fire-go').disabled = !this.ritePet.fire || !written;
   }
 
-  private renderRitePicker(kind: RiteKind) {
+  private renderRitePicker(kind: PickKind) {
     const q = $<HTMLInputElement>(`${kind}-search`).value;
     const list = $(`${kind}-results`);
     list.replaceChildren();
+    // 选宠物是可选的时候，没输入就不列出来，弹窗保持简短
+    if (kind !== 'fire' && !q.trim()) return;
     const found = this.findPets(q);
     if (!found.length) {
       const li = document.createElement('li');
@@ -467,6 +486,7 @@ export class UI {
     for (const p of found) {
       const li = document.createElement('li');
       const pick = document.createElement('button');
+      pick.type = 'button';
       pick.className = 'primary';
       pick.textContent = STR.riverPick;
       pick.addEventListener('click', () => this.chooseRitePet(kind, p));

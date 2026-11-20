@@ -2,6 +2,7 @@ import { CONFIG, RIVER_BANKS } from '../config';
 import { mulberry32 } from '../data/pets';
 import { TREE_POS, TREE_SPAN } from '../world/Tree';
 import { BRIDGE_X, DOCK_X, FIRE_X, pathX } from '../world/Outdoor';
+import { LANTERN_STANDS } from '../world/LanternTerrace';
 import type { Collider, Seat, World } from '../world/World';
 import type { VisitorSource, VisitorState } from './Visitors';
 
@@ -173,6 +174,9 @@ export class SimulatedVisitors implements VisitorSource {
     const fireRing = [fireN, ...around, fireS];
     for (let i = 1; i < fireRing.length; i++) this.link(fireRing[i - 1], fireRing[i]);
     for (const seat of this.world.seats.filter((s) => s.zone === 'fire')) this.sit(seat, fireRing);
+
+    // 孔明灯平台：在步道另一侧，站在桌子两头看灯
+    for (const s of LANTERN_STANDS) this.stand(s.x, s.z, s.facing, [byFire]);
 
     // 大厅：正中是纪念树和两侧的沙发，访客沿着四周的过道走
     const t = TREE_POS;

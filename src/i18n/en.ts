@@ -34,6 +34,7 @@ export const en = {
     outdoor: 'Laying the stone path…',
     river: 'Letting the river in…',
     fire: 'Lighting the campfire…',
+    lantern: 'Folding the paper lanterns…',
     hall: 'Setting up the lobby…',
     gallery: 'Hanging the frames…',
     space: 'Sweeping the courtyard…',
@@ -52,11 +53,11 @@ export const en = {
   soloOn: 'Visitors: hidden',
 
   tpGate: 'Gate',
-  tpRiver: 'River',
+  tpDock: 'Dock',
   tpFire: 'Fire',
+  tpLantern: 'Lanterns',
   tpHall: 'Lobby',
   search: 'Find a pet',
-  lantern: 'Sky lantern',
 
   wallTitle: 'Still here.',
   treeLabel: 'The Remembering Tree',
@@ -67,6 +68,7 @@ export const en = {
   tipGuestbook: 'Open the guestbook',
   tipReception: 'Front desk · Find a pet',
   tipDock: 'Float a river lantern',
+  tipLantern: 'Release a sky lantern',
 
   tipFire: 'Burn a letter for them',
   fireHint: 'By the campfire you can write a letter and burn it for them',
@@ -79,13 +81,17 @@ export const en = {
   fireToast: (name: string) => `Your letter to ${name} is in the fire. Look up at the rising sparks`,
   riverHint: 'At the dock by the river you can float a lantern for them',
   riverTitle: 'Float a river lantern',
-  riverDesc: 'Their name is written on the lantern. Set it on the water and let it glow.',
+  riverDesc: 'Set a lantern on the water and let it glow. If it is for one of them, their name is written on it.',
   riverPlaceholder: 'Type a name to find the one you remember…',
+  /** 选宠物是可选的时候，搜索框里的提示（河灯、孔明灯） */
+  pickOptional: 'For one of them? Type a name (optional)…',
   riverFor: (name: string) => `This lantern carries the name ${name}`,
   riverChange: 'Change',
   riverPick: 'Choose',
   riverGo: 'Set it afloat',
   riverToast: (name: string) => `The lantern for ${name} is on the water, glowing`,
+  /** 没有写给某一只的河灯 */
+  riverToastPlain: 'Your lantern is on the water, glowing',
 
   giftFlower: 'Flower',
   giftCandle: 'Candle',
@@ -136,7 +142,9 @@ export const en = {
   close: 'Close',
 
   lanternTitle: 'Release a sky lantern',
-  lanternDesc: 'Write a line for them and let the lantern lift it into the night sky.',
+  lanternHint: 'At the lantern table you can write a line and send a sky lantern up',
+  lanternDesc: 'Write a line and let the lantern lift it into the night sky. You can also send it for one of them.',
+  lanternFor: (name: string) => `This lantern is for ${name}`,
   lanternPlaceholder: 'What you want to tell them…',
   lanternGo: 'Release',
   lanternDefault: 'Remembered, and still with us',

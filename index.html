@@ -49,12 +49,12 @@
       <div class="bottom-bar">
         <div class="group">
           <button data-tp="gate" data-t="tpGate"></button>
-          <button data-tp="river" data-t="tpRiver"></button>
+          <button data-tp="river" data-t="tpDock"></button>
           <button data-tp="fire" data-t="tpFire"></button>
+          <button data-tp="lantern" data-t="tpLantern"></button>
           <button data-tp="hall" data-t="tpHall"></button>
         </div>
         <button id="btn-search" data-t="search"></button>
-        <button id="btn-lantern" class="primary" data-t="lantern"></button>
       </div>
       <div id="hint"></div>
       <div id="stick-zone"></div>
@@ -122,8 +122,16 @@
         <p data-t="lanternDesc"></p>
         <form id="lantern-form">
           <input id="lantern-input" maxlength="24" autocomplete="off" />
-          <button class="primary" data-t="lanternGo"></button>
         </form>
+        <div class="chosen hidden" id="lantern-chosen">
+          <span id="lantern-chosen-name"></span>
+          <button id="lantern-change" data-t="riverChange"></button>
+        </div>
+        <div class="picker" id="lantern-picker">
+          <input id="lantern-search" autocomplete="off" />
+          <ul class="results" id="lantern-results"></ul>
+        </div>
+        <button class="primary go" id="lantern-go" form="lantern-form" data-t="lanternGo"></button>
       </div>
     </div>
 
@@ -152,7 +160,7 @@
           <input id="river-search" autocomplete="off" />
           <ul class="results" id="river-results"></ul>
         </div>
-        <button class="primary go" id="river-go" data-t="riverGo" disabled></button>
+        <button class="primary go" id="river-go" data-t="riverGo"></button>
       </div>
     </div>
 

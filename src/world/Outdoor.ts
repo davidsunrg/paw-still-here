@@ -30,6 +30,15 @@ function nearFire(x: number, z: number, margin = 0) {
   return Math.hypot(x - FIRE_X, z - CONFIG.bonfire.z) < CONFIG.bonfire.radius + margin;
 }
 
+/** 孔明灯平台的中心 */
+export const LANTERN_X =
+  pathX(CONFIG.lanternTerrace.z) + CONFIG.path.width / 2 + CONFIG.lanternTerrace.gap + CONFIG.lanternTerrace.radius;
+
+/** 是否落在孔明灯平台上，margin 是额外留出的距离 */
+function nearTerrace(x: number, z: number, margin = 0) {
+  return Math.hypot(x - LANTERN_X, z - CONFIG.lanternTerrace.z) < CONFIG.lanternTerrace.radius + margin;
+}
+
 /** z 是否落在河道（含岸坡）范围内，margin 是额外留出的距离 */
 export function inRiver(z: number, margin = 0) {
   return z > RIVER_BANKS.north - margin && z < RIVER_BANKS.south + margin;
@@ -70,6 +79,10 @@ export function buildOutdoor(w: World) {
   const C = CONFIG.colors;
   const rnd = mulberry32(7);
   const R = (a: number, b: number) => a + rnd() * (b - a);
+  /** 让开孔明灯平台而没摆的东西，仍然把它本来要用的随机数用掉，别处的树和花草就保持原样 */
+  const skip = (n: number) => {
+    for (let k = 0; k < n; k++) rnd();
+  };
 
   // ---------- 草地与远山 ----------
   // 草地在河道处断开，分成南北两块，中间的河床和水面由 River.ts 搭建
@@ -156,7 +169,12 @@ export function buildOutdoor(w: World) {
       const lz = z + R(-0.5, 0.5);
       const ls = R(0.95, 1.25);
       if (!nearFire(lx, lz, 2)) tree(lx, lz, ls, i % 4 === 0 ? 0 : 1);
-      tree(cx + 3.7 + R(-0.3, 0.3), z + R(-0.5, 0.5), R(0.95, 1.25), i % 4 === 0 ? 1 : 0);
+      // 孔明灯平台上原本也有一棵，同样让开
+      const rx = cx + 3.7 + R(-0.3, 0.3);
+      const rz = z + R(-0.5, 0.5);
+      const rs = R(0.95, 1.25);
+      if (!nearTerrace(rx, rz, 1.2)) tree(rx, rz, rs, i % 4 === 0 ? 1 : 0);
+      else skip(4);
     } else {
       lamp(cx - 2.35, z);
       lamp(cx + 2.35, z);
@@ -190,6 +208,10 @@ export function buildOutdoor(w: World) {
     const x = pathX(z) + side * R(2.6, 9);
     const kind = rnd();
     if (inRiver(z, 0.8) || nearDock(x, z) || nearFire(x, z, 0.9)) continue;
+    if (nearTerrace(x, z, 0.9)) {
+      skip(2);
+      continue;
+    }
     if (kind < 0.6) kit.ball(x, 0.25, z, R(0.4, 0.8), greens[k % 4], 0.75, R(0, 6));
     else kit.ball(x, 0.1, z, R(0.2, 0.45), 0x77767a, 0.6, R(0, 6));
   }
@@ -200,6 +222,10 @@ export function buildOutdoor(w: World) {
     const x = pathX(z) + side * R(1.75, 10);
     const tall = rnd() < 0.7;
     if (inRiver(z, 0.25) || nearDock(x, z) || nearFire(x, z, 0.25)) continue;
+    if (nearTerrace(x, z, 0.25)) {
+      skip(tall ? 4 : 2);
+      continue;
+    }
     if (tall) {
       kit.cone(x, 0, z, R(0.04, 0.07), R(0.18, 0.36), rnd() < 0.5 ? 0x4c8a55 : 0x5fa064, R(0, 6));
     } else {
