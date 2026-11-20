@@ -615,20 +615,30 @@ form button {
   padding: 5px 12px;
   font-size: 12px;
 }
-#river-picker {
+.picker {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-height: 0;
 }
-#river-picker .results {
-  max-height: 34vh;
+.picker .results {
+  max-height: 30vh;
   overflow-y: auto;
 }
-#river-go {
+.card .go {
   align-self: flex-end;
   border-radius: 12px;
   padding: 9px 22px;
+}
+.card .note {
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+}
+#modal-fire .picker .results {
+  max-height: 20vh;
 }
 button:disabled {
   opacity: 0.45;
@@ -735,11 +745,11 @@ button:disabled {
     bottom: calc(14px + env(safe-area-inset-bottom));
   }
   .bottom-bar button {
-    padding: 7px 11px;
-    font-size: 13px;
+    padding: 7px 9px;
+    font-size: 12px;
   }
   .bottom-bar .group button {
-    padding: 6px 9px;
+    padding: 6px 7px;
   }
   /* 小屏幕上资料收成顶部的一张小卡片，把画面留给格子 */
   #detail {

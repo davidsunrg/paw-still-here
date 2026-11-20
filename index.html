@@ -46,6 +46,7 @@
         <div class="group">
           <button data-tp="gate" data-t="tpGate"></button>
           <button data-tp="river" data-t="tpRiver"></button>
+          <button data-tp="fire" data-t="tpFire"></button>
           <button data-tp="hall" data-t="tpHall"></button>
           <button data-tp="memorial" data-t="tpMemorial"></button>
         </div>
@@ -67,8 +68,7 @@
       <blockquote id="detail-message"></blockquote>
       <div class="rites" id="detail-rites">
         <button id="btn-rite-river" data-t="riteRiver"></button>
-        <!-- 烧信在后续阶段启用 -->
-        <button id="btn-rite-fire" class="hidden" data-t="riteFire"></button>
+        <button id="btn-rite-fire" data-t="riteFire"></button>
       </div>
     </aside>
 
@@ -144,11 +144,30 @@
           <span id="river-chosen-name"></span>
           <button id="river-change" data-t="riverChange"></button>
         </div>
-        <div id="river-picker">
+        <div class="picker" id="river-picker">
           <input id="river-search" autocomplete="off" />
           <ul class="results" id="river-results"></ul>
         </div>
-        <button class="primary" id="river-go" data-t="riverGo" disabled></button>
+        <button class="primary go" id="river-go" data-t="riverGo" disabled></button>
+      </div>
+    </div>
+
+    <div class="modal" id="modal-fire">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 data-t="fireTitle"></h2>
+        <p data-t="fireDesc"></p>
+        <div class="chosen hidden" id="fire-chosen">
+          <span id="fire-chosen-name"></span>
+          <button id="fire-change" data-t="riverChange"></button>
+        </div>
+        <div class="picker" id="fire-picker">
+          <input id="fire-search" autocomplete="off" />
+          <ul class="results" id="fire-results"></ul>
+        </div>
+        <textarea id="fire-input" maxlength="300" rows="4"></textarea>
+        <p class="note" data-t="fireNote"></p>
+        <button class="primary go" id="fire-go" data-t="fireGo" disabled></button>
       </div>
     </div>
 

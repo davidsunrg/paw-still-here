@@ -22,6 +22,14 @@ export function pathX(z: number) {
 export const BRIDGE_X = pathX(CONFIG.river.z);
 export const DOCK_X = BRIDGE_X + CONFIG.river.dock.offsetX;
 
+/** 篝火空地的中心 */
+export const FIRE_X = pathX(CONFIG.bonfire.z) - CONFIG.path.width / 2 - CONFIG.bonfire.gap - CONFIG.bonfire.radius;
+
+/** 是否落在篝火空地里，margin 是额外留出的距离 */
+function nearFire(x: number, z: number, margin = 0) {
+  return Math.hypot(x - FIRE_X, z - CONFIG.bonfire.z) < CONFIG.bonfire.radius + margin;
+}
+
 /** z 是否落在河道（含岸坡）范围内，margin 是额外留出的距离 */
 export function inRiver(z: number, margin = 0) {
   return z > RIVER_BANKS.north - margin && z < RIVER_BANKS.south + margin;
@@ -141,7 +149,11 @@ export function buildOutdoor(w: World) {
     const z = clearOfRiver(z0, i % 2 === 1 ? 1.6 : 1.3);
     const cx = pathX(z);
     if (i % 2 === 1) {
-      tree(cx - 3.7 + R(-0.3, 0.3), z + R(-0.5, 0.5), R(0.95, 1.25), i % 4 === 0 ? 0 : 1);
+      // 篝火空地上原本有一棵行道树，这里让开
+      const lx = cx - 3.7 + R(-0.3, 0.3);
+      const lz = z + R(-0.5, 0.5);
+      const ls = R(0.95, 1.25);
+      if (!nearFire(lx, lz, 2)) tree(lx, lz, ls, i % 4 === 0 ? 0 : 1);
       tree(cx + 3.7 + R(-0.3, 0.3), z + R(-0.5, 0.5), R(0.95, 1.25), i % 4 === 0 ? 1 : 0);
     } else {
       lamp(cx - 2.35, z);
@@ -168,7 +180,7 @@ export function buildOutdoor(w: World) {
     const side = rnd() < 0.5 ? -1 : 1;
     const x = pathX(z) + side * R(2.6, 9);
     const kind = rnd();
-    if (inRiver(z, 0.8) || nearDock(x, z)) continue;
+    if (inRiver(z, 0.8) || nearDock(x, z) || nearFire(x, z, 0.9)) continue;
     if (kind < 0.6) kit.ball(x, 0.25, z, R(0.4, 0.8), greens[k % 4], 0.75, R(0, 6));
     else kit.ball(x, 0.1, z, R(0.2, 0.45), 0x77767a, 0.6, R(0, 6));
   }
@@ -178,7 +190,7 @@ export function buildOutdoor(w: World) {
     const side = rnd() < 0.5 ? -1 : 1;
     const x = pathX(z) + side * R(1.75, 10);
     const tall = rnd() < 0.7;
-    if (inRiver(z, 0.25) || nearDock(x, z)) continue;
+    if (inRiver(z, 0.25) || nearDock(x, z) || nearFire(x, z, 0.25)) continue;
     if (tall) {
       kit.cone(x, 0, z, R(0.04, 0.07), R(0.18, 0.36), rnd() < 0.5 ? 0x4c8a55 : 0x5fa064, R(0, 6));
     } else {

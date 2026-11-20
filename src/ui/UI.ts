@@ -1,8 +1,8 @@
 import { PETS, type Pet } from '../data/pets';
-import { store, type Message, type OfferKind } from '../data/store';
+import { store, type Message, type OfferKind, type RiteKind } from '../data/store';
 import { STR } from '../strings';
 
-export type TeleportTarget = 'gate' | 'river' | 'hall' | 'memorial';
+export type TeleportTarget = 'gate' | 'river' | 'fire' | 'hall' | 'memorial';
 
 export interface UIHooks {
   onEnter(): void;
@@ -17,10 +17,12 @@ export interface UIHooks {
   onOffering(pet: Pet, kind: OfferKind): void;
   /** 在单宠物视角里切换到旁边的宠物：-1 上一只，1 下一只 */
   onStep(dir: -1 | 1): void;
-  /** 在单宠物视角里选择为它放河灯：把访客带到码头 */
-  onRite(kind: 'river', pet: Pet): void;
+  /** 在单宠物视角里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
+  onRite(kind: RiteKind, pet: Pet): void;
   /** 访客在码头放下了一盏写着这只宠物名字的河灯 */
   onRiverLantern(pet: Pet): void;
+  /** 访客把写给这只宠物的信投进了篝火（信的内容不保存，所以这里不传） */
+  onBurnLetter(pet: Pet): void;
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
   /** 有面板打开时需要暂停走动 */
@@ -42,7 +44,7 @@ export class UI {
   private toastTimer = 0;
   private hintTimer = 0;
   private shrineHinted = false;
-  private riverPet: Pet | null = null;
+  private ritePet: Record<RiteKind, Pet | null> = { river: null, fire: null };
   private tooltip = $('tooltip');
 
   constructor(private hooks: UIHooks) {
@@ -58,6 +60,8 @@ export class UI {
     $<HTMLInputElement>('guestbook-input').placeholder = STR.guestbookPlaceholder;
     $<HTMLInputElement>('search-input').placeholder = STR.searchPlaceholder;
     $<HTMLInputElement>('river-search').placeholder = STR.riverPlaceholder;
+    $<HTMLInputElement>('fire-search').placeholder = STR.riverPlaceholder;
+    $<HTMLTextAreaElement>('fire-input').placeholder = STR.firePlaceholder;
     $('btn-sound').textContent = STR.soundOff;
 
     $('btn-enter').addEventListener('click', () => {
@@ -128,18 +132,31 @@ export class UI {
       this.toast(STR.giftToast.letter(pet.name));
     });
 
-    // 河灯
-    $('btn-rite-river').addEventListener('click', () => {
-      if (this.pet) hooks.onRite('river', this.pet);
-    });
-    $('river-search').addEventListener('input', () => this.renderRiverPicker());
-    $('river-change').addEventListener('click', () => this.chooseRiverPet(null));
+    // 河灯与烧信
+    for (const kind of ['river', 'fire'] as const) {
+      $(`btn-rite-${kind}`).addEventListener('click', () => {
+        if (this.pet) hooks.onRite(kind, this.pet);
+      });
+      $(`${kind}-search`).addEventListener('input', () => this.renderRitePicker(kind));
+      $(`${kind}-change`).addEventListener('click', () => this.chooseRitePet(kind, null));
+    }
     $('river-go').addEventListener('click', () => {
-      const pet = this.riverPet;
+      const pet = this.ritePet.river;
       if (!pet) return;
       this.closeModals();
       hooks.onRiverLantern(pet);
       this.toast(STR.riverToast(pet.name));
+    });
+    $('fire-input').addEventListener('input', () => this.updateRiteGo('fire'));
+    $('fire-go').addEventListener('click', () => {
+      const pet = this.ritePet.fire;
+      const input = $<HTMLTextAreaElement>('fire-input');
+      if (!pet || !input.value.trim()) return;
+      // 信的内容到这里为止，不保存也不外传
+      input.value = '';
+      this.closeModals();
+      hooks.onBurnLetter(pet);
+      this.toast(STR.fireToast(pet.name));
     });
 
     // 孔明灯
@@ -405,27 +422,37 @@ export class UI {
     }
   }
 
-  // ---------- 河灯 ----------
+  // ---------- 河灯与烧信 ----------
 
-  /** 打开放河灯的弹窗；从单宠物视角过来时已经选好了宠物 */
-  openRiver(pet: Pet | null = null) {
-    $<HTMLInputElement>('river-search').value = '';
-    this.chooseRiverPet(pet);
-    this.openModal('modal-river', pet ? undefined : 'river-search');
+  /**
+   * 打开放河灯 / 烧信的弹窗。两个弹窗的结构相同：先选一只宠物，再确认。
+   * 从单宠物视角过来时已经选好了宠物。
+   */
+  openRite(kind: RiteKind, pet: Pet | null = null) {
+    $<HTMLInputElement>(`${kind}-search`).value = '';
+    if (kind === 'fire') $<HTMLTextAreaElement>('fire-input').value = '';
+    this.chooseRitePet(kind, pet);
+    this.openModal(`modal-${kind}`, pet ? (kind === 'fire' ? 'fire-input' : undefined) : `${kind}-search`);
   }
 
-  private chooseRiverPet(pet: Pet | null) {
-    this.riverPet = pet;
-    $('river-chosen').classList.toggle('hidden', !pet);
-    $('river-picker').classList.toggle('hidden', !!pet);
-    $<HTMLButtonElement>('river-go').disabled = !pet;
-    if (pet) $('river-chosen-name').textContent = STR.riverFor(pet.name);
-    else this.renderRiverPicker();
+  private chooseRitePet(kind: RiteKind, pet: Pet | null) {
+    this.ritePet[kind] = pet;
+    $(`${kind}-chosen`).classList.toggle('hidden', !pet);
+    $(`${kind}-picker`).classList.toggle('hidden', !!pet);
+    if (pet) $(`${kind}-chosen-name`).textContent = (kind === 'river' ? STR.riverFor : STR.fireFor)(pet.name);
+    else this.renderRitePicker(kind);
+    this.updateRiteGo(kind);
   }
 
-  private renderRiverPicker() {
-    const q = $<HTMLInputElement>('river-search').value.trim().toLowerCase();
-    const list = $('river-results');
+  /** 选好了宠物（烧信还要写了内容）才能确认 */
+  private updateRiteGo(kind: RiteKind) {
+    const written = kind === 'river' || $<HTMLTextAreaElement>('fire-input').value.trim().length > 0;
+    $<HTMLButtonElement>(`${kind}-go`).disabled = !this.ritePet[kind] || !written;
+  }
+
+  private renderRitePicker(kind: RiteKind) {
+    const q = $<HTMLInputElement>(`${kind}-search`).value.trim().toLowerCase();
+    const list = $(`${kind}-results`);
     list.replaceChildren();
     const found = this.findPets(q);
     if (!found.length) {
@@ -440,7 +467,7 @@ export class UI {
       const pick = document.createElement('button');
       pick.className = 'primary';
       pick.textContent = STR.riverPick;
-      pick.addEventListener('click', () => this.chooseRiverPet(p));
+      pick.addEventListener('click', () => this.chooseRitePet(kind, p));
       li.append(this.petInfo(p), pick);
       list.append(li);
     }

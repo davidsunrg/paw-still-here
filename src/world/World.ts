@@ -4,6 +4,7 @@ import { PETS, type Pet } from '../data/pets';
 import type { OfferKind } from '../data/store';
 import { STR } from '../strings';
 import { LabelBatch, PhotoBatch } from './Batches';
+import { buildBonfire, type Bonfire } from './Bonfire';
 import { buildCorridor } from './Corridor';
 import { CELL_SPOT, cellMini, tickFlames } from './gifts';
 import { buildHall } from './Hall';
@@ -61,10 +62,11 @@ export class World {
   readonly slots = new Map<string, SlotInfo>();
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击留言簿 / 接待台时触发 */
-  hooks = { guestbook: () => {}, reception: () => {}, river: () => {} };
+  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {} };
   /** 访客脚下的地面高度，目前只有桥面高出地面 */
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
+  bonfire!: Bonfire;
 
   private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
@@ -80,6 +82,7 @@ export class World {
       ['sky', () => this.buildLights()],
       ['outdoor', () => buildOutdoor(this)],
       ['river', () => (this.river = buildRiver(this))],
+      ['fire', () => (this.bonfire = buildBonfire(this))],
       ['hall', () => buildHall(this)],
       ['corridor', () => buildCorridor(this)],
       ['memorial', () => buildMemorial(this)],

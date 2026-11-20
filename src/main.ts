@@ -15,6 +15,7 @@ import { UI } from './ui/UI';
 import './ui/style.css';
 import type { PhotoEntry } from './world/Batches';
 import { pathX } from './world/Outdoor';
+import { FIRE_SPOT } from './world/Bonfire';
 import { DOCK_SPOT, routeToDock } from './world/River';
 import { Shrine } from './world/Shrine';
 import { World } from './world/World';
@@ -60,6 +61,7 @@ const ui = new UI({
     guide.clear();
     if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
     else if (target === 'river') toDock();
+    else if (target === 'fire') toFire();
     else if (target === 'hall') player.teleport(0, -2.2, 0);
     else player.teleport(0, ZONES.memFront - 2.5, 0);
   },
@@ -97,12 +99,23 @@ const ui = new UI({
     const next = group[(group.indexOf(current) + dir + group.length) % group.length];
     if (next && next !== current) openPet(next);
   },
-  onRite(_kind, pet) {
-    // 从格子里选择为它放河灯：直接来到码头，名字已经写好
+  onRite(kind, pet) {
+    // 从格子里选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
     ui.closeAll();
     guide.clear();
-    toDock();
-    ui.openRiver(pet);
+    if (kind === 'river') toDock();
+    else toFire();
+    ui.openRite(kind, pet);
+  },
+  onBurnLetter(pet) {
+    store.addRite('fire', pet);
+    // 信从访客胸前的位置飞向火堆
+    const from = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw))
+      .multiplyScalar(0.55)
+      .add(player.pos)
+      .setY(1.25);
+    world.bonfire.burn(from);
+    audio.chime(false);
   },
   onRiverLantern(pet) {
     store.addRite('river', pet);
@@ -136,7 +149,8 @@ const ui = new UI({
 
 world.hooks.guestbook = () => ui.openGuestbook();
 world.hooks.reception = () => ui.openSearch();
-world.hooks.river = () => ui.openRiver();
+world.hooks.river = () => ui.openRite('river');
+world.hooks.fire = () => ui.openRite('fire');
 
 /** 站到码头上，面向河面 */
 function toDock() {
@@ -145,14 +159,28 @@ function toDock() {
   player.pitch = DOCK_SPOT.pitch;
 }
 
+/** 站到篝火旁，面向火堆 */
+function toFire() {
+  seen.fire = true;
+  player.teleport(FIRE_SPOT.x, FIRE_SPOT.z, FIRE_SPOT.yaw);
+  player.pitch = FIRE_SPOT.pitch;
+}
+
 /** 第一次沿步道走近室外的纪念地点时，用一行小字和地上的光点告诉访客这里可以做什么 */
-const seen = { river: false };
+const seen = { river: false, fire: false };
 function updateDiscovery() {
-  if (!entered || blocked || seen.river) return;
-  if (Math.hypot(player.pos.x - DOCK_SPOT.x, player.pos.z - DOCK_SPOT.z) > 9) return;
-  seen.river = true;
-  ui.whisper(STR.riverHint);
-  if (!guide.active) guide.show(routeToDock(player.pos), () => {});
+  if (!entered || blocked) return;
+  const near = (spot: { x: number; z: number }, r: number) => Math.hypot(player.pos.x - spot.x, player.pos.z - spot.z) < r;
+  if (!seen.river && near(DOCK_SPOT, 9)) {
+    seen.river = true;
+    ui.whisper(STR.riverHint);
+    if (!guide.active) guide.show(routeToDock(player.pos), () => {});
+  } else if (!seen.fire && near(FIRE_SPOT, 7)) {
+    seen.fire = true;
+    ui.whisper(STR.fireHint);
+    const here = new THREE.Vector3(player.pos.x, 0, player.pos.z);
+    if (!guide.active) guide.show([here, new THREE.Vector3(FIRE_SPOT.x, 0, FIRE_SPOT.z)], () => {});
+  }
 }
 
 /** 宠物在纪念柜里的那张相框（照片墙上的不算） */
