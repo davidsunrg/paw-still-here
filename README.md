@@ -5,10 +5,10 @@
 ## 启动
 
 ```bash
-npm install
-npm run dev      # 本地开发
-npm run build    # 类型检查 + 打包到 dist/
-npm run preview  # 预览打包结果
+pnpm install
+pnpm dev      # 本地开发
+pnpm build    # 类型检查 + 打包到 dist/
+pnpm preview  # 预览打包结果
 ```
 
 ## 操作
