@@ -64,7 +64,6 @@ export const en = {
   wallTitle: 'Still here.',
   /** 右墙两个入口之间的一行字 */
   wallTitleRight: 'Stay a while.',
-  treeLabel: 'The Remembering Tree',
 
   tipPet: 'Visit their courtyard',
   tipLetters: 'Read the letters written to them',
