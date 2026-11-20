@@ -62,12 +62,24 @@ export function buildBonfire(w: World): Bonfire {
     kit.ball(FX + Math.cos(a) * ring, 0.1, FZ + Math.sin(a) * ring, R(0.17, 0.23), (g << 16) | (g << 8) | (g - 6), 0.75, R(0, 6));
   }
   kit.cyl(FX, 0.02, FZ, ring - 0.08, 0.03, 0x1f1a17);
-  // 几根木柴斜靠在一起，合并成一个网格
+  // 几根木柴搭成锥形，合并成一个网格：粗的一头在外圈着地，细的一头在火心上方聚拢。
+  // 每根瞄准的点绕火心错开一点，梢头互相搭着、略微伸过头，不会全挤在同一个点上
   const logs: THREE.BufferGeometry[] = [];
+  const LOG = { foot: 0.44, footY: 0.06, apexY: 0.58, twist: 0.05, over: 0.12 };
+  const up = new THREE.Vector3(0, 1, 0);
+  const foot = new THREE.Vector3();
+  const lean = new THREE.Vector3();
+  const logQ = new THREE.Quaternion();
+  const logM = new THREE.Matrix4();
+  const unit = new THREE.Vector3(1, 1, 1);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + 0.3;
-    const g = new THREE.CylinderGeometry(0.055, 0.07, 0.95, 6);
-    g.rotateZ(0.95).rotateY(a).translate(Math.cos(a) * -0.2, 0.3, Math.sin(a) * 0.2);
+    foot.set(Math.cos(a) * LOG.foot, LOG.footY, Math.sin(a) * LOG.foot);
+    lean.set(-Math.sin(a) * LOG.twist, LOG.apexY, Math.cos(a) * LOG.twist).sub(foot);
+    const len = lean.length() + LOG.over;
+    // 圆柱原本立着、中心在原点：先把底端挪到原点，再整根转到从根指向梢的方向
+    const g = new THREE.CylinderGeometry(0.05, 0.07, len, 6).translate(0, len / 2, 0);
+    g.applyMatrix4(logM.compose(foot, logQ.setFromUnitVectors(up, lean.normalize()), unit));
     logs.push(g);
   }
   const logMesh = new THREE.Mesh(
