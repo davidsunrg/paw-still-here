@@ -15,12 +15,10 @@ export interface Pet {
   message: string;
   flowers: number;
   candles: number;
-  /** 柜子编号（A、B、C…） */
-  cabinet: string;
-  /** 柜子序号（从 0 开始） */
-  cabinetIndex: number;
-  /** 格子序号（从 0 开始，左上角起逐行排列） */
-  slot: number;
+  /** 地址：第几层、几号墙、第几格（都从 1 开始）。按入驻顺序分配，分配后不再变 */
+  floor: number;
+  wall: number;
+  cell: number;
   /** 占位画像用的毛色与背景 */
   fur: string;
   bg: number;
@@ -35,6 +33,10 @@ export interface Pet {
  *   passedDate: '2025-06-18', photoUrl: '/photos/doudou.jpg', message: '下辈子还做我的小狗。' }
  */
 export const CUSTOM_PETS: Array<Partial<Pet> & Pick<Pet, 'name' | 'species' | 'passedDate' | 'message'>> = [];
+
+const G = CONFIG.gallery;
+/** 大厅三面照片墙各有多少格（下标 0 是 1 号墙） */
+export const WALL_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows, G.sideCols * G.rows];
 
 /** 可复现的伪随机数 */
 export function mulberry32(seed: number) {
@@ -108,17 +110,12 @@ const pad = (n: number) => String(n).padStart(2, '0');
 function buildPets(): Pet[] {
   const rnd = mulberry32(20261119);
   const pick = <T>(arr: T[]) => arr[Math.floor(rnd() * arr.length)];
-  const { cabinet } = CONFIG;
-  const perCab = cabinet.rows * cabinet.cols;
-  const totalSlots = cabinet.count * perCab;
-  const count = Math.min(CONFIG.petCount, totalSlots, 100);
+  const capacity = WALL_CELLS.reduce((a, b) => a + b, 0);
+  const count = Math.min(CONFIG.petCount, capacity, 100);
 
-  // 打乱所有格子，让空格子自然地分散在各个柜子里
-  const slots = Array.from({ length: totalSlots }, (_, i) => i);
-  for (let i = slots.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [slots[i], slots[j]] = [slots[j], slots[i]];
-  }
+  // 以前这里用随机数把宠物打散到各个柜子里；现在按入驻顺序排，但保留这些取值，
+  // 这样每只示例宠物的名字、品种、日期都和原来一样（访客存在本地的礼物才对得上）
+  for (let i = 0; i < 159; i++) rnd();
 
   const speciesTable: Species[] = ['猫', '猫', '猫', '猫', '猫', '狗', '狗', '狗', '狗', '狗', '兔子', '兔子', '仓鼠', '鸟'];
   const names = [...NAMES];
@@ -135,8 +132,10 @@ function buildPets(): Pet[] {
     const bMonth = 1 + Math.floor(rnd() * 12);
     const nameIdx = Math.floor(rnd() * names.length);
     const name = names.splice(nameIdx, 1)[0] ?? `小可爱${i}`;
-    const s = slots[i];
-    const cabinetIndex = Math.floor(s / perCab);
+    // 按入驻顺序依次填：1 号墙满了到 2 号墙
+    let wall = 0;
+    let cell = i;
+    while (cell >= WALL_CELLS[wall]) cell -= WALL_CELLS[wall++];
 
     const base: Pet = {
       id: `pet-${i + 1}`,
@@ -148,9 +147,9 @@ function buildPets(): Pet[] {
       message: pick(MESSAGES),
       flowers: rnd() < 0.7 ? 1 + Math.floor(rnd() * 40) : 0,
       candles: rnd() < 0.55 ? 1 + Math.floor(rnd() * 25) : 0,
-      cabinet: String.fromCharCode(65 + cabinetIndex),
-      cabinetIndex,
-      slot: s % perCab,
+      floor: 1,
+      wall: wall + 1,
+      cell: cell + 1,
       fur: pick(FUR[species]),
       bg: Math.floor(rnd() * 6),
     };

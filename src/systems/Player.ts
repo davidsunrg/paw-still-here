@@ -70,15 +70,6 @@ export interface Area {
   out: number;
 }
 
-interface Focus {
-  /** 镜头的位置和朝向 */
-  cam: THREE.Vector3;
-  yaw: number;
-  /** 小人站到哪里、面向哪里 */
-  stand: THREE.Vector3;
-  look: THREE.Vector3;
-}
-
 /**
  * 第三人称漫步：键盘 / 摇杆控制小人移动，拖拽让镜头绕着小人转，滚轮 / 双指缩放。
  * pos 是小人脚下的位置；yaw / pitch 是镜头的朝向，facing 是小人自己的朝向。
@@ -108,10 +99,6 @@ export class Player {
   /** 镜头想要的距离，和避开遮挡之后实际的距离 */
   private dist = CAM.dist;
   private boom = CAM.dist;
-  /** 单宠物特写：focus 不为空时镜头推到格子前，blend 是特写镜头占的比重 */
-  private focus: Focus | null = null;
-  private lastFocus: Focus | null = null;
-  private blend = 0;
   private goal: Goal | null = null;
   /** 坐着的时候，记着站起来要回到哪里 */
   private seat: { x: number; z: number } | null = null;
@@ -121,9 +108,6 @@ export class Player {
   private down = { x: 0, y: 0, t: 0, multi: false };
 
   private pivot = new THREE.Vector3();
-  private orbit = new THREE.Vector3();
-  private qa = new THREE.Quaternion();
-  private qb = new THREE.Quaternion();
   private euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
   constructor(
@@ -158,7 +142,7 @@ export class Player {
       const dy = e.clientY - last.y;
       last.x = e.clientX;
       last.y = e.clientY;
-      if (!this.enabled || this.focus) return;
+      if (!this.enabled) return;
       if (this.pointers.size >= 2) {
         // 双指缩放
         const span = this.pinchSpan();
@@ -185,7 +169,7 @@ export class Player {
     dom.addEventListener(
       'wheel',
       (e) => {
-        if (this.enabled && !this.focus) this.zoom(Math.exp(THREE.MathUtils.clamp(e.deltaY, -120, 120) * 0.0016));
+        if (this.enabled) this.zoom(Math.exp(THREE.MathUtils.clamp(e.deltaY, -120, 120) * 0.0016));
       },
       { passive: true },
     );
@@ -214,7 +198,6 @@ export class Player {
    * 实在过不去就停下（如果已经离得不远，仍然算到了）。键盘、摇杆、打开面板都会取消。
    */
   walkTo(x: number, z: number, radius = 0.15, done?: () => void) {
-    if (this.focus) return;
     this.goal = { x, z, radius, done, stuck: 0 };
   }
 
@@ -256,10 +239,6 @@ export class Player {
     return this.seat !== null;
   }
 
-  get focused() {
-    return this.focus !== null;
-  }
-
   /** 小人面朝的方向（水平单位向量） */
   forward(out = new THREE.Vector3()) {
     return out.set(-Math.sin(this.facing), 0, -Math.cos(this.facing));
@@ -272,54 +251,14 @@ export class Player {
 
   /** 把小人放到某处；yaw / pitch 是镜头的朝向，小人默认面向同一个方向 */
   teleport(x: number, z: number, yaw: number, pitch = CAM.pitch, facing = yaw) {
-    this.focus = this.lastFocus = null;
     this.goal = null;
     this.seat = null;
-    this.blend = 0;
     this.pos.set(x, 0, z);
     this.yaw = yaw;
     this.facing = facing;
     this.pitch = pitch;
     this.boom = this.dist;
     this.stride = 0;
-  }
-
-  /**
-   * 单宠物特写：镜头平滑推到目标正前方 dist 米处，小人走到目标旁边站好、面向它。
-   */
-  focusOn(target: THREE.Vector3, normal: THREE.Vector3, dist: number) {
-    const yaw = Math.atan2(normal.x, normal.z);
-    const cam = target.clone().addScaledVector(normal, dist);
-    cam.y = Math.max(0.95, target.y);
-    // 站在目标的一侧，不挡住镜头；左边站不下就站右边，都不行就留在原地
-    const { standOff, standSide } = CAM;
-    const stand = this.focus?.stand ?? this.pos.clone();
-    if (!this.focus) {
-      for (const side of [-1, 1]) {
-        const x = target.x + normal.x * standOff + Math.cos(yaw) * standSide * side;
-        const z = target.z + normal.z * standOff - Math.sin(yaw) * standSide * side;
-        if (this.blocked(x, z)) continue;
-        stand.set(x, 0, z);
-        break;
-      }
-    }
-    this.focus = { cam, yaw, stand, look: target.clone() };
-    this.goal = null;
-  }
-
-  /** 换到同一组里的另一只宠物时，让小人重新选站的位置 */
-  refocus(target: THREE.Vector3, normal: THREE.Vector3, dist: number) {
-    this.focus = null;
-    this.focusOn(target, normal, dist);
-  }
-
-  /** 结束特写：小人留在原地，镜头回到它身后 */
-  release() {
-    if (!this.focus) return;
-    this.lastFocus = this.focus;
-    this.yaw = this.focus.yaw;
-    this.pitch = CAM.pitch;
-    this.focus = null;
   }
 
   /** 小人能不能站在 (x, z) */
@@ -351,20 +290,6 @@ export class Player {
 
   private move(dt: number) {
     const { walk, run } = CONFIG.player;
-    const f = this.focus;
-    if (f) {
-      // 走到格子旁边站好，然后转身面向它
-      const dx = f.stand.x - this.pos.x;
-      const dz = f.stand.z - this.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 0.04) {
-        const speed = Math.min(Math.max(walk, d * 1.6), d / dt);
-        return this.step(dx / d, dz / d, speed, dt, false);
-      }
-      const to = Math.atan2(-(f.look.x - this.pos.x), -(f.look.z - this.pos.z));
-      this.facing = angleLerp(this.facing, to, 1 - Math.exp(-dt * 6));
-      return 0;
-    }
     if (!this.enabled) {
       this.goal = null;
       return 0;
@@ -399,7 +324,7 @@ export class Player {
     return this.step(-sin * fw + cos * sd, -cos * fw - sin * sd, speed, dt, true);
   }
 
-  /** 镜头最远能拉到多远而不穿进墙或柜子 */
+  /** 镜头最远能拉到多远而不穿进墙 */
   private clearance(dirX: number, dirZ: number, want: number) {
     const x0 = this.pivot.x;
     const z0 = this.pivot.z;
@@ -445,28 +370,12 @@ export class Player {
     const room = this.clearance(backX, backZ, this.dist);
     // 被挡住时立刻拉近，离开遮挡后慢慢恢复
     this.boom = room < this.boom ? room : this.boom + (room - this.boom) * (1 - Math.exp(-dt * 4));
-    this.orbit.set(
+    this.camera.position.set(
       this.pivot.x + backX * cp * this.boom,
       this.pivot.y - Math.sin(this.pitch) * this.boom,
       this.pivot.z + backZ * cp * this.boom,
     );
-    this.qa.setFromEuler(this.euler.set(this.pitch, this.yaw, 0));
-
-    // 特写镜头和跟随镜头之间平滑过渡
-    this.blend += ((this.focus ? 1 : 0) - this.blend) * (1 - Math.exp(-dt * 4.5));
-    if (!this.focus && this.blend < 0.002) {
-      this.blend = 0;
-      this.lastFocus = null;
-    }
-    const f = this.focus ?? this.lastFocus;
-    if (f && this.blend > 0) {
-      this.qb.setFromEuler(this.euler.set(0, f.yaw, 0));
-      this.camera.position.lerpVectors(this.orbit, f.cam, this.blend);
-      this.camera.quaternion.slerpQuaternions(this.qa, this.qb, this.blend);
-    } else {
-      this.camera.position.copy(this.orbit);
-      this.camera.quaternion.copy(this.qa);
-    }
+    this.camera.quaternion.setFromEuler(this.euler.set(this.pitch, this.yaw, 0));
 
     const near = this.camera.position.distanceTo(this.pivot);
     this.fade = THREE.MathUtils.smoothstep(near, CAM.fadeNear, CAM.fadeFar);

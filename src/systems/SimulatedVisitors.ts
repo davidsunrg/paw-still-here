@@ -1,6 +1,6 @@
-import { CONFIG, RIVER_BANKS, ZONES } from '../config';
+import { CONFIG, RIVER_BANKS } from '../config';
 import { mulberry32 } from '../data/pets';
-import { TREE_POS } from '../world/Memorial';
+import { TREE_POS, TREE_SPAN } from '../world/Tree';
 import { BRIDGE_X, DOCK_X, FIRE_X, pathX } from '../world/Outdoor';
 import type { Collider, Seat, World } from '../world/World';
 import type { VisitorSource, VisitorState } from './Visitors';
@@ -8,8 +8,6 @@ import type { VisitorSource, VisitorState } from './Visitors';
 const V = CONFIG.visitors;
 /** 坐下 / 起身的时长（秒） */
 const SIT_TIME = 1.1;
-/** 小人坐着时臀部比基准高度高多少（和 Avatar 里的坐姿对应） */
-const SIT_HIP = 0.42;
 
 interface Node {
   x: number;
@@ -72,8 +70,8 @@ function blockedBy(c: Collider, pad: number, ax: number, az: number, bx: number,
 }
 
 /**
- * 本地模拟的访客：沿着一张手工定义的路点图慢慢走，在柜子前、照片墙前、码头、河边站一会儿，
- * 或者在沙发、长椅、树桩凳上坐一会儿，逛几处之后走回入口离开，过一阵再换一个人进来。
+ * 本地模拟的访客：沿着一张手工定义的路点图慢慢走，在照片墙前、纪念树前、码头、河边站一会儿，
+ * 或者在沙发、树桩凳上坐一会儿，逛几处之后走回入口离开，过一阵再换一个人进来。
  * 他们只是在场：不放灯、不烧信、不送礼物，也不读写任何数据。
  */
 export class SimulatedVisitors implements VisitorSource {
@@ -148,11 +146,10 @@ export class SimulatedVisitors implements VisitorSource {
     const { north, south } = RIVER_BANKS;
     const FZ = CONFIG.bonfire.z;
 
-    // 入口步道 → 大厅 → 通道 → 纪念区入口
+    // 入口步道 → 大门
     const path = chain([P(60), P(50), P(44), P(39), P(34), P(CONFIG.river.z), P(24.5), P(22), P(18.5), P(15), P(10), P(5), [0, 1.2]]);
     const [exit, , , , bridgeS, , , pastBridge, , byFire, , , door] = path;
-    const inner = chain([[0, -2.5], [0, -9], [0, ZONES.hallBack + 1.5], [0, ZONES.hallBack - CONFIG.corridor.len / 2], [0, ZONES.memFront - 2]]);
-    const [hallFront, hallMid, hallBack, , memDoor] = inner;
+    const hallFront = this.node(0, -3.2);
     this.link(door, hallFront);
 
     // 码头：从桥头绕过路灯和码头的灯杆走上去
@@ -177,40 +174,37 @@ export class SimulatedVisitors implements VisitorSource {
     for (let i = 1; i < fireRing.length; i++) this.link(fireRing[i - 1], fireRing[i]);
     for (const seat of this.world.seats.filter((s) => s.zone === 'fire')) this.sit(seat, fireRing);
 
-    // 大厅：照片墙、休息区的沙发、接待台
-    const hw = CONFIG.hall.w / 2;
-    const hallLeft = this.node(-6, -9);
-    const lounge = this.node(5.6, -3.2);
-    const loungeFar = this.node(9, -3.1);
-    for (const h of [hallFront, hallMid, hallBack]) this.link(hallLeft, h);
-    this.link(hallFront, lounge);
-    this.link(lounge, loungeFar);
-    for (const z of [-4.2, -8.6, -13]) this.stand(-hw + 1.9, z, Math.PI / 2, [hallLeft]);
-    for (const seat of this.world.seats.filter((s) => s.zone === 'hall')) this.sit(seat, [lounge, loungeFar]);
-    this.stand(hw - 4.6, -12.6, -Math.PI / 2, [hallMid, hallBack]);
-
-    // 纪念区：两条纵向的通道串起每排柜子，中间绕着纪念树一圈
+    // 大厅：正中是纪念树和两侧的沙发，访客沿着四周的过道走
     const t = TREE_POS;
-    const ring = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sz]) => this.node(t.x + sx * 3.6, t.z + sz * 3.6));
-    ring.forEach((n, i) => this.link(n, ring[(i + 1) % 4]));
-    this.link(memDoor, ring[0]);
-    this.link(memDoor, ring[1]);
-    const rows = [...new Set([...this.world.slots.values()].map((s) => s.cabinetZ))].sort((a, b) => b - a);
+    const lane = CONFIG.gallery.lane;
+    const dz = TREE_SPAN / 2 + 2;
+    const hubs: number[] = [];
     for (const side of [-1, 1]) {
-      let prev = this.node(side * 6.5, ZONES.memFront - 3.5);
-      this.link(memDoor, prev);
-      for (const cz of rows) {
-        const lane = this.node(side * 6.5, cz + 1.3);
-        this.link(prev, lane);
-        prev = lane;
-        const cabX = [...this.world.slots.values()].find((s) => s.cabinetZ === cz && Math.sign(s.cabinetX) === side)?.cabinetX;
-        if (cabX !== undefined) for (const dx of [-0.8, 0.8]) this.stand(cabX + dx, cz + 1.25, 0, [lane], true);
-        // 通道和纪念树旁的一圈在树的前后各连一次
-        const corner = ring.find((n) => Math.sign(this.nodes[n].x) === side && Math.abs(this.nodes[n].z - (cz + 1.3)) < 3.2);
-        if (corner !== undefined) this.link(lane, corner);
-      }
+      const [front, mid, back] = chain([[side * lane, t.z + dz], [side * lane, t.z], [side * lane, t.z - dz]]);
+      this.link(hallFront, front);
+      // 树和沙发之间的窄道，通到沙发前面
+      const aisle = (TREE_SPAN / 2 + CONFIG.hall.sofaX - 0.5) / 2;
+      const [inFront, inBack] = chain([[side * aisle, t.z + dz - 0.8], [side * aisle, t.z - dz + 0.8]]);
+      this.link(hallFront, inFront);
+      this.link(front, inFront);
+      this.link(back, inBack);
+      for (const seat of this.world.seats.filter((s) => s.zone === 'hall' && Math.sign(s.x) === side)) this.sit(seat, [inFront, inBack]);
+      hubs.push(front, mid, back);
     }
-    for (const seat of this.world.seats.filter((s) => s.zone === 'memorial')) this.sit(seat, ring);
+    this.link(hubs[0], hubs[3]);
+    this.link(hubs[2], hubs[5]);
+    // 照片墙前：只在挂着照片的那几段墙前面停留
+    const hw = CONFIG.hall.w / 2;
+    const frames = [...this.world.slots.values()].map((s) => s.entry.center);
+    const gaze: Array<[number, number, number]> = [];
+    for (const z of [-3.2, -6.8, -11.2, -14.8]) gaze.push([-hw + 1.8, z, Math.PI / 2], [hw - 1.8, z, -Math.PI / 2]);
+    for (const x of [-9, -6.4, -3.8, 3.8, 6.4, 9]) gaze.push([x, -CONFIG.hall.d + 1.8, 0]);
+    for (const [x, z, facing] of gaze) {
+      if (frames.some((f) => Math.hypot(f.x - x, f.z - z) < 2.2)) this.stand(x, z, facing, hubs);
+    }
+    // 纪念树前、接待台前
+    this.stand(t.x, t.z + TREE_SPAN / 2 + 1.2, 0, [hallFront]);
+    this.stand(CONFIG.hall.receptionX, -4.5, Math.PI, [hallFront, hubs[3]]);
 
     return exit;
   }
@@ -311,7 +305,7 @@ export class SimulatedVisitors implements VisitorSource {
     const e = k * k * (3 - 2 * k);
     v.x = seat ? n.x + (seat.x - n.x) * e : n.x;
     v.z = seat ? n.z + (seat.z - n.z) * e : n.z;
-    v.y = this.world.heightAt(v.x, v.z) + (seat ? (seat.top - SIT_HIP) * e : 0);
+    v.y = this.world.heightAt(v.x, v.z) + (seat ? (seat.top - CONFIG.player.sitHip) * e : 0);
     v.facing = spot.facing;
     v.posture = seat && k > 0.25 ? 'sit' : 'stand';
     v.bowed = spot.bowed;

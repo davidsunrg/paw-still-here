@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { CONFIG, ZONES } from './config';
+import { CONFIG } from './config';
 import type { Pet } from './data/pets';
 import { prefs, store } from './data/store';
 import { STR } from './strings';
@@ -69,8 +69,7 @@ const ui = new UI({
       if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
       else if (target === 'river') toDock();
       else if (target === 'fire') toFire();
-      else if (target === 'hall') player.teleport(0, -2.2, 0);
-      else player.teleport(0, ZONES.memFront - 2.5, 0);
+      else player.teleport(0, -2.2, 0);
     });
   },
   onLantern(text) {
@@ -96,9 +95,8 @@ const ui = new UI({
   onDetailClosed() {
     if (inSpace) leaveSpace();
   },
-  onOffering(pet, kind) {
+  onOffering(_pet, kind) {
     world.space.drop(kind);
-    world.showInCell(pet, kind);
     audio.chime(kind === 'candle');
   },
   onRite(kind, pet) {
@@ -121,7 +119,7 @@ const ui = new UI({
   },
   onGuide(pet) {
     ui.closeAll();
-    const entry = cabinetEntry(pet);
+    const entry = frameOf(pet);
     // 在别的小院里找它：先回到刚才的相框前，再沿着光点走
     travel(() => {
       guide.show(world.routeTo(pet, player.pos), () => {
@@ -134,7 +132,7 @@ const ui = new UI({
   onGoto(pet) {
     ui.closeAll();
     guide.clear();
-    const entry = cabinetEntry(pet);
+    const entry = frameOf(pet);
     if (entry) enterSpace(entry);
   },
   onBlockingChange(b) {
@@ -148,6 +146,12 @@ world.hooks.guestbook = () => ui.openGuestbook();
 world.hooks.reception = () => ui.openSearch();
 world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
+world.hooks.sit = (seats) => {
+  // 坐到这张沙发上离自己近的那一边
+  const d = (s: { x: number; z: number }) => Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
+  const seat = [...seats].sort((a, b) => d(a) - d(b))[0];
+  if (seat) sitDown({ x: seat.x, z: seat.z, facing: seat.facing, yaw: seat.facing, lift: seat.top - CONFIG.player.sitHip, exit: seat.approach });
+};
 
 /** 小人面前 dist 米、离地 y 米的位置 */
 function inFront(dist: number, y: number) {
@@ -183,10 +187,9 @@ function updateDiscovery() {
   }
 }
 
-/** 宠物在纪念柜里的那张相框（照片墙上的不算） */
-function cabinetEntry(pet: Pet) {
-  const slot = world.slots.get(pet.id);
-  return world.photos.entries.find((e) => e.pet === pet && slot && e.center.equals(slot.frame));
+/** 宠物在照片墙上的那张相框 */
+function frameOf(pet: Pet) {
+  return world.slots.get(pet.id)?.entry;
 }
 
 // ---------- 进出宠物的小院 ----------
@@ -259,11 +262,14 @@ function travel(dest: () => void) {
 /** 坐下后镜头慢慢转去的方向；访客自己拖动视角或站起来就不再转 */
 let swing: number | null = null;
 
-/** 走到长椅前坐下 */
-function sitDown() {
-  const { seat } = world.space;
+/** 坐着时小人比站着高出多少（长椅和沙发的坐面高度不一样） */
+let seatLift = 0;
+
+/** 走到座位前坐下 */
+function sitDown(seat: { x: number; z: number; facing: number; yaw: number; lift: number; exit: { x: number; z: number } }) {
   player.walkTo(seat.exit.x, seat.exit.z, 0.25, () => {
     player.sit(seat.x, seat.z, seat.facing, seat.exit);
+    seatLift = seat.lift;
     swing = seat.yaw;
   });
 }
@@ -378,7 +384,7 @@ function frame() {
     else player.yaw += Math.atan2(Math.sin(swing - player.yaw), Math.cos(swing - player.yaw)) * (1 - Math.exp(-dt * 2.5));
   }
   pose.sit += ((player.seated ? 1 : 0) - pose.sit) * (1 - Math.exp(-dt * 3.5));
-  pose.y += world.space.seat.lift * pose.sit;
+  pose.y += seatLift * pose.sit;
   // 站在它的石柱前时微微低头
   const front = world.space.front;
   const bowing = inSpace && !player.seated && player.stride < 0.1 && Math.hypot(player.pos.x - front.x, player.pos.z - front.z) < 1.6;
@@ -426,7 +432,7 @@ async function boot() {
   }
   interaction = new Interaction(camera, world, player.pos);
   world.space.hooks.letters = () => ui.openLetters();
-  world.space.hooks.bench = sitDown;
+  world.space.hooks.bench = () => sitDown(world.space.seat);
   // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
   crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);
   crowd.hidden = prefs.solo;

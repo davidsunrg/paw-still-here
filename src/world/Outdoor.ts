@@ -115,9 +115,11 @@ export function buildOutdoor(w: World) {
   const coneCanopy = new Instancer(new THREE.ConeGeometry(1, 1, 7).translate(0, 0.5, 0), swayMaterial(w.uTime));
   const ballCanopy = new Instancer(new THREE.IcosahedronGeometry(1, 1), swayMaterial(w.uTime));
   const greens = [0x2f6b4a, 0x3a7a52, 0x27603f, 0x4a8a58];
+  const grove = mulberry32(41);
 
-  const tree = (x: number, z: number, s: number, kind: number) => {
-    const g = greens[Math.floor(rnd() * greens.length)];
+  const tree = (x: number, z: number, s: number, kind: number, pick = rnd) => {
+    const R = (a: number, b: number) => a + pick() * (b - a);
+    const g = greens[Math.floor(pick() * greens.length)];
     if (kind === 0) {
       kit.cyl(x, 0, z, 0.2 * s, 1.6 * s, trunkColor);
       coneCanopy.add(x, 1.2 * s, z, 1.7 * s, 2.4 * s, 1.7 * s, g, 1, R(0, 6));
@@ -165,11 +167,18 @@ export function buildOutdoor(w: World) {
   // 四周散落的树林
   for (let k = 0; k < 150; k++) {
     const x = R(-95, 95);
-    const z = R(ZONES.memBack - 40, 80);
+    const z = R(-104, 80);
     const nearPath = z > -1 && z < 62 && Math.abs(x - pathX(Math.min(Math.max(z, 0), CONFIG.path.startZ))) < 8.5;
-    const inBuilding = z < 3 && z > ZONES.memBack - 4 && Math.abs(x) < (z > ZONES.memFront - 2 ? 15 : 25);
+    const inBuilding = z < 3 && z > ZONES.hallBack - 4 && Math.abs(x) < 15;
     if (nearPath || inBuilding || inRiver(z, 3.2)) continue;
-    tree(x, z, R(0.9, 1.9), rnd() < 0.6 ? 0 : 1);
+    // 大厅后面那一片以前不种树；现在补上的树用另一串随机数，别处的树林保持原样
+    if (z < 3 && z > -68 && Math.abs(x) < (z > -30 ? 15 : 25)) tree(x, z, 0.9 + grove() * 1.0, grove() < 0.6 ? 0 : 1, grove);
+    else tree(x, z, R(0.9, 1.9), rnd() < 0.6 ? 0 : 1);
+  }
+  for (let k = 0; k < 16; k++) {
+    const x = (grove() * 2 - 1) * 26;
+    const z = ZONES.hallBack - 6 - grove() * 44;
+    tree(x, z, 0.9 + grove() * 1.0, grove() < 0.6 ? 0 : 1, grove);
   }
   coneCanopy.build(scene);
   ballCanopy.build(scene);

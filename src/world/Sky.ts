@@ -269,10 +269,9 @@ export class Sky {
     for (let k = 0; k < 20; k++) {
       x = (Math.random() * 2 - 1) * 75;
       z = 70 - Math.random() * 175;
-      const inHall = Math.abs(x) < 14 && z < 2 && z > ZONES.memFront;
-      const inMem = Math.abs(x) < 24 && z <= ZONES.memFront && z > ZONES.memBack - 2;
+      const inHall = Math.abs(x) < 14 && z < 2 && z > ZONES.hallBack - 2;
       const onPath = Math.abs(x) < 4 && z >= 0 && z < 55;
-      if (!inHall && !inMem && !onPath) break;
+      if (!inHall && !onPath) break;
     }
     this.lx[i] = x;
     this.lz[i] = z;

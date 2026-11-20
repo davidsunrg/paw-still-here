@@ -2,7 +2,7 @@ import { PETS, type Pet } from '../data/pets';
 import { store, type Message, type OfferKind, type RiteKind } from '../data/store';
 import { STR } from '../strings';
 
-export type TeleportTarget = 'gate' | 'river' | 'fire' | 'hall' | 'memorial';
+export type TeleportTarget = 'gate' | 'river' | 'fire' | 'hall';
 
 export interface UIHooks {
   onEnter(): void;
@@ -286,7 +286,7 @@ export class UI {
     this.closeModals();
     this.pet = pet;
     $('detail-name').textContent = pet.name;
-    $('detail-meta').textContent = [pet.species, pet.breed, STR.detailLocation(pet.cabinet, pet.slot + 1)]
+    $('detail-meta').textContent = [pet.species, pet.breed, STR.address(pet.floor, pet.wall, pet.cell)]
       .filter(Boolean)
       .join(' · ');
     $('detail-dates').textContent = `${pet.birthDate ?? '?'} — ${pet.passedDate}`;
@@ -392,7 +392,7 @@ export class UI {
   }
 
   private renderSearch() {
-    const q = $<HTMLInputElement>('search-input').value.trim().toLowerCase();
+    const q = $<HTMLInputElement>('search-input').value.trim().toLowerCase().replace(/\s/g, '');
     const list = $('search-results');
     list.replaceChildren();
     const found = this.findPets(q);
@@ -482,7 +482,8 @@ export class UI {
         p.name.toLowerCase().includes(q) ||
         p.species.includes(q) ||
         (p.breed ?? '').toLowerCase().includes(q) ||
-        p.cabinet.toLowerCase() === q,
+        q === String(p.wall) ||
+        q === STR.wallName(p.wall).replace(/\s/g, ''),
     ).slice(0, 30);
   }
 
@@ -492,7 +493,7 @@ export class UI {
     const b = document.createElement('b');
     b.textContent = p.name;
     const small = document.createElement('small');
-    small.textContent = `${p.breed ?? p.species} · ${STR.detailLocation(p.cabinet, p.slot + 1)}`;
+    small.textContent = `${p.breed ?? p.species} · ${STR.address(p.floor, p.wall, p.cell)}`;
     info.append(b, small);
     return info;
   }

@@ -46,8 +46,6 @@ const PHOTO = { y: 2.05, size: 0.78 };
 
 /** 长椅：在入口内侧偏左，背对缺口，正对着石柱 */
 const BENCH = { x: -1.9, z: R - 1.9 };
-/** 坐下时小人的髋部高度（和 Avatar 里的坐姿一致） */
-const SIT_HIP = 0.42;
 const SEAT_TOP = 0.485;
 
 /** 寄语太长时在靠近中间的标点处折成两行 */
@@ -78,7 +76,7 @@ export class Space {
     z: S.z + BENCH.z - 0.02,
     facing: 0,
     yaw: -0.22,
-    lift: SEAT_TOP - SIT_HIP,
+    lift: SEAT_TOP - CONFIG.player.sitHip,
     exit: { x: S.x + BENCH.x, z: S.z + BENCH.z - 0.87 },
   };
   /** 由 main 注入：点了那摞信 / 长椅 */
@@ -346,7 +344,7 @@ export class Space {
     for (const k of Object.keys(this.placed) as OfferKind[]) this.placed[k] = [];
 
     const gifts = store.gifts(pet);
-    const caps = CONFIG.shrine.caps;
+    const caps = S.caps;
     const put = (o: THREE.Object3D, [x, tier]: Spot, dz = 0) => {
       o.position.set(x, TIER_TOP[tier], tierZ(tier) + dz);
       o.scale.setScalar(S.giftScale);

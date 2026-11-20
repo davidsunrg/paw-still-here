@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
-import { mulberry32, PETS } from '../data/pets';
 import { STR } from '../strings';
 import { archWall, plant, sofa, wallStrip } from './parts';
+import { buildTree } from './Tree';
 import { pawTexture, plankTexture, textMesh } from './textures';
 import type { World } from './World';
 
+/** 大厅：正中是纪念树，三面墙是照片墙（见 Gallery.ts），门墙两侧是接待台和电梯 */
 export function buildHall(w: World) {
   const { kit, scene } = w;
   const C = CONFIG.colors;
@@ -14,8 +15,7 @@ export function buildHall(w: World) {
   const hw = CONFIG.hall.w / 2;
   const d = CONFIG.hall.d;
   const zc = -d / 2;
-  const rnd = mulberry32(11);
-  const R = (a: number, b: number) => a + rnd() * (b - a);
+  const L = CONFIG.hall;
 
   // ---------- 地面 ----------
   const planks = plankTexture();
@@ -28,16 +28,9 @@ export function buildHall(w: World) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const emblem = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.2, 3.2).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ map: pawTexture(), transparent: true, opacity: 0.16, depthWrite: false, color: 0xffe2b0 }),
-  );
-  emblem.position.set(0, 0.05, zc);
-  scene.add(emblem);
-
   // ---------- 墙 ----------
   archWall(w, ZONES.hallFront, CONFIG.hall.w + T, CONFIG.hall.doorHalf, CONFIG.hall.doorSpring, true);
-  archWall(w, ZONES.hallBack, CONFIG.hall.w + T, CONFIG.corridor.doorHalf, CONFIG.corridor.doorSpring);
+  archWall(w, ZONES.hallBack, CONFIG.hall.w + T, L.backDoorHalf, L.backDoorSpring);
   for (const sx of [-1, 1]) {
     kit.box(sx * hw, H / 2, zc, T, H, d + T, C.wall);
     w.collide(sx * hw, zc, T, d + T, true);
@@ -60,89 +53,91 @@ export function buildHall(w: World) {
   doorName.position.set(0, 4.72, T / 2 + 0.02);
   scene.add(doorName);
 
-  // ---------- 头顶的串灯（没有屋顶，直接衬着夜空） ----------
-  for (const z of [-2.5, -6.5, -11.5, -15.5]) {
+  // ---------- 头顶的串灯（没有屋顶，直接衬着夜空；中间让开树冠） ----------
+  for (const z of L.stringZ) {
     const n = 30;
     for (let i = 0; i <= n; i++) {
       const t = i / n;
       const y = H - 0.15 - 1.1 * 4 * t * (1 - t);
-      kit.glowBall(-hw + 0.3 + t * (CONFIG.hall.w - 0.6), y, z + Math.sin(t * 9 + z) * 0.08, 0.045, i % 3 ? C.warm : 0xfff0d0, 3);
+      kit.glowBall(-hw + 0.3 + t * (L.w - 0.6), y, z + Math.sin(t * 9 + z) * 0.08, 0.045, i % 3 ? C.warm : 0xfff0d0, 3);
     }
   }
-  w.pointLight(-3, 4.3, zc, 46, 26);
-  w.pointLight(5, 4.3, zc + 3, 38, 24);
-
-  // ---------- 照片墙（左墙） ----------
-  const wallX = -hw + T / 2;
-  const cols = 8;
-  const rows = 3;
-  const featured = PETS.slice(0, Math.min(CONFIG.wallPhotos, cols * rows));
-  const frameColors = [0x3b2a20, 0xd9c7a0, 0xf2efe8, 0xb08d57, 0x5a4636];
-  featured.forEach((pet, i) => {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    const s = R(0.7, 0.94);
-    const z = -2.3 - c * ((d - 4.6) / (cols - 1)) + R(-0.12, 0.12);
-    const y = 1.3 + r * 1.2 + R(-0.04, 0.04);
-    kit.box(wallX + 0.03, y, z, 0.06, s + 0.16, s + 0.16, frameColors[i % frameColors.length]);
-    w.photos.add(pet, new THREE.Vector3(wallX + 0.07, y, z), Math.PI / 2, s, s, 'wall');
-    kit.glowBox(wallX + 0.12, y + s / 2 + 0.17, z, 0.05, 0.035, s * 0.5, C.warm, 2.6);
-  });
+  w.pointLight(0, 4.3, -3.4, 30, 22);
+  // 三面照片墙前的灯
+  for (const s of [-1, 1]) {
+    w.pointLight(s * 8, 3.4, zc, 34, 22);
+    w.pointLight(s * 6.4, 3.4, ZONES.hallBack + 3.5, 24, 18);
+  }
   const wallTitle = textMesh(STR.wallTitle, { height: 0.4, color: '#6b4a2e' });
-  wallTitle.position.set(wallX + 0.02, 4.7, zc);
+  wallTitle.position.set(-hw + T / 2 + 0.02, 4.7, zc);
   wallTitle.rotation.y = Math.PI / 2;
   scene.add(wallTitle);
-  w.pointLight(-7.6, 3.0, zc, 24, 18);
 
-  // ---------- 休息区（右前方） ----------
-  const sx = 7.2;
-  const sz = -4.6;
-  kit.box(sx, 0.055, sz, 6.4, 0.03, 5.0, 0x6f5560);
-  kit.box(sx, 0.062, sz, 5.8, 0.03, 4.4, 0x86697a);
-  sofa(w, sx, -1.35, Math.PI, 2.6, 0x7f93a8, 0x9db0c4);
-  sofa(w, sx + 3.2, sz - 0.4, -Math.PI / 2, 2.0, 0x7f93a8, 0x9db0c4);
-  sofa(w, sx - 3.2, sz - 0.4, Math.PI / 2, 2.0, 0x7f93a8, 0x9db0c4);
-  // 茶几
-  kit.box(sx, 0.42, sz - 0.3, 1.5, 0.06, 0.85, C.woodLight);
-  for (const [lx, lz] of [[-0.65, -0.33], [0.65, -0.33], [-0.65, 0.33], [0.65, 0.33]]) {
-    kit.box(sx + lx, 0.2, sz - 0.3 + lz, 0.06, 0.4, 0.06, C.woodDark);
+  // ---------- 纪念树和两侧的沙发 ----------
+  buildTree(w);
+  for (const s of [-1, 1]) {
+    kit.box(s * (L.sofaX - 0.5), 0.055, zc, 2.6, 0.03, 3.8, 0x6f5560);
+    kit.box(s * (L.sofaX - 0.5), 0.062, zc, 2.2, 0.03, 3.4, 0x86697a);
+    const before = w.seats.length;
+    sofa(w, s * L.sofaX, zc, -s * Math.PI / 2, 2.6, 0x7f93a8, 0x9db0c4);
+    const seats = w.seats.slice(before);
+    w.proxy(s * L.sofaX, 0.5, zc, 1.0, 1.0, 2.9, STR.tipBench, () => w.hooks.sit(seats));
   }
-  w.collide(sx, sz - 0.3, 1.5, 0.85);
-  kit.box(sx - 0.35, 0.5, sz - 0.3, 0.26, 0.1, 0.14, 0xf4f1ea);
-  kit.box(sx - 0.35, 0.56, sz - 0.3, 0.1, 0.03, 0.04, 0xffffff);
-  kit.cyl(sx + 0.3, 0.45, sz - 0.25, 0.035, 0.1, 0xf6ecd8);
-  kit.flame(sx + 0.3, 0.58, sz - 0.25, 0.02);
-  // 落地灯
-  const lx = sx + 3.5;
-  const lz = -1.3;
-  kit.cyl(lx, 0, lz, 0.18, 0.04, 0x2b2b33);
-  kit.cyl(lx, 0, lz, 0.025, 1.55, 0x2b2b33);
-  kit.glowCyl(lx, 1.5, lz, 0.2, 0.34, 0xffd9a0, 2.2);
-  kit.pool(lx - 0.5, lz - 0.5, 6, C.warm, 0.3);
-  w.pointLight(lx - 1.3, 1.9, lz - 1.5, 9, 10);
-  plant(w, sx - 3.4, -1.1, 1.15);
 
-  // ---------- 接待台（右后方，弧形） ----------
-  const cx = hw - 0.6;
-  const cz = -12.6;
+  // ---------- 后墙正中合上的石门（后面的展区还没有开放） ----------
+  const bz = ZONES.hallBack;
+  const dh = L.backDoorHalf;
+  const ds = L.backDoorSpring;
+  const shape = new THREE.Shape();
+  shape.moveTo(-dh, 0);
+  shape.lineTo(-dh, ds);
+  shape.absarc(0, ds, dh, Math.PI, 0, true);
+  shape.lineTo(dh, 0);
+  shape.closePath();
+  const leafGeo = new THREE.ExtrudeGeometry(shape, { depth: T - 0.16, bevelEnabled: false, curveSegments: 20 });
+  leafGeo.translate(0, 0, -(T - 0.16) / 2);
+  const leaves = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: 0x8f8a82, roughness: 0.9 }));
+  leaves.position.z = bz;
+  leaves.castShadow = leaves.receiveShadow = true;
+  scene.add(leaves);
+  w.collide(0, bz, dh * 2, T, true);
+  for (const face of [-1, 1]) {
+    const fz = bz + face * (T / 2 - 0.08);
+    // 两扇门之间的门缝，和每扇门上的一圈凹线、一个石把手
+    kit.box(0, (ds + dh) / 2, fz, 0.035, ds + dh, 0.02, 0x4a4641);
+    for (const s of [-1, 1]) {
+      const px = s * dh * 0.5;
+      kit.box(px, 0.34, fz, dh * 0.62, 0.025, 0.02, 0x7a756e);
+      kit.box(px, ds, fz, dh * 0.62, 0.025, 0.02, 0x7a756e);
+      for (const e of [-1, 1]) kit.box(px + e * dh * 0.31, (0.34 + ds) / 2, fz, 0.025, ds - 0.34, 0.02, 0x7a756e);
+      kit.box(s * 0.2, 1.15, fz + face * 0.03, 0.06, 0.34, 0.06, 0x6b665f);
+    }
+  }
+  // 门框
+  for (const s of [-1, 1]) kit.box(s * (dh + 0.11), ds / 2, bz + T / 2 + 0.05, 0.2, ds, 0.12, C.stone);
+
+  // ---------- 接待台（大门东侧，背靠门墙，弧形） ----------
+  const cx = L.receptionX;
+  const cz = -0.6;
   const rad = 2.7;
   const seg = 7;
   const a0 = THREE.MathUtils.degToRad(112);
   const a1 = THREE.MathUtils.degToRad(248);
-  for (let i = 0; i < seg; i++) {
-    const a = a0 + ((i + 0.5) / seg) * (a1 - a0);
-    const x = cx + Math.cos(a) * rad;
-    const z = cz + Math.sin(a) * rad;
-    const ry = Math.atan2(-Math.cos(a), -Math.sin(a));
-    kit.box(x, 0.52, z, 1.0, 1.04, 0.42, C.wood, ry);
-    kit.box(x + Math.cos(a) * 0.03, 1.07, z + Math.sin(a) * 0.03, 1.06, 0.06, 0.62, C.woodLight, ry);
-    kit.glowBox(x + Math.cos(a) * 0.23, 0.14, z + Math.sin(a) * 0.23, 0.96, 0.03, 0.03, C.warm, 2.2, ry);
-    w.collide(x, z, 0.9, 0.9);
-  }
+  /** 弧上的一点：180° 正对大厅里面，off 是往外（访客一侧）偏多少 */
   const deskAt = (deg: number, off = 0): [number, number] => {
     const a = THREE.MathUtils.degToRad(deg);
-    return [cx + Math.cos(a) * (rad + off), cz + Math.sin(a) * (rad + off)];
+    return [cx + Math.sin(a) * (rad + off), cz + Math.cos(a) * (rad + off)];
   };
+  for (let i = 0; i < seg; i++) {
+    const a = a0 + ((i + 0.5) / seg) * (a1 - a0);
+    const x = cx + Math.sin(a) * rad;
+    const z = cz + Math.cos(a) * rad;
+    const ry = Math.atan2(-Math.sin(a), -Math.cos(a));
+    kit.box(x, 0.52, z, 1.0, 1.04, 0.42, C.wood, ry);
+    kit.box(x + Math.sin(a) * 0.03, 1.07, z + Math.cos(a) * 0.03, 1.06, 0.06, 0.62, C.woodLight, ry);
+    kit.glowBox(x + Math.sin(a) * 0.23, 0.14, z + Math.cos(a) * 0.23, 0.96, 0.03, 0.03, C.warm, 2.2, ry);
+    w.collide(x, z, 0.9, 0.9);
+  }
   // 台面上的爪印标志
   const logo = new THREE.Mesh(
     new THREE.PlaneGeometry(0.62, 0.62),
@@ -150,15 +145,15 @@ export function buildHall(w: World) {
   );
   const [gx, gz] = deskAt(180, 0.22);
   logo.position.set(gx, 0.62, gz);
-  logo.rotation.y = -Math.PI / 2;
+  logo.rotation.y = Math.PI;
   scene.add(logo);
   // 留言簿
-  const [bx, bz] = deskAt(180, 0.02);
-  kit.box(bx, 1.115, bz - 0.14, 0.34, 0.03, 0.27, 0xfaf4e6, 0.06);
-  kit.box(bx, 1.115, bz + 0.14, 0.34, 0.03, 0.27, 0xf3ecdb, -0.06);
-  kit.box(bx, 1.105, bz, 0.37, 0.02, 0.6, 0x7b3f3f);
-  kit.cyl(bx + 0.05, 1.13, bz + 0.42, 0.012, 0.16, 0x2b2b33);
-  w.proxy(bx, 1.16, bz, 0.5, 0.2, 0.75, STR.tipGuestbook, () => w.hooks.guestbook());
+  const [bx, bkz] = deskAt(180, 0.02);
+  kit.box(bx - 0.14, 1.115, bkz, 0.27, 0.03, 0.34, 0xfaf4e6, 0.06);
+  kit.box(bx + 0.14, 1.115, bkz, 0.27, 0.03, 0.34, 0xf3ecdb, -0.06);
+  kit.box(bx, 1.105, bkz, 0.6, 0.02, 0.37, 0x7b3f3f);
+  kit.cyl(bx + 0.42, 1.13, bkz + 0.05, 0.012, 0.16, 0x2b2b33);
+  w.proxy(bx, 1.16, bkz, 0.75, 0.2, 0.5, STR.tipGuestbook, () => w.hooks.guestbook());
   // 台灯
   const [tx, tz] = deskAt(141);
   kit.cyl(tx, 1.1, tz, 0.09, 0.03, 0x2b2b33);
@@ -174,43 +169,52 @@ export function buildHall(w: World) {
   // 招财猫一样守在台边的小猫摆件
   const [mx, mz] = deskAt(160);
   kit.ball(mx, 1.22, mz, 0.12, 0xfaf6ee, 1.05);
-  kit.ball(mx - 0.02, 1.4, mz, 0.095, 0xfaf6ee);
-  kit.cone(mx - 0.02, 1.46, mz - 0.055, 0.035, 0.07, 0xfaf6ee);
-  kit.cone(mx - 0.02, 1.46, mz + 0.055, 0.035, 0.07, 0xfaf6ee);
-  kit.ball(mx - 0.11, 1.4, mz - 0.035, 0.014, 0x2a2320);
-  kit.ball(mx - 0.11, 1.4, mz + 0.035, 0.014, 0x2a2320);
-  kit.ball(mx - 0.07, 1.3, mz, 0.03, 0xe0504a);
+  kit.ball(mx, 1.4, mz - 0.02, 0.095, 0xfaf6ee);
+  kit.cone(mx - 0.055, 1.46, mz - 0.02, 0.035, 0.07, 0xfaf6ee);
+  kit.cone(mx + 0.055, 1.46, mz - 0.02, 0.035, 0.07, 0xfaf6ee);
+  kit.ball(mx - 0.035, 1.4, mz - 0.11, 0.014, 0x2a2320);
+  kit.ball(mx + 0.035, 1.4, mz - 0.11, 0.014, 0x2a2320);
+  kit.ball(mx, 1.3, mz - 0.07, 0.03, 0xe0504a);
 
-  w.proxy(cx - rad, 0.55, cz, 0.7, 1.0, 5.6, STR.tipReception, () => w.hooks.reception());
+  w.proxy(cx, 0.55, cz - rad, 5.6, 1.0, 0.7, STR.tipReception, () => w.hooks.reception());
 
   // 背景墙：发光的馆名
-  const backX = hw - T / 2 - 0.07;
+  const faceZ = -T / 2;
   const name = textMesh(STR.brand, { height: 0.62, color: '#ffd9a0', glow: 2.0 });
-  name.position.set(backX, 3.35, cz);
-  name.rotation.y = -Math.PI / 2;
+  name.position.set(cx, 3.35, faceZ - 0.07);
+  name.rotation.y = Math.PI;
   const sub = textMesh(STR.subtitle, { height: 0.24, color: '#fff1dc', glow: 1.25 });
-  sub.position.set(backX, 2.72, cz);
-  sub.rotation.y = -Math.PI / 2;
+  sub.position.set(cx, 2.72, faceZ - 0.07);
+  sub.rotation.y = Math.PI;
   scene.add(name, sub);
-  kit.box(hw - T / 2 - 0.03, 3.1, cz, 0.05, 1.7, 6.2, 0x5a4636);
+  kit.box(cx, 3.1, faceZ - 0.03, 6.2, 1.7, 0.05, 0x5a4636);
   // 背景墙下的矮柜
-  kit.box(hw - T / 2 - 0.3, 0.45, cz, 0.5, 0.9, 3.4, C.woodDark);
-  kit.box(hw - T / 2 - 0.3, 0.92, cz, 0.56, 0.05, 3.5, C.woodLight);
-  for (const dz of [-1.2, 0, 1.2]) {
-    kit.cyl(hw - T / 2 - 0.3, 0.95, cz + dz, 0.045, 0.14, 0xf6ecd8);
-    kit.flame(hw - T / 2 - 0.3, 1.13, cz + dz, 0.024);
+  kit.box(cx, 0.45, faceZ - 0.3, 3.4, 0.9, 0.5, C.woodDark);
+  kit.box(cx, 0.92, faceZ - 0.3, 3.5, 0.05, 0.56, C.woodLight);
+  for (const dx of [-1.2, 0, 1.2]) {
+    kit.cyl(cx + dx, 0.95, faceZ - 0.3, 0.045, 0.14, 0xf6ecd8);
+    kit.flame(cx + dx, 1.13, faceZ - 0.3, 0.024);
   }
-  w.collide(hw - T / 2 - 0.3, cz, 0.6, 3.5);
-  w.pointLight(cx - 2.6, 3.0, cz, 26, 16);
-  plant(w, hw - 1.0, -16.9, 1.25);
-  plant(w, hw - 1.0, -8.6, 1.1);
+  w.collide(cx, faceZ - 0.3, 3.5, 0.6);
+  w.pointLight(cx, 3.0, cz - 2.6, 26, 16);
 
-  // ---------- 通往纪念区的指示 ----------
-  const sign = textMesh(STR.hallSign, { height: 0.36, color: '#ffd9a0', glow: 2.0 });
-  sign.position.set(0, 4.42, ZONES.hallBack + T / 2 + 0.02);
-  scene.add(sign);
-  for (const s of [-1, 1]) {
-    kit.glowBall(s * 2.6, 2.5, ZONES.hallBack + T / 2 + 0.14, 0.13, C.warm, 2.6);
-    plant(w, s * 3.3, ZONES.hallBack + 0.95, 1.2);
-  }
+  // ---------- 电梯（大门西侧，只有门；别的楼层还没有开放） ----------
+  const ex = L.elevatorX;
+  const metal = 0x4a4540;
+  kit.box(ex, 1.3, faceZ - 0.05, 2.5, 2.6, 0.1, metal);
+  for (const s of [-1, 1]) kit.box(ex + s * 0.5, 1.14, faceZ - 0.11, 0.98, 2.2, 0.03, 0xa39a8c);
+  kit.box(ex, 1.14, faceZ - 0.125, 0.02, 2.2, 0.01, 0x2b2824);
+  kit.glowBox(ex, 2.28, faceZ - 0.11, 2.0, 0.02, 0.02, C.warm, 1.6);
+  // 门楣上的楼层数字
+  kit.box(ex, 2.95, faceZ - 0.04, 0.62, 0.44, 0.06, 0x2b2824);
+  const floorNo = textMesh(STR.floorNumber, { height: 0.3, color: '#ffd9a0', glow: 2.0 });
+  floorNo.position.set(ex, 2.95, faceZ - 0.08);
+  floorNo.rotation.y = Math.PI;
+  scene.add(floorNo);
+  // 门边的呼叫面板
+  kit.box(ex - 1.5, 1.2, faceZ - 0.03, 0.14, 0.3, 0.04, 0x2b2824);
+  kit.glowBall(ex - 1.5, 1.2, faceZ - 0.06, 0.022, C.warm, 1.6);
+  w.collide(ex, faceZ - 0.08, 2.5, 0.16);
+
+  for (const s of [-1, 1]) plant(w, s * 3.1, -0.95, 1.15);
 }

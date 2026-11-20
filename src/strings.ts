@@ -9,8 +9,7 @@ export const STR = {
     river: '正在引来河水…',
     fire: '正在点起篝火…',
     hall: '正在布置大厅…',
-    corridor: '正在点亮通道…',
-    memorial: '正在摆放相框…',
+    gallery: '正在挂上相框…',
     space: '正在打扫小院…',
     finish: '马上就好…',
   },
@@ -30,13 +29,10 @@ export const STR = {
   tpRiver: '河边',
   tpFire: '篝火',
   tpHall: '大厅',
-  tpMemorial: '纪念区',
   search: '找宠物',
   lantern: '放孔明灯',
 
-  hallSign: '纪念区',
   wallTitle: '它们曾来过',
-  cabinetZone: '区',
   treeLabel: '纪念树',
 
   tipPet: '走进它的小院',
@@ -87,7 +83,11 @@ export const STR = {
   letterPlaceholder: '想对它说的话，慢慢写…',
   letterSend: '放在它身边',
   letterEmpty: '还没有人给它写信，写下第一封吧。',
-  detailLocation: (cab: string, slot: number) => `${cab} 区 · 第 ${slot} 格`,
+  /** 一只宠物的地址 */
+  address: (floor: number, wall: number, cell: number) => `${floor} 层 · 大厅 · ${wall} 号墙 · 第 ${cell} 格`,
+  /** 电梯门上方的楼层数字 */
+  floorNumber: '1',
+  wallName: (wall: number) => `${wall} 号墙`,
   close: '关闭',
 
   lanternTitle: '放一盏孔明灯',
@@ -102,7 +102,7 @@ export const STR = {
   guestbookSend: '写下',
 
   searchTitle: '查找宠物',
-  searchPlaceholder: '输入名字、品种或柜子编号…',
+  searchPlaceholder: '输入名字、品种或墙号…',
   searchEmpty: '没有找到，换个名字试试。',
   searchGuide: '指引',
   searchGoto: '传送',
@@ -111,15 +111,7 @@ export const STR = {
 
   commentToast: '留言已留下',
 
-  /** 通道墙上的短句 */
-  quotes: [
-    '它们只是先去了星星上',
-    '谢谢你，陪我走过这一程',
-    '想你的时候，就抬头看看',
-    '爱不会因为离开而消失',
-  ],
-
-  /** 示例宠物格子里预先放着的信 */
+  /** 示例宠物身边预先放着的信 */
   sampleLetters: [
     '今天做了你爱吃的鸡胸肉，习惯性多做了一份。',
     '搬家了，新家的窗台很宽，你一定会喜欢在那里晒太阳。',

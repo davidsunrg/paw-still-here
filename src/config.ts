@@ -1,6 +1,6 @@
 /**
  * 全局可调参数：尺寸、数量、颜色都集中在这里。
- * 坐标约定：访客从 +Z 方向沿石头路走向 -Z，依次经过 大厅 → 通道 → 纪念区。
+ * 坐标约定：访客从 +Z 方向沿石头路走向 -Z，走进大厅。
  */
 export const CONFIG = {
   name: '星光宠物纪念馆',
@@ -10,6 +10,8 @@ export const CONFIG = {
     /** 小人的身高 */
     height: 1.6,
     radius: 0.35,
+    /** 坐着时臀部比站立的基准高度高多少（和 Avatar 里的坐姿对应） */
+    sitHip: 0.42,
     walk: 4.2,
     run: 8,
     /** 转身的快慢，越大转得越快 */
@@ -37,16 +39,13 @@ export const CONFIG = {
     pitchMax: 0.3,
     /** 镜头绕着转的那一点离脚底多高 */
     pivot: 1.45,
-    /** 镜头和墙、柜子之间至少留多少空隙；被挡住时最近能贴到多近；离地面至少多高 */
+    /** 镜头和墙之间至少留多少空隙；被挡住时最近能贴到多近；离地面至少多高 */
     pad: 0.25,
     near: 0.2,
     floor: 0.3,
     /** 镜头离小人这么近时开始 / 完全淡出小人 */
     fadeFar: 1.25,
     fadeNear: 0.6,
-    /** 单宠物特写时小人站的位置：离相框多远、往旁边偏多少 */
-    standOff: 0.75,
-    standSide: 1.2,
   },
 
   /** 石头路：从 startZ 延伸到大厅正门 (z = 0) */
@@ -55,48 +54,27 @@ export const CONFIG = {
   wallT: 0.4,
   wallH: 5,
 
-  /** 大厅：x ∈ [-w/2, w/2]，z ∈ [0, -d] */
-  hall: { w: 24, d: 18, doorHalf: 2.0, doorSpring: 2.4 },
-
-  /** 通道：接在大厅后墙，长度 len */
-  corridor: { len: 10, half: 2, doorHalf: 1.6, doorSpring: 2.2 },
-
-  /** 纪念区：接在通道之后 */
-  memorial: { w: 36, d: 36 },
-
-  /** 纪念柜 */
-  cabinet: {
-    count: 8,
-    rows: 4,
-    cols: 5,
-    cellW: 0.72,
-    cellH: 0.62,
-    depth: 0.42,
-    base: 0.4,
-    board: 0.04,
-  },
+  /** 大厅：x ∈ [-w/2, w/2]，z ∈ [0, -d]。backDoor 是后墙正中通往展区的石门（展区还没开，门关着） */
+  hall: { w: 24, d: 18, doorHalf: 2.0, doorSpring: 2.4, backDoorHalf: 1.6, backDoorSpring: 2.2, sofaX: 5.2, receptionX: 6.7, elevatorX: -7, stringZ: [-2, -4.8, -13.2, -16] },
 
   /**
-   * 单宠物视角：点击相框后，这一格展开成一个放得下礼物的小龛。
-   * w / h / d 是展开后的尺寸，offset 是它从相框向外探出的距离。
+   * 大厅三面墙上的照片墙。进门左手是 1 号墙，正对面（石门两侧）是 2 号墙，右手是 3 号墙。
+   * 每面墙 rows 行；格号按列编：面向墙从左到右，每列从上到下。
    */
-  shrine: {
-    w: 1.5,
-    h: 1.05,
-    d: 0.62,
-    offset: 0.62,
-    /** 小龛中心的高度范围，最下排和最上排的格子展开时会移到这个范围内 */
-    minY: 1.0,
-    maxY: 2.3,
-    /** 刚开始展开时相对最终尺寸的比例（约等于一格的大小） */
-    startScale: 0.3,
-    /** 展开 / 收回的时长（秒） */
-    time: 0.9,
-    /** 周围变暗的程度 0–1 */
-    veil: 0.93,
-    light: 1.3,
-    /** 每类礼物最多摆出多少件实物，超过后不再增加模型 */
-    caps: { flower: 14, candle: 6, snack: 4, toy: 4, letter: 5 },
+  gallery: {
+    rows: 3,
+    /** 每行相框中心的高度，从上到下 */
+    rowY: [2.5, 1.75, 1.0],
+    /** 相邻两列的间距，相框的边长 */
+    pitch: 0.8,
+    frame: 0.5,
+    /** 1、3 号墙各多少列；2 号墙石门两侧各多少列，以及最靠近石门的一列离中轴线多远 */
+    sideCols: 20,
+    backCols: 11,
+    backInner: 2.5,
+    /** 贴在墙上的石板：从多高到多高、多厚 */
+    slabY: [0.5, 3.0] as [number, number],
+    slabT: 0.1, lane: 8,
   },
 
   /**
@@ -117,8 +95,10 @@ export const CONFIG = {
     leave: 1.1,
     /** 进出时画面暗下去 / 亮起来各用多久（秒） */
     fade: 0.45,
-    /** 礼物模型放大多少（原本是按柜子格子的大小做的） */
+    /** 礼物模型放大多少 */
     giftScale: 1.8,
+    /** 每类礼物最多摆出多少件实物，超过后不再增加模型 */
+    caps: { flower: 14, candle: 6, snack: 4, toy: 4, letter: 5 },
     /** 石柱两侧壁灯和缺口灯柱的亮度 */
     light: 7,
     gateLight: 5,
@@ -180,8 +160,6 @@ export const CONFIG = {
 
   /** 宠物数量（上限 100，受照片图集大小限制） */
   petCount: 96,
-  /** 大厅照片墙展示的精选数量 */
-  wallPhotos: 24,
 
   sky: {
     stars: 2600,
@@ -216,6 +194,4 @@ export const RIVER_BANKS = {
 export const ZONES = {
   hallFront: 0,
   hallBack: -CONFIG.hall.d,
-  memFront: -CONFIG.hall.d - CONFIG.corridor.len,
-  memBack: -CONFIG.hall.d - CONFIG.corridor.len - CONFIG.memorial.d,
 };

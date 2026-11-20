@@ -64,10 +64,9 @@ export function wallStrip(kit: Kit, x: number, z: number, lenX: number, lenZ: nu
 
 /** 在沙发 / 长椅上登记左右两个座位（局部 +Z 是正面） */
 function seats(w: World, P: ReturnType<typeof placer>, rot: number, lx: number, lz: number, top: number) {
-  const zone = P(0, 0)[1] > -CONFIG.hall.d ? 'hall' : 'memorial';
   for (const side of [-1, 1]) {
     const [x, z] = P(side * lx, lz);
-    w.seat(zone, x, z, top, Math.sin(rot), Math.cos(rot));
+    w.seat('hall', x, z, top, Math.sin(rot), Math.cos(rot));
   }
 }
 

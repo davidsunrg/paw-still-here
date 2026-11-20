@@ -9,8 +9,6 @@ export interface PhotoEntry {
   rotY: number;
   w: number;
   h: number;
-  /** 同一组里的相框可以用左右键互相切换：照片墙是 wall，纪念柜是柜子编号 */
-  group: string;
 }
 
 /** 把一批朝向任意的矩形合并进一个几何体 */
@@ -51,7 +49,7 @@ class QuadBatch {
 
 /**
  * 所有宠物照片共用一张图集和一个网格：
- * 每只宠物在图集里占一格，照片墙和纪念柜里的相框都引用同一格。
+ * 每只宠物在图集里占一格，照片墙上的相框和小院石柱上的照片都引用同一格。
  */
 export class PhotoBatch {
   static readonly CELL = 204;
@@ -92,7 +90,7 @@ export class PhotoBatch {
     img.src = url;
   }
 
-  /** 图集纹理，单宠物视角里的大相框也用它 */
+  /** 图集纹理，小院石柱上的照片也用它 */
   get map() {
     return this.texture;
   }
@@ -112,7 +110,7 @@ export class PhotoBatch {
     ];
   }
 
-  add(pet: Pet, center: THREE.Vector3, rotY: number, w: number, h: number, group: string) {
+  add(pet: Pet, center: THREE.Vector3, rotY: number, w: number, h: number) {
     this.quads.quad(center, rotY, w, h, this.uvOf(pet));
     this.entries.push({
       pet,
@@ -121,8 +119,8 @@ export class PhotoBatch {
       rotY,
       w,
       h,
-      group,
     });
+    return this.entries[this.entries.length - 1];
   }
 
   build(parent: THREE.Object3D) {
@@ -143,7 +141,7 @@ export class LabelBatch {
   private static readonly CW = 256;
   private static readonly CH = 64;
   private static readonly W = 2048;
-  private static readonly H = 1024;
+  private static readonly H = 2048;
 
   private quads = new QuadBatch();
   private canvas: HTMLCanvasElement;
@@ -154,7 +152,8 @@ export class LabelBatch {
     [this.canvas, this.ctx] = makeCanvas(LabelBatch.W, LabelBatch.H);
   }
 
-  add(text: string, center: THREE.Vector3, rotY: number, w: number, h: number) {
+  /** tag 是写在名牌左角的小字（格号）；blank 为 true 时是空格子的名牌：石色、只有格号 */
+  add(text: string, center: THREE.Vector3, rotY: number, w: number, h: number, tag = '', blank = false) {
     const { CW, CH, W, H } = LabelBatch;
     const cols = W / CW;
     if (this.count >= cols * (H / CH)) return;
@@ -164,18 +163,32 @@ export class LabelBatch {
 
     const ctx = this.ctx;
     const g = ctx.createLinearGradient(0, y, 0, y + CH);
-    g.addColorStop(0, '#e9d3a2');
-    g.addColorStop(1, '#c9a868');
+    g.addColorStop(0, blank ? '#8d8880' : '#e9d3a2');
+    g.addColorStop(1, blank ? '#7a756e' : '#c9a868');
     ctx.fillStyle = g;
     ctx.fillRect(x, y, CW, CH);
-    ctx.strokeStyle = 'rgba(90,60,20,0.55)';
+    ctx.strokeStyle = blank ? 'rgba(40,36,32,0.4)' : 'rgba(90,60,20,0.55)';
     ctx.lineWidth = 3;
     ctx.strokeRect(x + 3, y + 3, CW - 6, CH - 6);
-    ctx.fillStyle = '#3d2a14';
-    ctx.font = `600 30px ${FONT}`;
-    ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, x + CW / 2, y + CH / 2 + 2, CW - 20);
+    if (blank) {
+      ctx.fillStyle = 'rgba(30,27,24,0.7)';
+      ctx.font = `500 30px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(tag, x + CW / 2, y + CH / 2 + 2);
+    } else {
+      const left = tag ? 44 : 0;
+      if (tag) {
+        ctx.fillStyle = 'rgba(90,60,20,0.8)';
+        ctx.font = `500 23px ${FONT}`;
+        ctx.textAlign = 'left';
+        ctx.fillText(tag, x + 11, y + CH / 2 + 2);
+      }
+      ctx.fillStyle = '#3d2a14';
+      ctx.font = `600 32px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(text, x + (CW + left) / 2, y + CH / 2 + 2, CW - 20 - left);
+    }
 
     this.quads.quad(center, rotY, w, h, [x / W, 1 - (y + CH) / H, (x + CW) / W, 1 - y / H]);
   }

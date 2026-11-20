@@ -102,7 +102,7 @@ export class Interaction {
     if (!hit) return null;
     const reach = Math.hypot(hit.point.x - this.who.x, hit.point.z - this.who.z);
 
-    // 视线被墙或柜子挡住时不算
+    // 视线被墙挡住时不算
     const o = this.ray.ray.origin;
     const back = Math.max(0, hit.distance - 0.6) / hit.distance;
     const ex = o.x + (hit.point.x - o.x) * back;
@@ -123,7 +123,7 @@ export class Interaction {
 
   /**
    * 点击处对应的地面位置，用来让小人走过去。点到天上、太远的地方返回 null；
-   * 视线被墙或柜子挡住时，返回挡住之前的位置（小人会走到墙边）。
+   * 视线被墙挡住时，返回挡住之前的位置（小人会走到墙边）。
    */
   ground(clientX: number, clientY: number): THREE.Vector3 | null {
     this.ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);

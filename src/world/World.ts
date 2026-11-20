@@ -1,26 +1,25 @@
 import * as THREE from 'three';
-import { CONFIG, ZONES } from '../config';
+import { CONFIG } from '../config';
 import { PETS, type Pet } from '../data/pets';
-import type { OfferKind } from '../data/store';
 import { STR } from '../strings';
-import { LabelBatch, PhotoBatch } from './Batches';
+import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
-import { buildCorridor } from './Corridor';
-import { CELL_SPOT, cellMini, tickFlames } from './gifts';
+import { buildGallery } from './Gallery';
+import { tickFlames } from './gifts';
 import { buildHall } from './Hall';
 import { Kit } from './Kit';
-import { buildMemorial } from './Memorial';
 import { buildOutdoor } from './Outdoor';
 import { buildRiver, type River } from './River';
 import { MOON_DIR, Sky } from './Sky';
 import { Space } from './Space';
+import { TREE_POS, TREE_SPAN } from './Tree';
 
 export interface Collider {
   minX: number;
   maxX: number;
   minZ: number;
   maxZ: number;
-  /** 高到足以挡住视线（墙、柜子） */
+  /** 高到足以挡住视线（墙） */
   tall: boolean;
 }
 
@@ -30,15 +29,12 @@ export interface Interactable {
   onClick: () => void;
 }
 
+/** 一只宠物在照片墙上的那一格 */
 export interface SlotInfo {
-  /** 格子底板中心（世界坐标） */
-  floor: THREE.Vector3;
-  /** 相框中心 */
-  frame: THREE.Vector3;
-  cabinetX: number;
-  cabinetZ: number;
-  /** 格子里已经摆出了哪几类礼物的小摆件 */
-  shown: Set<OfferKind>;
+  /** 它的相框 */
+  entry: PhotoEntry;
+  /** 相框下面小石台的台面中心 */
+  ledge: THREE.Vector3;
 }
 
 /** 一个可以坐下的位置（沙发、长椅、树桩凳），模拟访客会走过来坐一会儿 */
@@ -51,10 +47,10 @@ export interface Seat {
   facing: number;
   /** 走到这里再坐下 */
   approach: { x: number; z: number };
-  zone: 'fire' | 'hall' | 'memorial';
+  zone: 'fire' | 'hall';
 }
 
-/** 一盏登记过的灯。位置和亮度可以随时改（单宠物视角的灯会跟着小龛移动） */
+/** 一盏登记过的灯。位置和亮度可以随时改 */
 export interface Lamp {
   pos: THREE.Vector3;
   intensity: number;
@@ -76,8 +72,8 @@ export class World {
   readonly slots = new Map<string, SlotInfo>();
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
-  /** 由 main 注入：点击留言簿 / 接待台时触发 */
-  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {} };
+  /** 由 main 注入：点击留言簿 / 接待台 / 沙发时触发；sit 收到的是这张沙发上的座位 */
+  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, sit: (_seats: Seat[]) => {} };
   /** 访客脚下的地面高度，目前只有桥面高出地面 */
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
@@ -100,8 +96,7 @@ export class World {
       ['river', () => (this.river = buildRiver(this))],
       ['fire', () => (this.bonfire = buildBonfire(this))],
       ['hall', () => buildHall(this)],
-      ['corridor', () => buildCorridor(this)],
-      ['memorial', () => buildMemorial(this)],
+      ['gallery', () => buildGallery(this)],
       ['space', () => (this.space = new Space(this))],
       ['finish', () => this.finish()],
     ];
@@ -197,34 +192,61 @@ export class World {
     this.interact(m, label, onClick);
   }
 
-  /** 访客放入礼物后，如果柜子格子里还没有这一类的小摆件，就补上一个 */
-  showInCell(pet: Pet, kind: OfferKind) {
-    const slot = this.slots.get(pet.id);
-    if (!slot || slot.shown.has(kind)) return;
-    slot.shown.add(kind);
-    const mini = cellMini(kind, pet.slot);
-    mini.position.add(new THREE.Vector3(slot.floor.x + CELL_SPOT[kind][0], slot.floor.y, slot.floor.z + CELL_SPOT[kind][1]));
-    this.scene.add(mini);
-  }
-
-  /** 从当前位置走到某只宠物格子前的大致路线（用于地面光点指引） */
+  /**
+   * 从当前位置走到某只宠物相框前的大致路线（用于地面光点指引）。
+   * 大厅正中是纪念树和两侧的沙发，直走会穿过去时，改从四周的过道绕。
+   */
   routeTo(pet: Pet, from: THREE.Vector3): THREE.Vector3[] {
     const slot = this.slots.get(pet.id);
     if (!slot) return [];
-    const pts: THREE.Vector3[] = [new THREE.Vector3(from.x, 0, from.z)];
-    const add = (x: number, z: number) => pts.push(new THREE.Vector3(x, 0, z));
-    const lane = Math.sign(slot.cabinetX) * 6.5;
-    const frontZ = slot.cabinetZ + 1.3;
-    if (from.z > ZONES.memFront - 1) {
-      if (from.z > 0.5) add(0, 1.2);
-      if (from.z > ZONES.hallBack + 1) add(0, ZONES.hallBack + 1);
-      add(0, ZONES.memFront - 1.5);
-      add(lane, ZONES.memFront - 3.5);
-    } else if (Math.abs(from.z - frontZ) > 1 || Math.sign(from.x) !== Math.sign(slot.cabinetX)) {
-      add(lane, from.z);
+    const { center, normal } = slot.entry;
+    const V = (x: number, z: number) => new THREE.Vector3(x, 0, z);
+    const pts = [V(from.x, from.z)];
+    // 还在室外：先进大门
+    if (from.z > 0.5) pts.push(V(0, 1.2), V(0, -3.2));
+    const start = pts[pts.length - 1];
+    const goal = V(center.x + normal.x * 1.5, center.z + normal.z * 1.5);
+
+    // 中间走不过去的一块：树的底座加上两侧的沙发
+    const halfX = CONFIG.hall.sofaX + 1;
+    const halfZ = TREE_SPAN / 2 + 0.6;
+    const crosses = (a: THREE.Vector3, b: THREE.Vector3) => {
+      const n = Math.ceil(a.distanceTo(b) / 0.25);
+      for (let i = 0; i <= n; i++) {
+        const x = a.x + ((b.x - a.x) * i) / Math.max(n, 1);
+        const z = a.z + ((b.z - a.z) * i) / Math.max(n, 1);
+        if (Math.abs(x - TREE_POS.x) < halfX && Math.abs(z - TREE_POS.z) < halfZ) return true;
+      }
+      return false;
+    };
+    // 绕着这一块的四个拐角，按顺时针排列
+    const lane = CONFIG.gallery.lane;
+    const dz = TREE_SPAN / 2 + 2;
+    const corners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([sx, sz]) => V(TREE_POS.x + sx * lane, TREE_POS.z + sz * dz));
+    let best: THREE.Vector3[] = [];
+    let bestLen = Infinity;
+    if (!crosses(start, goal)) bestLen = 0;
+    else {
+      for (let first = 0; first < 4; first++) {
+        for (const dir of [1, -1]) {
+          for (let count = 1; count <= 3; count++) {
+            const via = Array.from({ length: count }, (_, k) => corners[(first + dir * k + 8) % 4]);
+            const path = [start, ...via, goal];
+            let len = 0;
+            let ok = true;
+            for (let i = 1; i < path.length && ok; i++) {
+              ok = !crosses(path[i - 1], path[i]);
+              len += path[i - 1].distanceTo(path[i]);
+            }
+            if (ok && len < bestLen) {
+              bestLen = len;
+              best = via;
+            }
+          }
+        }
+      }
     }
-    add(lane, frontZ);
-    add(slot.frame.x, frontZ);
+    pts.push(...best, goal);
     return pts;
   }
 
