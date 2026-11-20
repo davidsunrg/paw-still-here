@@ -175,6 +175,31 @@ export const CONFIG = {
     lookUp: 0.85,
     /** 快到终点时，提前多少米开始让画面暗下去 */
     fadeOut: 4,
+    /**
+     * 沿途刻着照片和字的石面。aspect 是石面的宽高比，margin 是石面四周留出的石边（米）。
+     * every 秒换一只，换的时候用 fade 秒暗下去再亮起来；level 是石面平时的亮度，dim 是暗下去时剩下多少。
+     */
+    tablets: {
+      aspect: 1.6,
+      margin: 0.6,
+      every: 16,
+      fade: 1.4,
+      level: 0.8,
+      dim: 0.12,
+      /** 两侧崖壁上的：宽 w，中心高 y，立在洞底半宽的 inset 倍处，背后的石头厚 depth；at 是 [河道上走了多远, 哪一侧（1 是出洞方向的右手边）] */
+      side: {
+        w: 11,
+        y: 7,
+        inset: 0.72,
+        depth: 15,
+        at: [[24, -1], [40, 1], [56, -1], [72, 1], [88, -1]] as Array<[number, number]>,
+      },
+      /** 正前方高处的：[河道上走了多远, 偏离中线多少, 中心高, 宽, 朝向（1 朝河道前进的方向，-1 朝来路）, 往下俯多少弧度, 背后的石头厚多少] */
+      front: [
+        [-10, 3, 13, 12, 1, 0.1, 7],
+        [97, 0, 16.5, 13, -1, 0.3, 12],
+      ] as Array<[number, number, number, number, number, number, number]>,
+    },
   },
 
   /**

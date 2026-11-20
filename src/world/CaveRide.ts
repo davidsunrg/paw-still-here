@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { STR } from '../i18n';
 import { mulberry32 } from '../data/pets';
+import { CaveTablets } from './CaveTablets';
 import { AvatarBatch, defaultPose, type AvatarPose } from './Avatar';
 import { textMesh } from './textures';
 import type { Lamp, World } from './World';
@@ -251,6 +252,7 @@ export class CaveRide {
   private hidden = defaultPose(0xffffff);
   private lamps: Lamp[] = [];
   /** 自己坐在哪条船的哪个座位上 */
+  private tablets: CaveTablets;
   private mine: { boat: Boat; seat: number } | null = null;
   /** 自己坐的船刚靠岸：该从哪里下船 */
   private arrival: { x: number; z: number } | null = null;
@@ -294,6 +296,10 @@ export class CaveRide {
     ];
 
     this.buildCave();
+    this.tablets = new CaveTablets(world.scene, (s, inset) => {
+      this.frame(s, inset * profileAt(s).half);
+      return { x: this.p.x, z: this.p.z, tx: this.t.x, tz: this.t.z };
+    });
     this.buildStation(this.inner, STR.cinemaExit);
     this.buildStation(this.outer, STR.caveGate);
     this.buildBoats();
@@ -420,6 +426,7 @@ export class CaveRide {
   update(dt: number, t: number, who: THREE.Vector3): RidePose | null {
     if (!this.active) return null;
     this.advance(dt, t);
+    this.tablets.update(dt);
 
     const d = (b: Boat) => Math.hypot(b.x - who.x, b.z - who.z);
     const near = this.lines.flatMap((l) => l.boats).filter((b) => b.state !== 'idle').sort((a, b) => d(a) - d(b));
