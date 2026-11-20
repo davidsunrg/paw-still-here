@@ -11,7 +11,7 @@ export const TREE_POS = new THREE.Vector3(0, 0, -CONFIG.hall.d / 2);
 /** 树底座占的范围（正方形的边长），小人和访客都要绕开 */
 export const TREE_SPAN = 4.7;
 
-/** 纪念树：石砌的圆形底座、白色的树干、发光的树冠和垂下来的灯串 */
+/** 纪念树：石砌的圆形底座、白色的树干、发光的树冠和树冠下面挂着的木牌 */
 export function buildTree(w: World) {
   const { kit, scene } = w;
   const C = CONFIG.colors;
@@ -52,15 +52,20 @@ export function buildTree(w: World) {
     }
   }
   canopy.build(scene);
-  // 垂下来的灯串
-  for (let k = 0; k < 18; k++) {
+  // 树冠下面挂着的木牌：一根细绳，下面一块小木牌，木牌底下坠一颗小木珠。牌子上不写字，只是一个意象
+  const P = CONFIG.tree.plaques;
+  const woods = [C.wood, C.woodLight, 0x9a7650];
+  for (let k = 0; k < P.count; k++) {
     const a = R(0, Math.PI * 2);
-    const r = R(1.2, 2.9);
-    const top = R(3.6, 4.2);
-    const n = 4 + Math.floor(R(0, 5));
-    for (let j = 0; j < n; j++) {
-      kit.glowBall(tx + Math.cos(a) * r, top - j * 0.24, tz + Math.sin(a) * r, 0.032, j % 2 ? C.warm : 0xfff3dc, 3.2);
-    }
+    const r = R(P.ring[0], P.ring[1]);
+    const top = R(3.7, 4.3);
+    const y = R(P.y[0], P.y[1]);
+    const x = tx + Math.cos(a) * r;
+    const z = tz + Math.sin(a) * r;
+    const ry = R(0, Math.PI);
+    kit.box(x, (top + y) / 2 + P.h / 4, z, 0.012, top - y - P.h / 2, 0.012, 0x3a2c22);
+    kit.box(x, y, z, P.w, P.h, P.t, woods[k % woods.length], ry);
+    kit.ball(x, y - P.h / 2 - 0.035, z, 0.022, C.woodDark);
   }
   kit.pool(tx, tz, 16, C.warm, 0.2);
   w.pointLight(tx + 3.1, 2.3, tz + 3.1, 15, 20, 0xffcf9a);
