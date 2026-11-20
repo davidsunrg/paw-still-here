@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
-import { PETS, WALL_CELLS, type Pet } from '../data/pets';
+import { PETS, SECTION_CELLS, SECTIONS, type Pet, type Section } from '../data/pets';
+import { store } from '../data/store';
+import { STR } from '../i18n';
+import { TRACE } from './gifts';
+import { textMesh } from './textures';
 import type { World } from './World';
 
 const G = CONFIG.gallery;
 
 /** 照片墙上的一格 */
 export interface Cell {
-  wall: number;
+  section: Section;
   cell: number;
   /** 相框中心在墙面上的位置（贴着墙面），以及墙面朝向 */
   at: THREE.Vector3;
@@ -23,7 +27,7 @@ interface Slab {
 }
 
 /**
- * 三面墙上每一格的位置，按地址顺序排列。
+ * 三个区每一格的位置，按地址顺序排列。
  * 格号按列编：面向墙从左到右，每列从上到下；所以绕着大厅顺时针走，格号是连着的。
  */
 function layout(): { cells: Cell[]; slabs: Slab[] } {
@@ -32,18 +36,18 @@ function layout(): { cells: Cell[]; slabs: Slab[] } {
   const zc = -CONFIG.hall.d / 2;
   const side = (G.sideCols - 1) / 2;
   const cells: Cell[] = [];
-  const column = (wall: number, c: number, x: number, z: number, rotY: number) => {
-    G.rowY.forEach((y, r) => cells.push({ wall, cell: c * G.rows + r + 1, at: new THREE.Vector3(x, y, z), rotY }));
+  const column = (section: Section, c: number, x: number, z: number, rotY: number) => {
+    G.rowY.forEach((y, r) => cells.push({ section, cell: c * G.rows + r + 1, at: new THREE.Vector3(x, y, z), rotY }));
   };
-  // 1 号墙：进门左手，从大门一端排向后墙
-  for (let c = 0; c < G.sideCols; c++) column(1, c, -hw + T / 2, zc + (side - c) * G.pitch, Math.PI / 2);
-  // 2 号墙：正对大门，石门左右各一段，格号跨过石门连着编
+  // A 区：进门左手，从大门一端排向后墙
+  for (let c = 0; c < G.sideCols; c++) column('A', c, -hw + T / 2, zc + (side - c) * G.pitch, Math.PI / 2);
+  // B 区：正对大门，石门左右各一段，格号跨过石门连着编
   const backZ = ZONES.hallBack + T / 2;
   const outer = G.backInner + (G.backCols - 1) * G.pitch;
-  for (let c = 0; c < G.backCols; c++) column(2, c, -outer + c * G.pitch, backZ, 0);
-  for (let c = 0; c < G.backCols; c++) column(2, G.backCols + c, G.backInner + c * G.pitch, backZ, 0);
-  // 3 号墙：进门右手，从后墙一端排回大门
-  for (let c = 0; c < G.sideCols; c++) column(3, c, hw - T / 2, zc - (side - c) * G.pitch, -Math.PI / 2);
+  for (let c = 0; c < G.backCols; c++) column('B', c, -outer + c * G.pitch, backZ, 0);
+  for (let c = 0; c < G.backCols; c++) column('B', G.backCols + c, G.backInner + c * G.pitch, backZ, 0);
+  // C 区：进门右手，从后墙一端排回大门
+  for (let c = 0; c < G.sideCols; c++) column('C', c, hw - T / 2, zc - (side - c) * G.pitch, -Math.PI / 2);
 
   const sideLen = G.sideCols * G.pitch + 0.5;
   const backLen = G.backCols * G.pitch + 0.5;
@@ -60,15 +64,16 @@ function layout(): { cells: Cell[]; slabs: Slab[] } {
 /**
  * 大厅三面墙上的照片墙：石板上一格一格的相框，每格下面一条小石台和一块带格号的名牌。
  * 住了宠物的格子有照片、有灯；空格子是一块素面石板，只有格号。
+ * 返回的 refresh 在有人为某只宠物放下礼物之后调用，更新它石台上的痕迹。
  */
-export function buildGallery(w: World) {
+export function buildGallery(w: World): Gallery {
   const { kit } = w;
   const C = CONFIG.colors;
   const { cells, slabs } = layout();
   if (import.meta.env.DEV) {
-    WALL_CELLS.forEach((n, i) => {
-      const built = cells.filter((c) => c.wall === i + 1).length;
-      if (built !== n) console.warn(`[gallery] ${i + 1} 号墙应有 ${n} 格，实际搭了 ${built} 格`);
+    SECTIONS.forEach((id, i) => {
+      const built = cells.filter((c) => c.section === id).length;
+      if (built !== SECTION_CELLS[i]) console.warn(`[gallery] section ${id} should have ${SECTION_CELLS[i]} cells, built ${built}`);
     });
   }
 
@@ -87,7 +92,7 @@ export function buildGallery(w: World) {
     kit.glowBox(gx, y1 + 0.02, gz, s.len - 0.3, 0.025, 0.025, C.warm, 1.5, s.rotY);
   }
 
-  const occupants = new Map<string, Pet>(PETS.map((p) => [`${p.wall}-${p.cell}`, p]));
+  const occupants = new Map<string, Pet>(PETS.map((p) => [`${p.section}-${p.cell}`, p]));
   const frameColors = [0x3b2a20, 0xd9c7a0, 0xf2efe8, 0xb08d57, 0x5a4636];
   const F = G.frame;
   cells.forEach((cell, i) => {
@@ -97,7 +102,7 @@ export function buildGallery(w: World) {
     /** 离墙面 d 米、比相框中心高 dy 米的位置 */
     const p = (d: number, dy = 0) => new THREE.Vector3(at.x + nx * d, at.y + dy, at.z + nz * d);
     const box = (v: THREE.Vector3, sx: number, sy: number, sz: number, color: number) => kit.box(v.x, v.y, v.z, sx, sy, sz, color, rotY);
-    const pet = occupants.get(`${cell.wall}-${cell.cell}`);
+    const pet = occupants.get(`${cell.section}-${cell.cell}`);
     const T = G.slabT;
 
     // 相框下的小石台，和石台下面的名牌
@@ -120,4 +125,94 @@ export function buildGallery(w: World) {
     w.labels.add(`${pet.name} · ${pet.passedDate.slice(0, 4)}`, label, rotY, F - 0.08, 0.105, String(cell.cell));
     w.slots.set(pet.id, { entry, ledge: ledge.clone().setY(ledge.y + 0.015) });
   });
+
+  // 每个区两端的铭牌：区名和这个区的格号范围
+  SECTIONS.forEach((id, i) => {
+    const count = SECTION_CELLS[i];
+    const mine = cells.filter((c) => c.section === id);
+    const ends = [mine[0], mine[mine.length - 1]];
+    ends.forEach((cell, k) => {
+      const { rotY } = cell;
+      // 铭牌在石板上方，从最外面的一列往里收半列
+      const along = (k === 0 ? 1 : -1) * G.pitch * 0.9;
+      const x = cell.at.x + Math.cos(rotY) * along;
+      const z = cell.at.z - Math.sin(rotY) * along;
+      const nx = Math.sin(rotY);
+      const nz = Math.cos(rotY);
+      const text = textMesh(STR.sectionPlaque(id, count), { height: 0.26, color: '#ffd9a0', glow: 1.3, maxWidth: 2.2 });
+      // 牌子跟着字的宽度走
+      kit.box(x + nx * 0.02, G.plaqueY, z + nz * 0.02, text.userData.width + 0.1, 0.34, 0.04, 0x5a4636, rotY);
+      text.position.set(x + nx * 0.045, G.plaqueY, z + nz * 0.045);
+      text.rotation.y = rotY;
+      w.scene.add(text);
+    });
+  });
+
+  return { refresh: buildTraces(w) };
+}
+
+export interface Gallery {
+  /** 这只宠物收到了新的礼物：更新它石台上的痕迹 */
+  refresh(pet: Pet): void;
+}
+
+/**
+ * 石台上的痕迹：有人放过花，就横着一枝花；点过蜡烛，就立着一点烛光。
+ * 每只宠物在四个实例化网格里各占一个位置，没有的时候缩成零。
+ */
+function buildTraces(w: World) {
+  const ids = [...w.slots.keys()];
+  const make = (part: { geo: THREE.BufferGeometry; mat: THREE.Material }) => {
+    const mesh = new THREE.InstancedMesh(part.geo, part.mat, Math.max(1, ids.length));
+    mesh.frustumCulled = false;
+    w.scene.add(mesh);
+    return mesh;
+  };
+  const stems = make(TRACE.stem);
+  const blooms = make(TRACE.bloom);
+  const waxes = make(TRACE.wax);
+  const flames = make(TRACE.flame);
+
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const upright = new THREE.Quaternion();
+  const pos = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  const tangent = new THREE.Vector3();
+  const UP = new THREE.Vector3(0, 1, 0);
+  const color = new THREE.Color();
+  const set = (mesh: THREE.InstancedMesh, i: number, show: boolean, rot: THREE.Quaternion, sx: number, sy: number, sz: number) => {
+    if (show) scale.set(sx, sy, sz);
+    else scale.setScalar(0);
+    mesh.setMatrixAt(i, m.compose(pos, rot, scale));
+    mesh.instanceMatrix.needsUpdate = true;
+  };
+
+  const refresh = (pet: Pet) => {
+    const i = ids.indexOf(pet.id);
+    const slot = w.slots.get(pet.id);
+    if (i < 0 || !slot) return;
+    const { ledge, entry } = slot;
+    const flowers = store.gifts(pet).flower;
+    const hasFlower = flowers.length > 0;
+    const hasCandle = store.counts(pet).candle > 0;
+    tangent.set(Math.cos(entry.rotY), 0, -Math.sin(entry.rotY));
+
+    // 花横放在石台右半边，花朵朝外
+    q.setFromUnitVectors(UP, tangent);
+    pos.copy(ledge).addScaledVector(tangent, 0.05).setY(ledge.y + 0.006);
+    set(stems, i, hasFlower, q, 0.004, 0.15, 0.004);
+    pos.copy(ledge).addScaledVector(tangent, 0.21).setY(ledge.y + 0.02);
+    set(blooms, i, hasFlower, upright, 0.032, 0.024, 0.032);
+    blooms.setColorAt(i, color.set(TRACE.bloomColors[(flowers[flowers.length - 1] ?? 0) % TRACE.bloomColors.length]));
+    if (blooms.instanceColor) blooms.instanceColor.needsUpdate = true;
+
+    // 蜡烛立在左半边
+    pos.copy(ledge).addScaledVector(tangent, -0.2);
+    set(waxes, i, hasCandle, upright, 0.015, 0.05, 0.015);
+    pos.y += 0.072;
+    set(flames, i, hasCandle, upright, 0.009, 0.019, 0.009);
+  };
+  for (const pet of PETS) refresh(pet);
+  return refresh;
 }

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import type { Pet } from '../data/pets';
+import { STR } from '../i18n';
 
-export const FONT = '"Songti SC", "Noto Serif SC", "STSong", "SimSun", serif';
+/** 场景里的字用的字体，跟着语言走 */
+export const FONT = STR.style.serif;
 
 export function makeCanvas(w: number, h: number) {
   const c = document.createElement('canvas');
@@ -65,9 +67,11 @@ export interface TextOpts {
   /** 大于 0 时文字自发光，数值越大辉光越强 */
   glow?: number;
   weight?: string;
+  /** 文字最宽多少米；超过就整体缩小。不同语言的字数差得多，写在牌子上的字都应该给一个 */
+  maxWidth?: number;
 }
 
-/** 生成一块带文字的平面 */
+/** 生成一块带文字的平面；实际的宽度（米）记在 userData.width 里 */
 export function textMesh(text: string, o: TextOpts) {
   const fs = 96;
   const font = `${o.weight ?? '600'} ${fs}px ${FONT}`;
@@ -84,7 +88,11 @@ export function textMesh(text: string, o: TextOpts) {
   ctx.fillText(text, w / 2, h / 2 + 4);
   const mat = new THREE.MeshBasicMaterial({ map: canvasTexture(c), transparent: true, depthWrite: false });
   if (o.glow) mat.color = new THREE.Color(o.color ?? '#ffd9a0').multiplyScalar(o.glow);
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry((o.height * w) / h, o.height), mat);
+  const width = (o.height * w) / h;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, o.height), mat);
+  const fit = o.maxWidth ? Math.min(1, o.maxWidth / width) : 1;
+  mesh.scale.setScalar(fit);
+  mesh.userData.width = width * fit;
   return mesh;
 }
 
@@ -199,27 +207,27 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
 
   const hy = 0.56;
   switch (pet.species) {
-    case '猫':
+    case 'cat':
       tri([0.27, 0.46, 0.3, 0.2, 0.47, 0.36], fur);
       tri([0.73, 0.46, 0.7, 0.2, 0.53, 0.36], fur);
       tri([0.31, 0.41, 0.325, 0.27, 0.42, 0.36], '#f6b8b8');
       tri([0.69, 0.41, 0.675, 0.27, 0.58, 0.36], '#f6b8b8');
       circle(0.5, hy, 0.25, fur);
       break;
-    case '狗':
+    case 'dog':
       ellipse(0.25, 0.56, 0.075, 0.17, 0.25, dark);
       ellipse(0.75, 0.56, 0.075, 0.17, -0.25, dark);
       circle(0.5, hy, 0.25, fur);
       ellipse(0.5, 0.665, 0.115, 0.09, 0, isDark ? shade(fur, 1.6) : '#fffaf0');
       break;
-    case '兔子':
+    case 'rabbit':
       ellipse(0.41, 0.25, 0.05, 0.17, -0.12, fur);
       ellipse(0.59, 0.25, 0.05, 0.17, 0.12, fur);
       ellipse(0.41, 0.26, 0.024, 0.12, -0.12, '#f6b8b8');
       ellipse(0.59, 0.26, 0.024, 0.12, 0.12, '#f6b8b8');
       circle(0.5, hy, 0.24, fur);
       break;
-    case '仓鼠':
+    case 'hamster':
       circle(0.31, 0.37, 0.065, dark);
       circle(0.69, 0.37, 0.065, dark);
       circle(0.31, 0.37, 0.035, '#f6b8b8');
@@ -228,7 +236,7 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
       ellipse(0.36, 0.65, 0.1, 0.08, 0, light);
       ellipse(0.64, 0.65, 0.1, 0.08, 0, light);
       break;
-    case '鸟':
+    case 'bird':
       tri([0.46, 0.34, 0.5, 0.2, 0.56, 0.34], dark);
       circle(0.5, hy, 0.24, fur);
       ellipse(0.26, 0.74, 0.07, 0.13, 0.4, dark);
@@ -244,16 +252,16 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
   }
   // 腮红
   ctx.globalAlpha = 0.45;
-  circle(0.33, hy + 0.075, 0.035, pet.species === '鸟' ? '#ff9a4d' : '#ff9aa2');
-  circle(0.67, hy + 0.075, 0.035, pet.species === '鸟' ? '#ff9a4d' : '#ff9aa2');
+  circle(0.33, hy + 0.075, 0.035, pet.species === 'bird' ? '#ff9a4d' : '#ff9aa2');
+  circle(0.67, hy + 0.075, 0.035, pet.species === 'bird' ? '#ff9a4d' : '#ff9aa2');
   ctx.globalAlpha = 1;
 
   // 鼻子与嘴
-  if (pet.species === '鸟') {
+  if (pet.species === 'bird') {
     tri([0.465, 0.6, 0.535, 0.6, 0.5, 0.67], '#f39a2e');
   } else {
-    const ny = pet.species === '狗' ? 0.625 : 0.63;
-    if (pet.species === '狗') ellipse(0.5, ny, 0.034, 0.024, 0, '#2a2320');
+    const ny = pet.species === 'dog' ? 0.625 : 0.63;
+    if (pet.species === 'dog') ellipse(0.5, ny, 0.034, 0.024, 0, '#2a2320');
     else tri([0.478, ny - 0.012, 0.522, ny - 0.012, 0.5, ny + 0.014], '#e88a94');
     ctx.strokeStyle = '#3a2f2a';
     ctx.lineWidth = Math.max(1, s * 0.008);
@@ -264,7 +272,7 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
     ctx.beginPath();
     ctx.arc(0.525 * s, (ny + 0.02) * s, 0.026 * s, 0.1, Math.PI * 0.9);
     ctx.stroke();
-    if (pet.species === '猫') {
+    if (pet.species === 'cat') {
       ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(60,45,40,0.5)';
       for (const dir of [-1, 1]) {
         for (const dy of [-0.012, 0.02]) {

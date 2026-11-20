@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import type { OfferKind } from '../data/store';
 
 /**
  * 礼物的小模型：花、蜡烛、零食、玩具、信。
@@ -27,7 +26,7 @@ function mat(color: number) {
 }
 
 const FLAME = new THREE.Color(0xffb45a);
-/** 柜子远景里的烛火很小，需要更亮才看得见；小龛里是近看，太亮会糊成一团光 */
+/** 照片墙石台上的烛火很小，需要更亮才看得见；小院里是近看，太亮会糊成一团光 */
 const FAR_GLOW = 3.2;
 const NEAR_GLOW = 1.5;
 const flameMat = new THREE.MeshBasicMaterial();
@@ -147,34 +146,17 @@ export function letter() {
   );
 }
 
-// ---------- 柜子远景里每格的小摆件 ----------
+// ---------- 照片墙石台上的痕迹 ----------
 
-/** 各类摆件在格子里的位置：相对格子底板中心的 [x, z] 偏移 */
-export const CELL_SPOT: Record<OfferKind, [number, number]> = {
-  candle: [-0.27, 0.1],
-  flower: [0.27, 0.1],
-  toy: [-0.31, -0.05],
-  snack: [0.31, -0.05],
-  letter: [0.26, 0.17],
+/**
+ * 照片墙每格的小石台上，有人放过花就横着一枝花，点过蜡烛就立着一点烛光。
+ * 这里给出它们用的几何体和材质，由 Gallery 实例化渲染。
+ */
+export const TRACE = {
+  stem: { geo: GEO.cyl, mat: mat(0x4f8a4a) },
+  /** 花朵的颜色写在每个实例上 */
+  bloom: { geo: GEO.ball, mat: new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true }) },
+  wax: { geo: GEO.cyl, mat: mat(0xf6ecd8) },
+  flame: { geo: GEO.smooth, mat: flameMat },
+  bloomColors: FLOWER_COLORS,
 };
-
-/** 访客新放入礼物时，补到柜子格子里的小摆件（搭建时已有的那些走 Kit 实例化） */
-export function cellMini(kind: OfferKind, i = 0) {
-  switch (kind) {
-    case 'flower':
-      return flowerStem(i, 0.13);
-    case 'candle':
-      return group(
-        part(GEO.cyl, mat(0xf6ecd8), 0, 0, 0, 0.018, 0.07, 0.018),
-        part(GEO.smooth, flameMat, 0, 0.092, 0, 0.0105, 0.021, 0.0105),
-      );
-    case 'snack':
-      return part(GEO.cyl, mat(0xb9bcc2), 0, 0, 0, 0.028, 0.035, 0.028);
-    case 'toy':
-      return part(GEO.ball, mat(TOY_COLORS[i % TOY_COLORS.length]), 0, 0.035, 0, 0.035, 0.035, 0.035);
-    default:
-      return part(GEO.box, mat(0xf4ecdb), 0, 0.003, 0, 0.085, 0.005, 0.055, 0, 0.3, 0);
-  }
-}
-
-export const MINI_TOY_COLORS = TOY_COLORS;

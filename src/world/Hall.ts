@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
-import { STR } from '../strings';
+import { STR } from '../i18n';
+import { buildFloorMap } from './FloorMap';
 import { archWall, plant, sofa, wallStrip } from './parts';
 import { buildTree } from './Tree';
 import { pawTexture, plankTexture, textMesh } from './textures';
@@ -49,7 +50,7 @@ export function buildHall(w: World) {
     kit.pool(sx * 3.1, 1.3, 5, C.warm, 0.28);
     plant(w, sx * 3.5, 0.9, 1.1);
   }
-  const doorName = textMesh(STR.brand, { height: 0.42, color: '#ffd9a0', glow: 1.9 });
+  const doorName = textMesh(STR.brand, { height: 0.42, color: '#ffd9a0', glow: 1.9, maxWidth: 6 });
   doorName.position.set(0, 4.72, T / 2 + 0.02);
   scene.add(doorName);
 
@@ -180,10 +181,10 @@ export function buildHall(w: World) {
 
   // 背景墙：发光的馆名
   const faceZ = -T / 2;
-  const name = textMesh(STR.brand, { height: 0.62, color: '#ffd9a0', glow: 2.0 });
+  const name = textMesh(STR.brand, { height: 0.62, color: '#ffd9a0', glow: 2.0, maxWidth: 5.6 });
   name.position.set(cx, 3.35, faceZ - 0.07);
   name.rotation.y = Math.PI;
-  const sub = textMesh(STR.subtitle, { height: 0.24, color: '#fff1dc', glow: 1.25 });
+  const sub = textMesh(STR.taglineShort, { height: 0.24, color: '#fff1dc', glow: 1.25, maxWidth: 5.6 });
   sub.position.set(cx, 2.72, faceZ - 0.07);
   sub.rotation.y = Math.PI;
   scene.add(name, sub);
@@ -216,5 +217,7 @@ export function buildHall(w: World) {
   kit.glowBall(ex - 1.5, 1.2, faceZ - 0.06, 0.022, C.warm, 1.6);
   w.collide(ex, faceZ - 0.08, 2.5, 0.16);
 
-  for (const s of [-1, 1]) plant(w, s * 3.1, -0.95, 1.15);
+  buildFloorMap(w);
+
+  for (const s of [-1, 1]) plant(w, s * 2.85, -0.95, 1.15);
 }

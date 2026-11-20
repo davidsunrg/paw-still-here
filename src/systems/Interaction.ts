@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import type { PhotoEntry } from '../world/Batches';
 import { canvasTexture, makeCanvas } from '../world/textures';
 import type { Collider, Interactable, World } from '../world/World';

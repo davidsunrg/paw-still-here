@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config';
 import { mulberry32 } from '../data/pets';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import { FIRE_X, pathX } from './Outdoor';
 import type { World } from './World';
 

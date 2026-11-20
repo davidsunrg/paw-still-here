@@ -1,6 +1,6 @@
-import { PETS, type Pet } from '../data/pets';
+import { PETS, SECTIONS, type Pet } from '../data/pets';
 import { store, type Message, type OfferKind, type RiteKind } from '../data/store';
-import { STR } from '../strings';
+import { applyLocaleStyle, STR } from '../i18n';
 
 export type TeleportTarget = 'gate' | 'river' | 'fire' | 'hall';
 
@@ -51,6 +51,7 @@ export class UI {
     document.body.classList.toggle('touch', this.isTouch);
 
     // 静态文案
+    applyLocaleStyle();
     document.querySelectorAll<HTMLElement>('[data-t]').forEach((el) => {
       const v = (STR as Record<string, unknown>)[el.dataset.t!];
       if (typeof v === 'string') el.textContent = v;
@@ -286,9 +287,8 @@ export class UI {
     this.closeModals();
     this.pet = pet;
     $('detail-name').textContent = pet.name;
-    $('detail-meta').textContent = [pet.species, pet.breed, STR.address(pet.floor, pet.wall, pet.cell)]
-      .filter(Boolean)
-      .join(' · ');
+    $('detail-meta').textContent = [STR.species[pet.species], pet.breed].filter(Boolean).join(' · ');
+    $('detail-address').textContent = STR.address(pet.floor, pet.section, pet.cell);
     $('detail-dates').textContent = `${pet.birthDate ?? '?'} — ${pet.passedDate}`;
     $('detail-message').textContent = pet.message;
     this.renderCounts();
@@ -362,7 +362,7 @@ export class UI {
     for (const m of items) {
       const li = document.createElement('li');
       li.textContent = m.text;
-      const meta = [m.petName ? `致 ${m.petName}` : '', timeLabel(m.time)].filter(Boolean).join(' · ');
+      const meta = [m.petName ? STR.letterTo(m.petName) : '', timeLabel(m.time)].filter(Boolean).join(' · ');
       if (meta) {
         const small = document.createElement('small');
         small.textContent = meta;
@@ -392,7 +392,7 @@ export class UI {
   }
 
   private renderSearch() {
-    const q = $<HTMLInputElement>('search-input').value.trim().toLowerCase().replace(/\s/g, '');
+    const q = $<HTMLInputElement>('search-input').value;
     const list = $('search-results');
     list.replaceChildren();
     const found = this.findPets(q);
@@ -453,7 +453,7 @@ export class UI {
   }
 
   private renderRitePicker(kind: RiteKind) {
-    const q = $<HTMLInputElement>(`${kind}-search`).value.trim().toLowerCase();
+    const q = $<HTMLInputElement>(`${kind}-search`).value;
     const list = $(`${kind}-results`);
     list.replaceChildren();
     const found = this.findPets(q);
@@ -475,16 +475,22 @@ export class UI {
     }
   }
 
-  private findPets(q: string) {
-    return PETS.filter(
+  /**
+   * 按名字、物种、品种查找，不区分大小写、不计空格。
+   * 输入的正好是一个区（"a" 或 "section a"）时，这个区的宠物排在前面。
+   */
+  private findPets(query: string) {
+    const norm = (t: string) => t.toLowerCase().replace(/\s/g, '');
+    const q = norm(query);
+    if (!q) return PETS.slice(0, 30);
+    const section = SECTIONS.find((s) => q === norm(s) || q === norm(STR.sectionName(s)));
+    const inSection = PETS.filter((p) => p.section === section);
+    const byText = PETS.filter(
       (p) =>
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.species.includes(q) ||
-        (p.breed ?? '').toLowerCase().includes(q) ||
-        q === String(p.wall) ||
-        q === STR.wallName(p.wall).replace(/\s/g, ''),
-    ).slice(0, 30);
+        p.section !== section &&
+        (norm(p.name).includes(q) || norm(STR.species[p.species]).includes(q) || norm(p.breed ?? '').includes(q)),
+    );
+    return [...inSection, ...byText].slice(0, 30);
   }
 
   private petInfo(p: Pet) {
@@ -492,9 +498,12 @@ export class UI {
     info.className = 'info';
     const b = document.createElement('b');
     b.textContent = p.name;
-    const small = document.createElement('small');
-    small.textContent = `${p.breed ?? p.species} · ${STR.address(p.floor, p.wall, p.cell)}`;
-    info.append(b, small);
+    // 品种一行、地址一行，窄屏上也不会折得很碎
+    const breed = document.createElement('small');
+    breed.textContent = p.breed ?? STR.species[p.species];
+    const address = document.createElement('small');
+    address.textContent = STR.address(p.floor, p.section, p.cell);
+    info.append(b, breed, address);
     return info;
   }
 

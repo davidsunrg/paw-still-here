@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0d24" />
-    <title>星光宠物纪念馆</title>
+    <!-- title、description、分享卡片和 canonical 在打包时从语言文件写进来，见 vite.config.ts -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230b0d24'/%3E%3Cg fill='%23f2b56b' transform='translate(11 13) scale(.78)'%3E%3Cellipse cx='50' cy='66' rx='23' ry='18'/%3E%3Cellipse cx='22' cy='42' rx='8' ry='11' transform='rotate(-20 22 42)'/%3E%3Cellipse cx='40' cy='26' rx='8' ry='11' transform='rotate(-6 40 26)'/%3E%3Cellipse cx='60' cy='26' rx='8' ry='11' transform='rotate(6 60 26)'/%3E%3Cellipse cx='78' cy='42' rx='8' ry='11' transform='rotate(20 78 42)'/%3E%3C/g%3E%3C/svg%3E" />
   </head>
   <body>
     <canvas id="scene"></canvas>
@@ -20,10 +21,11 @@
         <ellipse cx="78" cy="42" rx="8" ry="11" transform="rotate(20 78 42)" />
       </svg>
       <h1 data-t="brand"></h1>
-      <p class="sub" data-t="subtitle"></p>
+      <p class="sub" data-t="tagline"></p>
       <div class="bar"><i id="progress"></i></div>
       <p class="step" id="load-step"></p>
       <button id="btn-enter" class="primary hidden" data-t="enter"></button>
+      <p class="site" data-t="site"></p>
     </div>
 
     <!-- 常驻界面 -->
@@ -66,6 +68,7 @@
       <button class="close" id="detail-close" aria-label="close">×</button>
       <h2 id="detail-name"></h2>
       <p class="meta" id="detail-meta"></p>
+      <p class="meta" id="detail-address"></p>
       <p class="meta" id="detail-dates"></p>
       <blockquote id="detail-message"></blockquote>
       <div class="rites" id="detail-rites">

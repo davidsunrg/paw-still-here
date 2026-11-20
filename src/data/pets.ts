@@ -1,6 +1,12 @@
 import { CONFIG } from '../config';
+import { STR } from '../i18n';
 
-export type Species = '猫' | '狗' | '兔子' | '仓鼠' | '鸟';
+/** 物种的代号；显示名在语言文件里 */
+export type Species = 'cat' | 'dog' | 'rabbit' | 'hamster' | 'bird';
+
+/** 大厅照片墙的三个区：进门左手是 A，正对面是 B，右手是 C。以后展区开放，字母往后接着排 */
+export const SECTIONS = ['A', 'B', 'C'] as const;
+export type Section = (typeof SECTIONS)[number];
 
 export interface Pet {
   id: string;
@@ -15,9 +21,9 @@ export interface Pet {
   message: string;
   flowers: number;
   candles: number;
-  /** 地址：第几层、几号墙、第几格（都从 1 开始）。按入驻顺序分配，分配后不再变 */
+  /** 地址：第几层、哪个区、第几格（层和格从 1 开始）。按入驻顺序分配，分配后不再变 */
   floor: number;
-  wall: number;
+  section: Section;
   cell: number;
   /** 占位画像用的毛色与背景 */
   fur: string;
@@ -25,18 +31,18 @@ export interface Pet {
 }
 
 /**
- * 在这里添加真实的宠物。它们会排在最前面，优先出现在大厅照片墙上。
+ * 在这里添加真实的宠物。它们会排在最前面，住进 A 区最靠前的格子。
  * 只需填写 name / species / passedDate / message，其余字段可省略。
  *
  * 例：
- * { name: '豆豆', species: '狗', breed: '柯基', birthDate: '2012-03-01',
- *   passedDate: '2025-06-18', photoUrl: '/photos/doudou.jpg', message: '下辈子还做我的小狗。' }
+ * { name: 'Bean', species: 'dog', breed: 'Corgi', birthDate: '2012-03-01',
+ *   passedDate: '2025-06-18', photoUrl: '/photos/bean.jpg', message: 'Be my dog again next time.' }
  */
 export const CUSTOM_PETS: Array<Partial<Pet> & Pick<Pet, 'name' | 'species' | 'passedDate' | 'message'>> = [];
 
 const G = CONFIG.gallery;
-/** 大厅三面照片墙各有多少格（下标 0 是 1 号墙） */
-export const WALL_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows, G.sideCols * G.rows];
+/** 三个区各有多少格，顺序和 SECTIONS 一致 */
+export const SECTION_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows, G.sideCols * G.rows];
 
 /** 可复现的伪随机数 */
 export function mulberry32(seed: number) {
@@ -50,75 +56,38 @@ export function mulberry32(seed: number) {
   };
 }
 
-const NAMES = [
-  '豆豆', '旺财', '咪咪', '小白', '球球', '雪球', '可乐', '奶茶', '布丁', '年糕', '汤圆', '馒头',
-  '花花', '橘子', '大黄', '小黑', '毛毛', '多多', '乐乐', '妞妞', '皮皮', '糯米', '芝麻', '团子',
-  '元宝', '包子', '饺子', '麻薯', '栗子', '柚子', '桃子', '果冻', '奥利奥', '可可', '摩卡', '拿铁',
-  '泡芙', '蛋挞', '薯条', '土豆', '南瓜', '板栗', '花生', '核桃', '糖糖', '蜜糖', '小满', '冬至',
-  '初一', '十五', '福宝', '来福', '平安', '如意', '阿黄', '阿福', '小虎', '胖虎', '丸子', '雪糕',
-  '棉花', '云朵', '星星', '月亮', '小七', '八宝', '九月', '米粒', '豆包', '麦芽', '小鱼', '泡泡',
-  '点点', '斑斑', '灰灰', '墨墨', '金金', '银子', '菠萝', '芒果', '西瓜', '樱桃', '椰子', '柠檬',
-  '小熊', '贝贝', '嘟嘟', '咕噜', '啾啾', '叽叽', '跳跳', '闪闪', '欢欢', '笑笑', '安安', '小乖',
-  '大福', '小麦', '阿布', '糖豆',
-];
-
-const BREEDS: Record<Species, string[]> = {
-  猫: ['橘猫', '英短', '布偶', '狸花猫', '暹罗', '美短', '三花猫'],
-  狗: ['金毛', '柯基', '柴犬', '泰迪', '边牧', '拉布拉多', '中华田园犬', '萨摩耶'],
-  兔子: ['垂耳兔', '侏儒兔', '安哥拉兔'],
-  仓鼠: ['金丝熊', '三线仓鼠', '布丁仓鼠'],
-  鸟: ['玄凤鹦鹉', '虎皮鹦鹉', '文鸟'],
-};
-
 const FUR: Record<Species, string[]> = {
-  猫: ['#f0a04b', '#9a9aa2', '#f5f0e6', '#4a4442', '#c9a27a'],
-  狗: ['#e0b070', '#f4ede0', '#8a5c3c', '#4a423e', '#d08c4a'],
-  兔子: ['#fbfbf8', '#cfc6bd', '#b08a68'],
-  仓鼠: ['#f1c98d', '#e9e2d6', '#c9a87f'],
-  鸟: ['#ffd84d', '#8fd0f0', '#9be08f', '#f5f5f5'],
+  cat: ['#f0a04b', '#9a9aa2', '#f5f0e6', '#4a4442', '#c9a27a'],
+  dog: ['#e0b070', '#f4ede0', '#8a5c3c', '#4a423e', '#d08c4a'],
+  rabbit: ['#fbfbf8', '#cfc6bd', '#b08a68'],
+  hamster: ['#f1c98d', '#e9e2d6', '#c9a87f'],
+  bird: ['#ffd84d', '#8fd0f0', '#9be08f', '#f5f5f5'],
 };
 
 const LIFESPAN: Record<Species, [number, number]> = {
-  猫: [8, 18],
-  狗: [7, 16],
-  兔子: [5, 10],
-  仓鼠: [2, 3],
-  鸟: [5, 12],
+  cat: [8, 18],
+  dog: [7, 16],
+  rabbit: [5, 10],
+  hamster: [2, 3],
+  bird: [5, 12],
 };
-
-const MESSAGES = [
-  '谢谢你陪我走过那么多个日夜，下辈子还要来我家。',
-  '你走以后，家里安静了好多。我很想你。',
-  '在那边要好好吃饭，不许挑食。',
-  '你是我见过最乖的小朋友，永远都是。',
-  '每次开门，还是会下意识找你。',
-  '愿你在彩虹桥的那一边，有吃不完的零食，晒不完的太阳。',
-  '遇见你，是我这辈子最幸运的事之一。',
-  '你教会了我什么是无条件的爱。',
-  '等我们再见面的时候，你一定要第一个跑过来。',
-  '你最喜欢的小毯子我还留着。',
-  '对不起，没能多陪陪你。谢谢你，从来没怪过我。',
-  '今天路过你常去的草地，风很温柔，像你。',
-  '你只是换了一种方式陪着我，对吧。',
-  '晚安，我的小宝贝。',
-  '家里的阳台还是你的位置，谁也不许占。',
-  '你是家人，一直都是。',
-];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function buildPets(): Pet[] {
   const rnd = mulberry32(20261119);
   const pick = <T>(arr: T[]) => arr[Math.floor(rnd() * arr.length)];
-  const capacity = WALL_CELLS.reduce((a, b) => a + b, 0);
+  const capacity = SECTION_CELLS.reduce((a, b) => a + b, 0);
   const count = Math.min(CONFIG.petCount, capacity, 100);
 
   // 以前这里用随机数把宠物打散到各个柜子里；现在按入驻顺序排，但保留这些取值，
   // 这样每只示例宠物的名字、品种、日期都和原来一样（访客存在本地的礼物才对得上）
   for (let i = 0; i < 159; i++) rnd();
 
-  const speciesTable: Species[] = ['猫', '猫', '猫', '猫', '猫', '狗', '狗', '狗', '狗', '狗', '兔子', '兔子', '仓鼠', '鸟'];
-  const names = [...NAMES];
+  const speciesTable: Species[] = ['cat', 'cat', 'cat', 'cat', 'cat', 'dog', 'dog', 'dog', 'dog', 'dog', 'rabbit', 'rabbit', 'hamster', 'bird'];
+  // 名字、品种、寄语来自当前语言的示例内容
+  const sample = STR.sample;
+  const names = [...sample.names];
   const pets: Pet[] = [];
 
   for (let i = 0; i < count; i++) {
@@ -131,24 +100,24 @@ function buildPets(): Pet[] {
     const age = lo + Math.floor(rnd() * (hi - lo + 1));
     const bMonth = 1 + Math.floor(rnd() * 12);
     const nameIdx = Math.floor(rnd() * names.length);
-    const name = names.splice(nameIdx, 1)[0] ?? `小可爱${i}`;
-    // 按入驻顺序依次填：1 号墙满了到 2 号墙
-    let wall = 0;
+    const name = names.splice(nameIdx, 1)[0] ?? sample.fallbackName(i + 1);
+    // 按入驻顺序依次填：A 区满了到 B 区
+    let sec = 0;
     let cell = i;
-    while (cell >= WALL_CELLS[wall]) cell -= WALL_CELLS[wall++];
+    while (cell >= SECTION_CELLS[sec]) cell -= SECTION_CELLS[sec++];
 
     const base: Pet = {
       id: `pet-${i + 1}`,
       name,
       species,
-      breed: pick(BREEDS[species]),
+      breed: pick(sample.breeds[species]),
       birthDate: `${year - age}-${pad(bMonth)}-${pad(1 + Math.floor(rnd() * 28))}`,
       passedDate: `${year}-${pad(month)}-${pad(day)}`,
-      message: pick(MESSAGES),
+      message: pick(sample.messages),
       flowers: rnd() < 0.7 ? 1 + Math.floor(rnd() * 40) : 0,
       candles: rnd() < 0.55 ? 1 + Math.floor(rnd() * 25) : 0,
       floor: 1,
-      wall: wall + 1,
+      section: SECTIONS[sec],
       cell: cell + 1,
       fur: pick(FUR[species]),
       bg: Math.floor(rnd() * 6),

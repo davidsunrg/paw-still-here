@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { mulberry32, PETS } from '../data/pets';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import { Instancer } from './Kit';
 import { textMesh } from './textures';
 import type { World } from './World';
@@ -67,7 +67,7 @@ export function buildTree(w: World) {
   w.pointLight(tx - 3.1, 2.3, tz - 3.1, 15, 20, 0xffcf9a);
 
   // 树名朝着大门
-  const label = textMesh(STR.treeLabel, { height: 0.22, color: '#ffd9a0', glow: 1.6 });
+  const label = textMesh(STR.treeLabel, { height: 0.22, color: '#ffd9a0', glow: 1.6, maxWidth: 2.2 });
   label.position.set(tx, 0.24, tz + 2.53);
   scene.add(label);
 }

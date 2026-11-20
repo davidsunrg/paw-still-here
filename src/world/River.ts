@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG, RIVER_BANKS } from '../config';
 import { mulberry32 } from '../data/pets';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import { BRIDGE_X, DOCK_X } from './Outdoor';
 import { canvasTexture, FONT, glowTexture, makeCanvas } from './textures';
 import type { World } from './World';

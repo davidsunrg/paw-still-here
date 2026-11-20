@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { mulberry32, type Pet } from '../data/pets';
 import { store, type OfferKind } from '../data/store';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import type { Area } from '../systems/Player';
 import { candle, flowerStem, letter, snack, toy, vase } from './gifts';
 import { bench } from './parts';
@@ -41,23 +41,35 @@ const DROP_H = 0.5;
 const DROP_TIME = 0.6;
 
 /** 石柱上各行字的高度 */
-const TEXT = { name: 1.49, meta: 1.3, dates: 1.17, message: 1.01, line: 0.13 };
+const TEXT = { name: 1.49, address: 1.347, meta: 1.245, dates: 1.135, message: 0.99, line: 0.125 };
 const PHOTO = { y: 2.05, size: 0.78 };
 
 /** 长椅：在入口内侧偏左，背对缺口，正对着石柱 */
 const BENCH = { x: -1.9, z: R - 1.9 };
 const SEAT_TOP = 0.485;
 
-/** 寄语太长时在靠近中间的标点处折成两行 */
-function wrap(text: string, max = 13): string[] {
+/**
+ * 寄语太长时折成几行，每行不超过 max 个字符，各行尽量一样长。
+ * 有空格的文字按单词折；没有空格的（中文、日文）按字折。
+ */
+function wrap(text: string, max = STR.style.pillarLine): string[] {
   if (text.length <= max) return [text];
-  const mid = text.length / 2;
-  let cut = -1;
-  for (let i = 3; i < text.length - 3; i++) {
-    if ('，。、；！？,.!? '.includes(text[i]) && (cut < 0 || Math.abs(i + 1 - mid) < Math.abs(cut - mid))) cut = i + 1;
+  const spaced = /\s/.test(text);
+  const words = spaced ? text.split(/\s+/) : [...text];
+  const joiner = spaced ? ' ' : '';
+  const target = text.length / Math.ceil(text.length / max);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? line + joiner + word : word;
+    // 这一行已经够长，或者再加一个词就超了：另起一行
+    if (line && (next.length > max || line.length >= target)) {
+      lines.push(line);
+      line = word;
+    } else line = next;
   }
-  if (cut < 0) cut = Math.ceil(mid);
-  return [text.slice(0, cut).trim(), text.slice(cut).trim()];
+  if (line) lines.push(line);
+  return lines;
 }
 
 /**
@@ -311,7 +323,7 @@ export class Space {
 
   // ---------- 换宠物时重做的部分 ----------
 
-  /** 石柱上的字：名字、种类、生卒日期、主人寄语 */
+  /** 石柱上的字：名字、它在照片墙上的地址、种类、生卒日期、主人寄语 */
   private inscribe(pet: Pet) {
     for (const o of [...this.texts.children] as THREE.Mesh[]) {
       const m = o.material as THREE.MeshBasicMaterial;
@@ -321,17 +333,16 @@ export class Space {
     }
     this.texts.clear();
     const line = (text: string, y: number, height: number, color: string) => {
-      const m = textMesh(text, { height, color });
       // 太长的一行整体缩小，不超出柱面
-      const width = (m.geometry as THREE.PlaneGeometry).parameters.width;
-      m.scale.setScalar(Math.min(1, (PILLAR.w - 0.1) / width));
+      const m = textMesh(text, { height, color, maxWidth: PILLAR.w - 0.1 });
       m.position.set(0, y, FACE + 0.006);
       this.texts.add(m);
     };
     // 浅色石面上刻深色的字
     line(pet.name, TEXT.name, 0.21, '#33261a');
-    line([pet.species, pet.breed].filter(Boolean).join(' · '), TEXT.meta, 0.095, '#5a4a3a');
-    line(`${pet.birthDate ?? '?'} — ${pet.passedDate}`, TEXT.dates, 0.095, '#5a4a3a');
+    line(STR.address(pet.floor, pet.section, pet.cell), TEXT.address, 0.075, '#6b5a48');
+    line([STR.species[pet.species], pet.breed].filter(Boolean).join(' · '), TEXT.meta, 0.09, '#5a4a3a');
+    line(`${pet.birthDate ?? '?'} — ${pet.passedDate}`, TEXT.dates, 0.09, '#5a4a3a');
     wrap(pet.message).forEach((t, i) => line(t, TEXT.message - i * TEXT.line, 0.105, '#3d2e20'));
   }
 

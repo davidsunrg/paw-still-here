@@ -103,7 +103,7 @@ export class SimulatedVisitors implements VisitorSource {
     this.nodes[b].links.push(a);
     if (import.meta.env.DEV && !this.clear(this.nodes[a], this.nodes[b])) {
       const f = (n: Node) => `(${n.x.toFixed(1)}, ${n.z.toFixed(1)})`;
-      console.warn(`[visitors] 路线被挡住：${f(this.nodes[a])} → ${f(this.nodes[b])}`);
+      console.warn(`[visitors] blocked link: ${f(this.nodes[a])} → ${f(this.nodes[b])}`);
     }
   }
 

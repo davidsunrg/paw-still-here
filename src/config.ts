@@ -3,8 +3,6 @@
  * 坐标约定：访客从 +Z 方向沿石头路走向 -Z，走进大厅。
  */
 export const CONFIG = {
-  name: '星光宠物纪念馆',
-
   player: {
     spawnZ: 50,
     /** 小人的身高 */
@@ -55,7 +53,7 @@ export const CONFIG = {
   wallH: 5,
 
   /** 大厅：x ∈ [-w/2, w/2]，z ∈ [0, -d]。backDoor 是后墙正中通往展区的石门（展区还没开，门关着） */
-  hall: { w: 24, d: 18, doorHalf: 2.0, doorSpring: 2.4, backDoorHalf: 1.6, backDoorSpring: 2.2, sofaX: 5.2, receptionX: 6.7, elevatorX: -7, stringZ: [-2, -4.8, -13.2, -16] },
+  hall: { w: 24, d: 18, doorHalf: 2.0, doorSpring: 2.4, backDoorHalf: 1.6, backDoorSpring: 2.2, sofaX: 5.2, receptionX: 6.7, elevatorX: -7, mapX: -4.65, stringZ: [-2, -4.8, -13.2, -16] },
 
   /**
    * 大厅三面墙上的照片墙。进门左手是 1 号墙，正对面（石门两侧）是 2 号墙，右手是 3 号墙。
@@ -74,7 +72,7 @@ export const CONFIG = {
     backInner: 2.5,
     /** 贴在墙上的石板：从多高到多高、多厚 */
     slabY: [0.5, 3.0] as [number, number],
-    slabT: 0.1, lane: 8,
+    slabT: 0.1, lane: 8, plaqueY: 3.42,
   },
 
   /**

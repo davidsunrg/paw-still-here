@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, RIVER_BANKS, ZONES } from '../config';
 import { mulberry32 } from '../data/pets';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import { Instancer } from './Kit';
 import { textMesh } from './textures';
 import type { World } from './World';
@@ -215,8 +215,8 @@ export function buildOutdoor(w: World) {
   kit.box(sx - 1.09, 0.9, sz - 0.4, 0.12, 1.8, 0.12, C.woodDark, ry);
   kit.box(sx + 1.09, 0.9, sz + 0.32, 0.12, 1.8, 0.12, C.woodDark, ry);
   kit.box(sx, 1.55, sz, 2.9, 1.15, 0.08, C.wood, ry);
-  const title = textMesh(STR.brand, { height: 0.5, color: '#ffd9a0', glow: 1.6 });
-  const sub = textMesh(STR.subtitle, { height: 0.24, color: '#f3e3c8' });
+  const title = textMesh(STR.brand, { height: 0.5, color: '#ffd9a0', glow: 1.6, maxWidth: 2.6 });
+  const sub = textMesh(STR.taglineShort, { height: 0.24, color: '#f3e3c8', maxWidth: 2.6 });
   for (const [m, y] of [[title, 1.72], [sub, 1.26]] as const) {
     m.position.set(sx + Math.sin(ry) * 0.05, y, sz + Math.cos(ry) * 0.05);
     m.rotation.y = ry;

@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { CONFIG } from './config';
 import type { Pet } from './data/pets';
 import { prefs, store } from './data/store';
-import { STR } from './strings';
+import { STR } from './i18n';
 import { AudioSystem } from './systems/AudioSystem';
 import { Guide } from './systems/Guide';
 import { Interaction } from './systems/Interaction';
@@ -95,8 +95,9 @@ const ui = new UI({
   onDetailClosed() {
     if (inSpace) leaveSpace();
   },
-  onOffering(_pet, kind) {
+  onOffering(pet, kind) {
     world.space.drop(kind);
+    world.gallery.refresh(pet);
     audio.chime(kind === 'candle');
   },
   onRite(kind, pet) {

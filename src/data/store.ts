@@ -1,4 +1,4 @@
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import { petById, type Pet } from './pets';
 
 /**
@@ -151,7 +151,7 @@ function presetCounts(pet: Pet): Record<GiftKind, number> {
 function presetLetters(pet: Pet): Message[] {
   const n = seed(pet);
   if (n % 3 !== 0) return [];
-  const pool = STR.sampleLetters;
+  const pool = STR.sample.letters;
   return Array.from({ length: 1 + (n % 2) }, (_, i) => ({ text: pool[(n + i * 3) % pool.length], time: 0 }));
 }
 
@@ -202,7 +202,7 @@ export const store = {
       for (const c of r.letters) all.push({ ...c, petName: petById.get(id)?.name });
     }
     all.sort((a, b) => b.time - a.time);
-    const samples = STR.sampleGuestbook.map((text) => ({ text, time: 0 }));
+    const samples = STR.sample.guestbook.map((text) => ({ text, time: 0 }));
     return [...all, ...samples].slice(0, limit);
   },
   /** 记下为某只宠物做过一次室外仪式（放河灯 / 烧信） */

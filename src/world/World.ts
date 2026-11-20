@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { PETS, type Pet } from '../data/pets';
-import { STR } from '../strings';
+import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
-import { buildGallery } from './Gallery';
+import { buildGallery, type Gallery } from './Gallery';
 import { tickFlames } from './gifts';
 import { buildHall } from './Hall';
 import { Kit } from './Kit';
@@ -79,6 +79,7 @@ export class World {
   river!: River;
   bonfire!: Bonfire;
   space!: Space;
+  gallery!: Gallery;
 
   private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
@@ -96,7 +97,7 @@ export class World {
       ['river', () => (this.river = buildRiver(this))],
       ['fire', () => (this.bonfire = buildBonfire(this))],
       ['hall', () => buildHall(this)],
-      ['gallery', () => buildGallery(this)],
+      ['gallery', () => (this.gallery = buildGallery(this))],
       ['space', () => (this.space = new Space(this))],
       ['finish', () => this.finish()],
     ];
@@ -204,12 +205,20 @@ export class World {
     const pts = [V(from.x, from.z)];
     // 还在室外：先进大门
     if (from.z > 0.5) pts.push(V(0, 1.2), V(0, -3.2));
-    const start = pts[pts.length - 1];
     const goal = V(center.x + normal.x * 1.5, center.z + normal.z * 1.5);
 
     // 中间走不过去的一块：树的底座加上两侧的沙发
     const halfX = CONFIG.hall.sofaX + 1;
     const halfZ = TREE_SPAN / 2 + 0.6;
+    // 正站在树和沙发之间：先顺着窄道走出这一块
+    const here = pts[pts.length - 1];
+    if (Math.abs(here.x - TREE_POS.x) < halfX && Math.abs(here.z - TREE_POS.z) < halfZ) {
+      // 在窄道里就朝目的地那一头出去；正对着树的底座时只能往外退
+      const facingTree = Math.abs(here.x - TREE_POS.x) < TREE_SPAN / 2 + 0.4;
+      const side = Math.sign((facingTree ? here.z : goal.z) - TREE_POS.z) || 1;
+      pts.push(V(here.x, TREE_POS.z + side * (halfZ + 0.3)));
+    }
+    const start = pts[pts.length - 1];
     const crosses = (a: THREE.Vector3, b: THREE.Vector3) => {
       const n = Math.ceil(a.distanceTo(b) / 0.25);
       for (let i = 0; i <= n; i++) {
