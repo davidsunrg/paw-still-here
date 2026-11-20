@@ -5,6 +5,7 @@ import { textMesh } from './textures';
 import type { World } from './World';
 
 const D = CONFIG.cave.door;
+const G = CONFIG.cave.gate;
 const T = CONFIG.wallT;
 
 /** 颜色：洞口的石头偏暖灰，洞里的岩壁很暗，水是深蓝色 */
@@ -135,4 +136,82 @@ export function buildCaveEntrance(w: World) {
   w.pointLight(GROTTO_X0 + AISLE + 0.8, 1.2, turnZ - 0.5, 5, 5, COL.glow);
 
   w.proxy(CONFIG.hall.w / 2, apex / 2, z, T + 0.2, apex, D.half * 2, STR.tipCave, () => w.hooks.cave());
+}
+
+/** 石屋的门口（朝西的那一面）在哪 */
+const GATE_X0 = G.x - G.depth / 2;
+
+/** 访客是不是已经走进了大门旁边的石屋（该换到洞口外的码头了） */
+export function inGateDoor(x: number, z: number) {
+  return x > GATE_X0 + G.enter && x < GATE_X0 + G.depth && Math.abs(z - G.z) < G.half;
+}
+
+/** 从洞口外的码头回来（走回头路，或者中途下船）后站在哪里：石屋的门口前，面向石屋 */
+export const GATE_BACK = { x: GATE_X0 - 1.8, z: G.z, yaw: -Math.PI / 2 };
+
+/**
+ * 思念之河在大门旁边的入口：石头路边的一间小石屋，门朝着路，门楣上挂着木牌，
+ * 迎面的石壁上一个朝下的箭头。走进去就换到洞口外的码头，从那里坐船漂进山洞，最后回到大厅。
+ */
+export function buildGateEntrance(w: World) {
+  const { kit } = w;
+  const C = CONFIG.colors;
+  const { z, h } = G;
+  const x1 = GATE_X0 + G.depth;
+  const mid = (GATE_X0 + x1) / 2;
+  const wall = (x: number, wz: number, sx: number, sz: number, color: number) => {
+    kit.box(x, h / 2, wz, sx, h, sz, color);
+    w.collide(x, wz, sx, sz, true);
+  };
+  // 三面石墙、屋顶、地面
+  for (const s of [-1, 1]) wall(mid, z + s * (G.half + 0.2), G.depth, 0.4, COL.stoneDark);
+  wall(x1 + 0.2, z, 0.4, G.half * 2 + 0.8, COL.stoneDark);
+  kit.box(mid + 0.1, h + 0.2, z, G.depth + 0.6, 0.4, G.half * 2 + 1.1, COL.stone);
+  kit.box(mid, 0.035, z, G.depth, 0.08, G.half * 2, COL.landing);
+  // 里面是黑的
+  kit.box(x1 - 0.04, h / 2, z, 0.06, h, G.half * 2, 0x08090c);
+  // 门口两侧垒起来的石块，脚下几块石头
+  const courses = 5;
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < courses; i++) {
+      const ch = h / courses;
+      kit.box(GATE_X0 - 0.04, ch * (i + 0.5), z + s * (G.half + 0.2), 0.34 + (i % 2) * 0.08, ch - 0.02, 0.5, i % 2 ? COL.stoneDark : COL.stone);
+    }
+    kit.ball(GATE_X0 - 0.3, 0.16, z + s * (G.half + 0.85), 0.4, 0x77767a, 0.7, s * 1.3);
+    kit.ball(mid, 0.2, z + s * (G.half + 0.7), 0.5, 0x6c6b70, 0.65, s * 2.6);
+    kit.glowBox(GATE_X0 - 0.16, h - 0.5, z + s * (G.half + 0.2), 0.14, 0.2, 0.14, C.warm, 2.4);
+  }
+  kit.pool(GATE_X0 - 1.2, z, 4, C.warm, 0.2);
+  w.pointLight(GATE_X0 - 0.8, 2.2, z, 7, 8);
+
+  // 木牌：立在屋顶上，朝着石头路
+  const board = { y: h + 0.95, h: 0.8, w: 3.4 };
+  kit.box(GATE_X0 + 0.1, board.y, z, 0.1, board.h, board.w, 0x5a4636);
+  for (const s of [-1, 1]) kit.box(GATE_X0 + 0.1, board.y - 0.1, z + s * (board.w / 2 - 0.06), 0.13, board.h + 0.3, 0.1, C.woodDark);
+  const sign = textMesh(STR.caveSign, { height: 0.36, color: '#ffd9a0', glow: 1.7, maxWidth: board.w - 0.5 });
+  const sub = textMesh(STR.caveSubGate, { height: 0.16, color: '#fff1dc', glow: 1.1, maxWidth: board.w - 0.5 });
+  for (const [m, y] of [[sign, board.y + 0.13], [sub, board.y - 0.2]] as const) {
+    m.position.set(GATE_X0 + 0.04, y, z);
+    m.rotation.y = -Math.PI / 2;
+    w.scene.add(m);
+  }
+
+  // 迎面石壁上朝下的箭头：下面是码头
+  const shape = new THREE.Shape();
+  for (const [i, [ax, ay]] of [[-0.07, 0.4], [0.07, 0.4], [0.07, -0.1], [0.24, -0.1], [0, -0.45], [-0.24, -0.1], [-0.07, -0.1]].entries()) {
+    if (i) shape.lineTo(ax, ay);
+    else shape.moveTo(ax, ay);
+  }
+  const arrow = new THREE.Mesh(
+    new THREE.ShapeGeometry(shape),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(C.warm).multiplyScalar(1.9) }),
+  );
+  const label = textMesh(STR.caveArrow, { height: 0.2, color: '#ffe2b8', glow: 1.3, maxWidth: 2 });
+  for (const [m, y] of [[arrow, 1.7], [label, 1.0]] as const) {
+    m.position.set(x1 - 0.09, y, z);
+    m.rotation.y = -Math.PI / 2;
+    w.scene.add(m);
+  }
+
+  w.proxy(GATE_X0 + 0.1, h / 2, z, 0.3, h, G.half * 2, STR.tipCave, () => w.hooks.gate());
 }

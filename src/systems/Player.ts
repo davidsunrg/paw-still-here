@@ -252,6 +252,14 @@ export class Player {
     this.seat = exit;
   }
 
+  /** 从座位上站起来，站到座位前面 */
+  stand() {
+    if (!this.seat) return;
+    this.pos.x = this.seat.x;
+    this.pos.z = this.seat.z;
+    this.seat = null;
+  }
+
   get seated() {
     return this.seat !== null;
   }

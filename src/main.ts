@@ -20,7 +20,7 @@ import type { PhotoEntry } from './world/Batches';
 import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
-import { CAVE_BACK, inCaveDoor } from './world/Cave';
+import { CAVE_BACK, GATE_BACK, inCaveDoor, inGateDoor } from './world/Cave';
 import { CINEMA_BACK, CINEMA_ROOM, CINEMA_SPAWN, inCinemaDoor, inCinemaExit } from './world/Cinema';
 import { LANTERN_LAUNCH, LANTERN_SPOT } from './world/LanternTerrace';
 import { DOCK_SPOT, routeToDock } from './world/River';
@@ -157,7 +157,8 @@ world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
 world.hooks.lantern = () => ui.openLantern();
 world.hooks.cinema = () => enterCinema();
-world.hooks.cave = () => enterRide();
+world.hooks.cave = () => enterRide('lobby');
+world.hooks.gate = () => enterRide('gate');
 world.hooks.board = (seat) => boardBoat(seat);
 world.hooks.sit = (seats) => {
   // 坐到这张沙发上离自己近的那一边
@@ -320,12 +321,24 @@ function leaveCinema() {
   });
 }
 
-// ---------- 思念之河：下到洞里的码头，坐船穿过山洞 ----------
-/** 是否在山洞里（在石台、石阶、码头上走，或者坐在船上） */
+// ---------- 思念之河：下到码头，坐船穿过山洞 ----------
+/** 是否在河边（在石台、石阶、码头上走，或者坐在船上） */
 let inRide = false;
+/** 现在在哪一头：洞里通往大厅的码头，还是洞口外通往大门的码头。中途下船、走回头路都回到这一头的入口前 */
+let rideSide: 'lobby' | 'gate' = 'lobby';
 
-/** 走进山洞：画面暗下去，再亮起来时站在洞壁高处的石台上，下面是码头 */
-function enterRide() {
+/** 站到这一头的码头上面的石台上 */
+function standAt(side: 'lobby' | 'gate') {
+  const { ride } = world;
+  const st = side === 'lobby' ? ride.inner : ride.outer;
+  rideSide = side;
+  player.room = st.room;
+  world.setAmbience(ride.ambienceOn(side));
+  return st;
+}
+
+/** 走进山洞（或者洞口外的码头）：画面暗下去，再亮起来时站在高处的石台上，下面是码头 */
+function enterRide(side: 'lobby' | 'gate') {
   if (inRide) return;
   marker.hide();
   guide.clear();
@@ -333,36 +346,40 @@ function enterRide() {
     if (inSpace) exitSpace();
     if (inCinema) exitCinema();
     inRide = true;
-    const { ride } = world;
-    ride.solo = prefs.solo;
-    ride.start();
-    player.room = ride.room;
-    player.teleport(ride.spawn.x, ride.spawn.z, ride.spawn.yaw, ride.spawn.pitch);
+    world.ride.solo = prefs.solo;
+    world.ride.start();
+    const { spawn } = standAt(side);
+    player.teleport(spawn.x, spawn.z, spawn.yaw, spawn.pitch);
     // 石台比水面高，直接站上去，不让小人从水面升上来
     player.pos.y = player.ground;
-    world.setAmbience(CONFIG.cave.ambience);
     ui.whisper(STR.caveArrive);
   });
 }
 
-/** 离开山洞（之后去哪里由调用的地方决定） */
+/** 离开河边（之后去哪里由调用的地方决定） */
 function exitRide() {
   inRide = false;
   world.ride.stop();
   world.setAmbience(1);
   player.room = null;
+  stopRiding();
+}
+
+/** 不再跟着船走（下船了，或者离开了河边） */
+function stopRiding() {
   player.riding = false;
   player.lookUp = CONFIG.camera.pitchMax;
   player.boomLimit = Infinity;
   ui.setRiding(false);
 }
 
-/** 从山洞回到大厅的洞口前 */
-function leaveRide() {
+/** 从河边回到入口前：大厅的洞口，或者大门旁边的石屋 */
+function leaveRide(side = rideSide) {
   transition(() => {
     if (!inRide) return;
     exitRide();
-    player.teleport(CAVE_BACK.x, CAVE_BACK.z, CAVE_BACK.yaw);
+    const back = side === 'lobby' ? CAVE_BACK : GATE_BACK;
+    player.teleport(back.x, back.z, back.yaw);
   });
 }
 
@@ -373,20 +390,31 @@ function boardBoat(want: number) {
   if (!seat) return ui.toast(STR.boatComing);
   player.walkTo(seat.exit.x, seat.exit.z, 0.3, () => {
     // 走过去的这一会儿，船可能开走了，座位也可能被别人坐了
-    const now = world.ride.seatNear(seat.index);
-    if (!now || !world.ride.claim(now.index)) return ui.toast(STR.boatComing);
+    const now = world.ride.seatNear(seat.code);
+    if (!now || !world.ride.claim(now.code)) return ui.toast(STR.boatComing);
     player.sit(now.x, now.z, now.facing, now.exit);
     seatLift = now.lift;
     ui.whisper(STR.boatWait);
   });
 }
 
-/** 山洞里的每一帧：船一班班地走；自己坐在船上时，小人和镜头跟着船 */
+/** 河边的每一帧：船一班班地走；自己坐在船上时，小人和镜头跟着船 */
 function updateRide(dt: number, t: number) {
   const p = world.ride.update(pending && player.riding ? 0 : dt, t, player.pos);
+  // 进洞的船靠上了洞里的码头：下船，站到码头上
+  const landed = world.ride.takeArrival();
+  if (landed) {
+    player.sit(player.pos.x, player.pos.z, player.facing, landed);
+    player.stand();
+    stopRiding();
+    standAt('lobby');
+    ui.whisper(STR.rideArrive);
+    return;
+  }
   if (!p) {
-    // 走回石台后面的门洞，就回到大厅
-    if (!pending && world.ride.inPortal(player.pos.x, player.pos.z)) leaveRide();
+    // 走回石台后面的门洞，就回到外面
+    const out = pending ? null : world.ride.portalAt(player.pos.x, player.pos.z);
+    if (out) leaveRide(out);
     return;
   }
   if (!player.riding) {
@@ -396,7 +424,7 @@ function updateRide(dt: number, t: number) {
     player.riding = true;
     player.lookUp = CONFIG.cave.lookUp;
     ui.setRiding(true);
-    ui.whisper(STR.rideStart);
+    ui.whisper(rideSide === 'lobby' ? STR.rideStart : STR.rideStartIn);
   }
   player.pos.x = p.x;
   player.pos.z = p.z;
@@ -404,7 +432,7 @@ function updateRide(dt: number, t: number) {
   player.yaw += p.turn;
   player.boomLimit = p.boom;
   world.setAmbience(p.ambience);
-  // 到了终点：画面暗下去，再亮起来时站在室外的码头上
+  // 出洞的船到了终点：画面暗下去，再亮起来时站在室外的码头上
   if (p.done && !pending) {
     transition(() => {
       if (!inRide) return;
@@ -580,7 +608,8 @@ function frame() {
     if (inCinema) {
       if (inCinemaExit(player.pos.x, player.pos.z)) leaveCinema();
     } else if (!inSpace && !inRide && inCinemaDoor(player.pos.x, player.pos.z)) enterCinema();
-    else if (!inSpace && !inRide && inCaveDoor(player.pos.x, player.pos.z)) enterRide();
+    else if (!inSpace && !inRide && inCaveDoor(player.pos.x, player.pos.z)) enterRide('lobby');
+    else if (!inSpace && !inRide && inGateDoor(player.pos.x, player.pos.z)) enterRide('gate');
   }
   updateDiscovery();
   updateHover();

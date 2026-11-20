@@ -4,6 +4,7 @@ import { PETS, type Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
+import { buildGateEntrance } from './Cave';
 import { CaveRide } from './CaveRide';
 import { buildCinema, type Cinema } from './Cinema';
 import { buildLanternTerrace } from './LanternTerrace';
@@ -80,7 +81,7 @@ export class World {
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击留言簿 / 接待台 / 影厅入口 / 河的洞口 / 沙发时触发；sit 收到的是这张沙发上的座位 */
-  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, cinema: () => {}, cave: () => {}, board: (_seat: number) => {}, sit: (_seats: Seat[]) => {} };
+  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, cinema: () => {}, cave: () => {}, gate: () => {}, board: (_seat: number) => {}, sit: (_seats: Seat[]) => {} };
   /** 访客脚下的地面高度：桥面高出地面，影厅里的座位一排比一排高 */
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
@@ -111,7 +112,10 @@ export class World {
       ['gallery', () => (this.gallery = buildGallery(this))],
       ['space', () => (this.space = new Space(this))],
       ['cinema', () => (this.cinema = buildCinema(this))],
-      ['cave', () => (this.ride = new CaveRide(this))],
+      ['cave', () => {
+        buildGateEntrance(this);
+        this.ride = new CaveRide(this);
+      }],
       ['finish', () => this.finish()],
     ];
   }
