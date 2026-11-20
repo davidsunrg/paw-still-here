@@ -830,7 +830,8 @@ export class CaveRide {
     // 水面：一整块，盖住整条河道
     const xs = V.path.map((q) => q[0]);
     const zs = V.path.map((q) => q[1]);
-    const pad = 110;
+    // 四周留的边要比洞厅最宽的地方还宽，水面才铺得到洞壁脚下
+    const pad = Math.max(...V.profile.map((k) => k[1])) * 1.1 + 30;
     const water = new THREE.Mesh(
       new THREE.PlaneGeometry(Math.max(...xs) - Math.min(...xs) + pad * 2, Math.max(...zs) - Math.min(...zs) + pad * 2).rotateX(-Math.PI / 2),
       new THREE.MeshStandardMaterial({ color: COL.water, roughness: 0.5, metalness: 0 }),
@@ -840,7 +841,7 @@ export class CaveRide {
 
     // 洞壁和洞顶：一整张粗糙的大面片。横截面是半个椭圆，每个顶点往里外随机挪一点，显出岩石的棱面
     // 洞厅很宽，一圈多分几段，棱面才不会大得像一堵堵平墙
-    const SEG = 24;
+    const SEG = 34;
     const gap = size * 0.9;
     const s0 = -gap * 2;
     const pos: number[] = [];
@@ -850,9 +851,11 @@ export class CaveRide {
       for (let i = 0; i <= SEG; i++) {
         const th = (i / SEG) * Math.PI;
         const k = 1 + R(-0.09, 0.09);
-        const [x, z] = at(s + R(-1.6, 1.6), half * k * Math.cos(th));
+        // 每一圈都正对着 z 方向，只是圆心跟着河道走：洞厅比河道拐弯的半径还宽，
+        // 圈要是跟着河道转向，拐弯内侧的洞壁会叠在一起
+        const [x, z] = at(s + R(-1.6, 1.6), 0);
         // 贴着水面的一圈埋到水下一点，水边不留缝
-        pos.push(x, i === 0 || i === SEG ? -1 : ceil * k * Math.sin(th), z);
+        pos.push(x + half * k * Math.cos(th), i === 0 || i === SEG ? -1 : ceil * k * Math.sin(th), z);
       }
     }
     const index: number[] = [];
@@ -930,7 +933,8 @@ export class CaveRide {
     for (let i = 0; i < 70; i++) {
       const s = R(4, this.length + 14);
       const { half } = profileAt(s);
-      const side = (rnd() < 0.5 ? -1 : 1) * R(2.2, half * 0.72);
+      // 河灯聚在河道附近，不跟着洞厅一起铺开
+      const side = (rnd() < 0.5 ? -1 : 1) * R(2.2, Math.min(half * 0.72, 30));
       // 让开两条航道和两处码头
       if (side > 0 && (side < LANE_IN + 2 || (s > this.outEnd && side < LANE_IN + ST.wide + 3))) continue;
       const [x, z] = at(s, side);
