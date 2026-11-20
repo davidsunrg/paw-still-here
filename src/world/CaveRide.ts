@@ -34,13 +34,13 @@ const HUE = {
  */
 type Light = [s: number, side: number, y: number, color: number, intensity: number];
 const LIGHTS: Light[] = [
-  [2, -17, 17, HUE.amber, 150],
-  [9, 22, 18, HUE.honey, 120],
-  [17, -23, 18, HUE.ember, 120],
-  [21, 2, 30, HUE.pale, 70],
-  [25, 23, 18, HUE.pale, 90],
-  [31, -22, 18, HUE.honey, 110],
-  [36, 14, 10, HUE.moon, 90],
+  [6, -17, 17, HUE.amber, 150],
+  [26, 22, 18, HUE.honey, 120],
+  [46, -23, 18, HUE.ember, 120],
+  [56, 2, 30, HUE.pale, 70],
+  [66, 23, 18, HUE.pale, 90],
+  [84, -22, 18, HUE.honey, 110],
+  [98, 14, 10, HUE.moon, 90],
 ];
 
 /** 露天的一段从哪里开始（横截面里第一个洞顶高度为 0 的地方） */
