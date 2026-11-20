@@ -8,6 +8,7 @@
   </head>
   <body>
     <canvas id="scene"></canvas>
+    <div id="fade"></div>
 
     <!-- 加载页 -->
     <div id="loader">
@@ -61,7 +62,7 @@
     <div id="tooltip"></div>
     <div id="toast"></div>
 
-    <!-- 单宠物视角：一侧的资料，下方的礼物栏，两边的切换按钮 -->
+    <!-- 宠物的小院：一侧的资料，下方的礼物栏 -->
     <aside id="detail">
       <button class="close" id="detail-close" aria-label="close">×</button>
       <h2 id="detail-name"></h2>
@@ -71,6 +72,7 @@
       <div class="rites" id="detail-rites">
         <button id="btn-rite-river" data-t="riteRiver"></button>
         <button id="btn-rite-fire" data-t="riteFire"></button>
+        <button id="btn-leave" data-t="spaceLeave"></button>
       </div>
     </aside>
 
@@ -109,8 +111,6 @@
         <span data-t="giftLetter"></span><b></b>
       </button>
     </div>
-    <button class="shrine-nav" id="shrine-prev" aria-label="previous">‹</button>
-    <button class="shrine-nav" id="shrine-next" aria-label="next">›</button>
 
     <!-- 弹窗 -->
     <div class="modal" id="modal-lantern">

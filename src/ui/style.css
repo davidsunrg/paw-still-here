@@ -366,7 +366,20 @@ body.touch #joystick {
   display: block;
 }
 
-/* ---------- 单宠物视角 ---------- */
+/* 进出小院时盖在画面上的一层夜色 */
+#fade {
+  position: fixed;
+  inset: 0;
+  background: #0b0d24;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+#fade.on {
+  opacity: 1;
+}
+
+/* ---------- 宠物的小院 ---------- */
 :root {
   --panel: 300px;
 }
@@ -443,10 +456,8 @@ body.touch #joystick {
   padding: 10px;
 }
 
-/* 进入单宠物视角后，收起底部的传送栏，换成礼物栏 */
-body.in-shrine .bottom-bar,
-body.in-shrine #joystick,
-body.in-shrine #stick-zone {
+/* 走进宠物的小院后，收起底部的传送栏，换成礼物栏 */
+body.in-shrine .bottom-bar {
   display: none;
 }
 body.in-shrine #hint {
@@ -518,34 +529,6 @@ body.in-shrine #shrine-bar {
   color: var(--warm);
   font-variant-numeric: tabular-nums;
   text-align: right;
-}
-.shrine-nav {
-  position: fixed;
-  z-index: 31;
-  top: 50%;
-  width: 44px;
-  height: 44px;
-  padding: 0 0 3px;
-  font-size: 24px;
-  line-height: 1;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-50%);
-  transition: opacity 0.5s, visibility 0s 0.5s;
-}
-body.in-shrine .shrine-nav {
-  opacity: 1;
-  visibility: visible;
-  transition: opacity 0.5s 0.4s;
-}
-.shrine-nav:active {
-  transform: translateY(-50%) scale(0.97);
-}
-#shrine-prev {
-  left: 18px;
-}
-#shrine-next {
-  right: calc(var(--panel) + 18px);
 }
 body.touch .close {
   width: 44px;
@@ -770,16 +753,15 @@ button:disabled {
   .bottom-bar .group button {
     padding: 6px 7px;
   }
-  /* 小屏幕上资料收成顶部的一张小卡片，把画面留给格子 */
+  /* 小屏幕上只留一条：名字和几个按钮。种类、日期、寄语都刻在石柱上，不再重复 */
   #detail {
     top: calc(54px + env(safe-area-inset-top));
     bottom: auto;
     left: 10px;
     right: 10px;
     width: auto;
-    max-height: 30vh;
-    padding: 14px 16px;
-    gap: 4px;
+    padding: 10px 14px 12px;
+    gap: 6px;
     border: 1px solid var(--line);
     border-radius: 18px;
     transform: translateY(calc(-100% - 80px));
@@ -788,11 +770,20 @@ button:disabled {
     font-size: 20px;
     margin: 0;
   }
+  #detail .meta,
   #detail blockquote {
-    margin: 6px 0 0;
-    padding: 8px 12px;
-    font-size: 13px;
-    line-height: 1.6;
+    display: none;
+  }
+  .rites {
+    flex-direction: row;
+    margin-top: 2px;
+    gap: 6px;
+  }
+  .rites button {
+    flex: 1;
+    padding: 7px 4px;
+    font-size: 12px;
+    border-radius: 12px;
   }
   body.in-shrine #hint {
     left: 50%;
@@ -807,20 +798,6 @@ button:disabled {
   #shrine-bar button {
     width: 56px;
     height: 58px;
-  }
-  .shrine-nav {
-    top: auto;
-    bottom: calc(100px + env(safe-area-inset-bottom));
-    transform: none;
-  }
-  .shrine-nav:active {
-    transform: scale(0.97);
-  }
-  #shrine-prev {
-    left: 12px;
-  }
-  #shrine-next {
-    right: 12px;
   }
   #loader h1 {
     font-size: 26px;

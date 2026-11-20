@@ -13,6 +13,7 @@ import { buildMemorial } from './Memorial';
 import { buildOutdoor } from './Outdoor';
 import { buildRiver, type River } from './River';
 import { MOON_DIR, Sky } from './Sky';
+import { Space } from './Space';
 
 export interface Collider {
   minX: number;
@@ -81,6 +82,7 @@ export class World {
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
   bonfire!: Bonfire;
+  space!: Space;
 
   private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
@@ -100,6 +102,7 @@ export class World {
       ['hall', () => buildHall(this)],
       ['corridor', () => buildCorridor(this)],
       ['memorial', () => buildMemorial(this)],
+      ['space', () => (this.space = new Space(this))],
       ['finish', () => this.finish()],
     ];
   }

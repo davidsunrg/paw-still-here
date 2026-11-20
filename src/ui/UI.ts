@@ -15,11 +15,9 @@ export interface UIHooks {
   /** 切换「独自参观」，返回切换后是否隐藏其他访客 */
   onToggleSolo(): boolean;
   onDetailClosed(): void;
-  /** 访客往格子里放了一件礼物或一封信（数据已保存） */
+  /** 访客在它的小院里放了一件礼物或一封信（数据已保存） */
   onOffering(pet: Pet, kind: OfferKind): void;
-  /** 在单宠物视角里切换到旁边的宠物：-1 上一只，1 下一只 */
-  onStep(dir: -1 | 1): void;
-  /** 在单宠物视角里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
+  /** 在它的小院里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
   onRite(kind: RiteKind, pet: Pet): void;
   /** 访客在码头放下了一盏写着这只宠物名字的河灯 */
   onRiverLantern(pet: Pet): void;
@@ -99,24 +97,15 @@ export class UI {
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
-        // 先收起弹窗，再退出单宠物视角
+        // 先收起弹窗，再离开小院
         if (this.modalOpen) this.closeModals();
         else this.closeDetail();
-        return;
       }
-      const el = e.target as HTMLElement | null;
-      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
-      if (!this.pet || this.modalOpen || typing) return;
-      if (e.key === 'ArrowLeft') hooks.onStep(-1);
-      else if (e.key === 'ArrowRight') hooks.onStep(1);
     });
 
-    // 单宠物视角
+    // 宠物的小院
     $('detail-close').addEventListener('click', () => this.closeDetail());
-    $('shrine-prev').setAttribute('aria-label', STR.shrinePrev);
-    $('shrine-next').setAttribute('aria-label', STR.shrineNext);
-    $('shrine-prev').addEventListener('click', () => hooks.onStep(-1));
-    $('shrine-next').addEventListener('click', () => hooks.onStep(1));
+    $('btn-leave').addEventListener('click', () => this.closeDetail());
     document.querySelectorAll<HTMLElement>('[data-offer]').forEach((b) =>
       b.addEventListener('click', () => this.offer(b.dataset.offer as OfferKind)),
     );
@@ -128,7 +117,7 @@ export class UI {
       if (!text || !pet) return;
       store.addLetter(pet, text);
       input.value = '';
-      // 收起弹窗，让访客看到信落在台面上
+      // 收起弹窗，让访客看到信落在石阶上
       this.closeModals();
       this.renderCounts();
       hooks.onOffering(pet, 'letter');
@@ -263,8 +252,14 @@ export class UI {
     return document.querySelector('.modal.open') !== null;
   }
 
+  /** 只有弹窗会暂停走动；在小院里（资料面板开着）照常可以走 */
   private notify() {
-    this.hooks.onBlockingChange(this.detailOpen || this.modalOpen);
+    this.hooks.onBlockingChange(this.modalOpen);
+  }
+
+  /** 进出小院时把画面暗下去 / 亮起来 */
+  veil(on: boolean) {
+    $('fade').classList.toggle('on', on);
   }
 
   private openModal(id: string, focusId?: string) {
@@ -300,7 +295,7 @@ export class UI {
     $('detail').classList.add('open');
     $('detail').scrollTop = 0;
     document.body.classList.add('in-shrine');
-    // 操作提示只在第一次打开格子时出现
+    // 操作提示只在第一次走进小院时出现
     if (!this.shrineHinted) {
       this.shrineHinted = true;
       const el = $('hint');

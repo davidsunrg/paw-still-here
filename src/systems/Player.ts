@@ -55,6 +55,21 @@ interface Goal {
   stuck: number;
 }
 
+/**
+ * 一块圆形的活动范围（宠物的专属小院）：四周是弧墙，只有朝 +Z 的缺口可以走出去一小段。
+ * 设置之后，小人和镜头都被限制在里面，不再使用主场景的边界。
+ */
+export interface Area {
+  x: number;
+  z: number;
+  /** 弧墙内侧的半径 */
+  r: number;
+  /** 缺口向两侧各张开多少弧度 */
+  gap: number;
+  /** 从缺口最远能走出多远 */
+  out: number;
+}
+
 interface Focus {
   /** 镜头的位置和朝向 */
   cam: THREE.Vector3;
@@ -80,6 +95,8 @@ export class Player {
   fade = 1;
   /** 打开面板时暂停移动 */
   enabled = true;
+  /** 不为空时，小人只能在这块范围里活动 */
+  area: Area | null = null;
   /** 摇杆输入：x 向右，y 向前 */
   readonly stick = new THREE.Vector2();
   /** 脚下的地面高度（桥面会高出地面） */
@@ -96,6 +113,8 @@ export class Player {
   private lastFocus: Focus | null = null;
   private blend = 0;
   private goal: Goal | null = null;
+  /** 坐着的时候，记着站起来要回到哪里 */
+  private seat: { x: number; z: number } | null = null;
   private pointers = new Map<number, { x: number; y: number }>();
   private lookId = -1;
   private pinch = 0;
@@ -224,6 +243,19 @@ export class Player {
     return moved / dt;
   }
 
+  /** 坐到 (x, z) 处、面朝 facing；一有移动的意图就站起来，回到 exit */
+  sit(x: number, z: number, facing: number, exit: { x: number; z: number }) {
+    this.goal = null;
+    this.pos.x = x;
+    this.pos.z = z;
+    this.facing = facing;
+    this.seat = exit;
+  }
+
+  get seated() {
+    return this.seat !== null;
+  }
+
   get focused() {
     return this.focus !== null;
   }
@@ -242,6 +274,7 @@ export class Player {
   teleport(x: number, z: number, yaw: number, pitch = CAM.pitch, facing = yaw) {
     this.focus = this.lastFocus = null;
     this.goal = null;
+    this.seat = null;
     this.blend = 0;
     this.pos.set(x, 0, z);
     this.yaw = yaw;
@@ -289,10 +322,18 @@ export class Player {
     this.focus = null;
   }
 
-  private blocked(x: number, z: number) {
+  /** 小人能不能站在 (x, z) */
+  blocked(x: number, z: number) {
     const r = CONFIG.player.radius;
     for (const c of this.colliders) {
       if (x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r) return true;
+    }
+    const a = this.area;
+    if (a) {
+      const dx = x - a.x;
+      const dz = z - a.z;
+      const open = Math.abs(Math.atan2(dx, dz)) < a.gap;
+      return Math.hypot(dx, dz) > (open ? a.r + a.out : a.r - r);
     }
     return Math.abs(x) > 90 || z > 78 || z < -130;
   }
@@ -338,6 +379,13 @@ export class Player {
     if (K.has('ArrowLeft') || K.has('KeyQ')) this.yaw += dt * 1.9;
     if (K.has('ArrowRight') || K.has('KeyE')) this.yaw -= dt * 1.9;
     const len = Math.hypot(fw, sd);
+    if (this.seat) {
+      if (len < 0.05 && !this.goal) return 0;
+      // 想走了：先站起来，回到座位前面
+      this.pos.x = this.seat.x;
+      this.pos.z = this.seat.z;
+      this.seat = null;
+    }
     if (len < 0.05) return this.goal ? this.walk(dt) : 0;
     // 自己动手走，就不再去刚才点的地方了
     this.goal = null;
@@ -361,6 +409,20 @@ export class Player {
     let t = 1;
     for (const c of this.colliders) {
       if (c.tall) t = Math.min(t, segmentEnter(c, CAM.pad, x0, z0, x1, z1));
+    }
+    // 小院里：镜头不穿出弧墙（朝缺口的方向除外）
+    const a = this.area;
+    if (a && horizontal > 1e-3) {
+      const px = x0 - a.x;
+      const pz = z0 - a.z;
+      const rr = a.r - CAM.pad;
+      const c = px * px + pz * pz - rr * rr;
+      if (c < 0) {
+        const b = px * dirX + pz * dirZ;
+        const s = -b + Math.sqrt(b * b - c);
+        const open = Math.abs(Math.atan2(px + dirX * s, pz + dirZ * s)) < a.gap;
+        if (!open) t = Math.min(t, s / horizontal);
+      }
     }
     let max = want * t;
     // 仰视时镜头不能钻到地面以下

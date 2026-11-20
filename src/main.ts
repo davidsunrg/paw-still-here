@@ -21,7 +21,6 @@ import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
 import { DOCK_SPOT, routeToDock } from './world/River';
-import { Shrine } from './world/Shrine';
 import { World } from './world/World';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -54,7 +53,6 @@ const marker = new Marker(scene);
 const avatar = new AvatarBatch(scene, 1);
 const pose = defaultPose(CONFIG.player.color);
 let interaction: Interaction | null = null;
-let shrine: Shrine | null = null;
 let crowd: Crowd | null = null;
 let entered = false;
 let blocked = false;
@@ -67,11 +65,13 @@ const ui = new UI({
   },
   onTeleport(target) {
     guide.clear();
-    if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
-    else if (target === 'river') toDock();
-    else if (target === 'fire') toFire();
-    else if (target === 'hall') player.teleport(0, -2.2, 0);
-    else player.teleport(0, ZONES.memFront - 2.5, 0);
+    travel(() => {
+      if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
+      else if (target === 'river') toDock();
+      else if (target === 'fire') toFire();
+      else if (target === 'hall') player.teleport(0, -2.2, 0);
+      else player.teleport(0, ZONES.memFront - 2.5, 0);
+    });
   },
   onLantern(text) {
     // 孔明灯从小人面前升起
@@ -94,27 +94,18 @@ const ui = new UI({
     return prefs.solo;
   },
   onDetailClosed() {
-    player.release();
-    shrine?.close();
+    if (inSpace) leaveSpace();
   },
   onOffering(pet, kind) {
-    shrine?.drop(kind);
+    world.space.drop(kind);
     world.showInCell(pet, kind);
     audio.chime(kind === 'candle');
   },
-  onStep(dir) {
-    const current = shrine?.entry;
-    if (!current || !shrine?.isOpen) return;
-    const group = world.photos.entries.filter((e) => e.group === current.group);
-    const next = group[(group.indexOf(current) + dir + group.length) % group.length];
-    if (next && next !== current) openPet(next);
-  },
   onRite(kind, pet) {
-    // 从格子里选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
+    // 在它的小院里选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
     ui.closeAll();
     guide.clear();
-    if (kind === 'river') toDock();
-    else toFire();
+    travel(kind === 'river' ? toDock : toFire);
     ui.openRite(kind, pet);
   },
   onBurnLetter(pet) {
@@ -131,20 +122,20 @@ const ui = new UI({
   onGuide(pet) {
     ui.closeAll();
     const entry = cabinetEntry(pet);
-    guide.show(world.routeTo(pet, player.pos), () => {
-      ui.toast(STR.guideArrive(pet.name));
-      if (entry) openPet(entry);
+    // 在别的小院里找它：先回到刚才的相框前，再沿着光点走
+    travel(() => {
+      guide.show(world.routeTo(pet, player.pos), () => {
+        ui.toast(STR.guideArrive(pet.name));
+        if (entry) enterSpace(entry);
+      });
+      ui.toast(STR.guideToast(pet.name));
     });
-    ui.toast(STR.guideToast(pet.name));
   },
   onGoto(pet) {
     ui.closeAll();
     guide.clear();
     const entry = cabinetEntry(pet);
-    const slot = world.slots.get(pet.id);
-    if (!entry || !slot) return;
-    player.teleport(slot.frame.x, slot.cabinetZ + 1.7, 0);
-    openPet(entry);
+    if (entry) enterSpace(entry);
   },
   onBlockingChange(b) {
     blocked = b;
@@ -198,23 +189,83 @@ function cabinetEntry(pet: Pet) {
   return world.photos.entries.find((e) => e.pet === pet && slot && e.center.equals(slot.frame));
 }
 
-/** 镜头离小龛中心多远，才能让它完整地出现在资料面板以外的画面里 */
-function shrineDistance() {
-  const { w, h, d } = CONFIG.shrine;
-  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-  const aspect = (window.innerWidth - ui.detailWidth) / window.innerHeight;
-  const byHeight = h / 0.6 / (2 * t);
-  const byWidth = w / 0.86 / (2 * t * aspect);
-  return Math.max(byHeight, byWidth) + d / 2;
+// ---------- 进出宠物的小院 ----------
+/** 是否在某只宠物的小院里；home 是出来以后回到哪里 */
+let inSpace = false;
+let home: { x: number; z: number; yaw: number } | null = null;
+/** 画面正在暗下去：暗到底的那一刻要做的事。期间又有新的去向时，以最后一个为准 */
+let pending: (() => void) | null = null;
+
+/** 画面暗下去，在最暗的时候执行 mid（换地方），再亮起来 */
+function transition(mid: () => void) {
+  const busy = pending !== null;
+  pending = mid;
+  if (busy) return;
+  ui.veil(true);
+  window.setTimeout(() => {
+    const run = pending!;
+    pending = null;
+    run();
+    ui.veil(false);
+  }, CONFIG.space.fade * 1000);
 }
 
-/** 进入单宠物视角：这一格展开成小龛，镜头推到它正前方，小人走到旁边站好 */
-function openPet(entry: PhotoEntry) {
-  if (!shrine) return;
-  ui.openDetail(entry.pet);
-  shrine.open(entry);
-  player.refocus(shrine.center, entry.normal, shrineDistance());
+function exitSpace() {
+  inSpace = false;
+  world.space.close();
+  player.area = null;
+}
+
+/** 走进这只宠物的小院；出来时回到这张相框前 */
+function enterSpace(entry: PhotoEntry) {
+  const { center, normal } = entry;
+  let back = { x: center.x + normal.x * 1.5, z: center.z + normal.z * 1.5, yaw: Math.atan2(normal.x, normal.z) };
+  // 相框前站不下人时，回到进来之前站的地方（已经在别的小院里，就沿用上一次的）
+  const area = player.area;
+  player.area = null;
+  const free = !player.blocked(back.x, back.z);
+  player.area = area;
+  if (!free) back = (inSpace ? home : null) ?? { x: player.pos.x, z: player.pos.z, yaw: player.facing };
   interaction?.setHighlight(null);
+  marker.hide();
+  transition(() => {
+    home = back;
+    inSpace = true;
+    world.space.open(entry.pet);
+    player.area = world.space.area;
+    const { spawn } = world.space;
+    player.teleport(spawn.x, spawn.z, spawn.yaw, spawn.pitch, spawn.facing);
+    ui.openDetail(entry.pet);
+  });
+}
+
+/** 从小院回到相框前 */
+function leaveSpace() {
+  transition(() => {
+    exitSpace();
+    if (home) player.teleport(home.x, home.z, home.yaw);
+  });
+}
+
+/** 去别的地方：如果正在小院里（或正在进出），先让画面暗下去再过去 */
+function travel(dest: () => void) {
+  if (!inSpace && !pending) return dest();
+  transition(() => {
+    if (inSpace) exitSpace();
+    dest();
+  });
+}
+
+/** 坐下后镜头慢慢转去的方向；访客自己拖动视角或站起来就不再转 */
+let swing: number | null = null;
+
+/** 走到长椅前坐下 */
+function sitDown() {
+  const { seat } = world.space;
+  player.walkTo(seat.exit.x, seat.exit.z, 0.25, () => {
+    player.sit(seat.x, seat.z, seat.facing, seat.exit);
+    swing = seat.yaw;
+  });
 }
 
 // ---------- 悬停与点击 ----------
@@ -240,15 +291,7 @@ canvas.addEventListener('pointerdown', () => canvas.classList.add('dragging'));
 window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 
 player.onTap = (x, y) => {
-  if (!entered || !interaction) return;
-  if (ui.detailOpen) {
-    // 单宠物视角里：点信可以读信，点小龛本身不做事，点外面退出
-    const hit = shrine?.pick(x, y, camera) ?? null;
-    if (hit === 'letter') ui.openLetters();
-    else if (!hit) ui.closeDetail();
-    return;
-  }
-  if (blocked) return;
+  if (!entered || !interaction || blocked || pending) return;
   const hit = interaction.pick(x, y);
   if (!hit) {
     // 没点到东西：点的是地面，让小人走过去
@@ -261,11 +304,11 @@ player.onTap = (x, y) => {
   marker.hide();
   if (hit.kind === 'pet') {
     const { entry } = hit;
-    if (!hit.far) return openPet(entry);
-    // 离得远：先走到相框前，到了再打开
+    if (!hit.far) return enterSpace(entry);
+    // 离得远：先走到相框前，到了再进去
     const x = entry.center.x + entry.normal.x * 1.5;
     const z = entry.center.z + entry.normal.z * 1.5;
-    player.walkTo(x, z, 0.3, () => openPet(entry));
+    player.walkTo(x, z, 0.3, () => enterSpace(entry));
     marker.show(x, world.heightAt(x, z), z);
   } else if (hit.far) {
     player.walkTo(hit.at.x, hit.at.z, 2.4, hit.item.onClick);
@@ -311,8 +354,6 @@ function resize() {
   composer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  // 窗口变化后重新计算镜头距离，保证小龛仍然完整可见
-  if (shrine?.isOpen && shrine.entry) player.focusOn(shrine.center, shrine.entry.normal, shrineDistance());
 }
 window.addEventListener('resize', resize);
 
@@ -331,8 +372,17 @@ function frame() {
   pose.facing = player.facing;
   pose.phase = player.phase;
   pose.stride = player.stride;
-  // 站在格子前时微微低头
-  pose.bow += ((player.focused && player.stride < 0.1 ? 0.3 : 0) - pose.bow) * (1 - Math.exp(-dt * 4));
+  // 坐在长椅上
+  if (swing !== null) {
+    if (!player.seated || player.dragging) swing = null;
+    else player.yaw += Math.atan2(Math.sin(swing - player.yaw), Math.cos(swing - player.yaw)) * (1 - Math.exp(-dt * 2.5));
+  }
+  pose.sit += ((player.seated ? 1 : 0) - pose.sit) * (1 - Math.exp(-dt * 3.5));
+  pose.y += world.space.seat.lift * pose.sit;
+  // 站在它的石柱前时微微低头
+  const front = world.space.front;
+  const bowing = inSpace && !player.seated && player.stride < 0.1 && Math.hypot(player.pos.x - front.x, player.pos.z - front.z) < 1.6;
+  pose.bow += ((bowing ? 0.3 : 0) - pose.bow) * (1 - Math.exp(-dt * 4));
   avatar.set(0, pose, t);
   avatar.opacity = player.fade;
   avatar.commit();
@@ -342,7 +392,11 @@ function frame() {
   world.update(dt, t, camera, player.pos, pixelRatio());
   guide.update(t, player.pos);
   interaction?.update(t);
-  shrine?.update(dt);
+  // 从缺口走出小院，就回到相框前
+  if (inSpace && !pending) {
+    const { area } = world.space;
+    if (Math.hypot(player.pos.x - area.x, player.pos.z - area.z) > area.r + CONFIG.space.leave) ui.closeDetail();
+  }
   updateDiscovery();
   updateHover();
 
@@ -371,7 +425,8 @@ async function boot() {
     run();
   }
   interaction = new Interaction(camera, world, player.pos);
-  shrine = new Shrine(world);
+  world.space.hooks.letters = () => ui.openLetters();
+  world.space.hooks.bench = sitDown;
   // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
   crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);
   crowd.hidden = prefs.solo;
@@ -384,7 +439,7 @@ async function boot() {
   ui.ready();
 
   if (import.meta.env.DEV) {
-    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, shrine, avatar, crowd } });
+    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, avatar, crowd } });
   }
 }
 
