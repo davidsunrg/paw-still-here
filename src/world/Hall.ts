@@ -34,7 +34,7 @@ export function buildHall(w: World) {
   // ---------- 墙 ----------
   archWall(w, ZONES.hallFront, CONFIG.hall.w + T, CONFIG.hall.doorHalf, CONFIG.hall.doorSpring, true);
   archWall(w, ZONES.hallBack, CONFIG.hall.w + T, L.backDoorHalf, L.backDoorSpring);
-  // 左墙是一整面；右墙不挂照片，开着两个门洞：靠大门一侧是影厅，靠后墙一侧是河
+  // 左墙是一整面；右墙不挂照片，开着两个门洞：靠大门一侧是河，靠后墙一侧是影厅
   kit.box(-hw, H / 2, zc, T, H, d + T, C.wall);
   w.collide(-hw, zc, T, d + T, true);
   const theater = CONFIG.cinema.door;
