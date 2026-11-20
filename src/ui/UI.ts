@@ -28,8 +28,6 @@ export interface UIHooks {
   onBurnLetter(pet: Pet): void;
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
-  /** 船上的「暂停 / 继续」：返回切换后是否停着 */
-  onRidePause(): boolean;
   /** 中途下船 */
   onRideLeave(): void;
   /** 有面板打开时需要暂停走动 */
@@ -95,9 +93,6 @@ export class UI {
       }),
     );
     $('btn-search').addEventListener('click', () => this.openSearch());
-    $('btn-ride-pause').addEventListener('click', () => {
-      $('btn-ride-pause').textContent = this.hooks.onRidePause() ? STR.rideResume : STR.ridePause;
-    });
     $('btn-ride-leave').addEventListener('click', () => this.hooks.onRideLeave());
 
     // 弹窗：点遮罩或关闭按钮收起
@@ -272,11 +267,10 @@ export class UI {
   }
 
   /** 进出小院时把画面暗下去 / 亮起来 */
-  /** 上船 / 下船：底部换成（换回）船上的按钮 */
+  /** 船开了 / 下船：底部换成（换回）船上的按钮 */
   setRiding(on: boolean) {
     document.body.classList.toggle('in-ride', on);
     if (!on) $('hint').classList.remove('show');
-    $('btn-ride-pause').textContent = STR.ridePause;
   }
 
   veil(on: boolean) {

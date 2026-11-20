@@ -486,7 +486,7 @@ body.in-shrine #hint {
   left: calc((100vw - var(--panel)) / 2);
   bottom: calc(122px + env(safe-area-inset-bottom));
 }
-/* 坐在船上：收起底部的传送栏，换成「暂停 / 下船」 */
+/* 船开了以后：收起底部的传送栏，换成「下船」 */
 body.in-ride .bottom-bar {
   display: none;
 }

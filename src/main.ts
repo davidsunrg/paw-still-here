@@ -94,6 +94,7 @@ const ui = new UI({
   onToggleSolo() {
     prefs.solo = !prefs.solo;
     if (crowd) crowd.hidden = prefs.solo;
+    world.ride.solo = prefs.solo;
     return prefs.solo;
   },
   onDetailClosed() {
@@ -140,17 +141,8 @@ const ui = new UI({
     const entry = frameOf(pet);
     if (entry) enterSpace(entry);
   },
-  onRidePause() {
-    world.ride.paused = !world.ride.paused;
-    return world.ride.paused;
-  },
   onRideLeave() {
-    if (!inRide) return;
-    transition(() => {
-      if (!inRide) return;
-      exitRide();
-      player.teleport(CAVE_BACK.x, CAVE_BACK.z, CAVE_BACK.yaw);
-    });
+    if (inRide) leaveRide();
   },
   onBlockingChange(b) {
     blocked = b;
@@ -166,6 +158,7 @@ world.hooks.fire = () => ui.openRite('fire');
 world.hooks.lantern = () => ui.openLantern();
 world.hooks.cinema = () => enterCinema();
 world.hooks.cave = () => enterRide();
+world.hooks.board = (seat) => boardBoat(seat);
 world.hooks.sit = (seats) => {
   // 坐到这张沙发上离自己近的那一边
   const d = (s: { x: number; z: number }) => Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
@@ -327,10 +320,11 @@ function leaveCinema() {
   });
 }
 
-// ---------- 思念之河：坐船穿过山洞 ----------
+// ---------- 思念之河：下到洞里的码头，坐船穿过山洞 ----------
+/** 是否在山洞里（在石台、石阶、码头上走，或者坐在船上） */
 let inRide = false;
 
-/** 上船：画面暗下去，再亮起来时已经坐在山洞里的木船上 */
+/** 走进山洞：画面暗下去，再亮起来时站在洞壁高处的石台上，下面是码头 */
 function enterRide() {
   if (inRide) return;
   marker.hide();
@@ -339,41 +333,78 @@ function enterRide() {
     if (inSpace) exitSpace();
     if (inCinema) exitCinema();
     inRide = true;
-    world.ride.start();
-    const p = world.ride.update(0);
-    player.teleport(p.x, p.z, p.facing, 0.02);
-    player.sit(p.x, p.z, p.facing, p);
-    player.riding = true;
-    player.lookUp = CONFIG.cave.lookUp;
-    player.boomLimit = p.boom;
-    seatLift = RIDE_LIFT;
-    pose.sit = 1;
-    world.setAmbience(p.ambience);
-    ui.setRiding(true);
-    ui.whisper(STR.rideStart);
+    const { ride } = world;
+    ride.solo = prefs.solo;
+    ride.start();
+    player.room = ride.room;
+    player.teleport(ride.spawn.x, ride.spawn.z, ride.spawn.yaw, ride.spawn.pitch);
+    // 石台比水面高，直接站上去，不让小人从水面升上来
+    player.pos.y = player.ground;
+    world.setAmbience(CONFIG.cave.ambience);
+    ui.whisper(STR.caveArrive);
   });
 }
 
-/** 下船（之后去哪里由调用的地方决定） */
+/** 离开山洞（之后去哪里由调用的地方决定） */
 function exitRide() {
   inRide = false;
   world.ride.stop();
   world.setAmbience(1);
+  player.room = null;
   player.riding = false;
   player.lookUp = CONFIG.camera.pitchMax;
   player.boomLimit = Infinity;
   ui.setRiding(false);
 }
 
-/** 船每帧往前走：小人和镜头跟着；到了终点，画面暗下去，再亮起来时站在室外的码头上 */
-function updateRide(dt: number) {
-  const p = world.ride.update(pending ? 0 : dt);
+/** 从山洞回到大厅的洞口前 */
+function leaveRide() {
+  transition(() => {
+    if (!inRide) return;
+    exitRide();
+    player.teleport(CAVE_BACK.x, CAVE_BACK.z, CAVE_BACK.yaw);
+  });
+}
+
+/** 走到船边，坐到（离点的那个座位最近的）空座上 */
+function boardBoat(want: number) {
+  if (!inRide || player.riding) return;
+  const seat = world.ride.seatNear(want);
+  if (!seat) return ui.toast(STR.boatComing);
+  player.walkTo(seat.exit.x, seat.exit.z, 0.3, () => {
+    // 走过去的这一会儿，船可能开走了，座位也可能被别人坐了
+    const now = world.ride.seatNear(seat.index);
+    if (!now || !world.ride.claim(now.index)) return ui.toast(STR.boatComing);
+    player.sit(now.x, now.z, now.facing, now.exit);
+    seatLift = now.lift;
+    ui.whisper(STR.boatWait);
+  });
+}
+
+/** 山洞里的每一帧：船一班班地走；自己坐在船上时，小人和镜头跟着船 */
+function updateRide(dt: number, t: number) {
+  const p = world.ride.update(pending && player.riding ? 0 : dt, t, player.pos);
+  if (!p) {
+    // 走回石台后面的门洞，就回到大厅
+    if (!pending && world.ride.inPortal(player.pos.x, player.pos.z)) leaveRide();
+    return;
+  }
+  if (!player.riding) {
+    // 船还没开：站起来就让出座位；船开了就不能再走动
+    if (!player.seated) return world.ride.release();
+    if (!p.sailing) return;
+    player.riding = true;
+    player.lookUp = CONFIG.cave.lookUp;
+    ui.setRiding(true);
+    ui.whisper(STR.rideStart);
+  }
   player.pos.x = p.x;
   player.pos.z = p.z;
   player.facing = p.facing;
   player.yaw += p.turn;
-  player.boomLimit += (p.boom - player.boomLimit) * (1 - Math.exp(-dt * 2));
+  player.boomLimit = p.boom;
   world.setAmbience(p.ambience);
+  // 到了终点：画面暗下去，再亮起来时站在室外的码头上
   if (p.done && !pending) {
     transition(() => {
       if (!inRide) return;
@@ -404,8 +435,6 @@ let swing: number | null = null;
 
 /** 坐着时小人比站着高出多少（长椅和沙发的坐面高度不一样） */
 let seatLift = 0;
-/** 船上的横板 */
-const RIDE_LIFT = 0.42 - CONFIG.player.sitHip;
 
 /** 走到座位前坐下 */
 function sitDown(seat: { x: number; z: number; facing: number; yaw: number; lift: number; exit: { x: number; z: number } }) {
@@ -439,7 +468,7 @@ canvas.addEventListener('pointerdown', () => canvas.classList.add('dragging'));
 window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 
 player.onTap = (x, y) => {
-  if (!entered || !interaction || blocked || pending || inRide) return;
+  if (!entered || !interaction || blocked || pending || player.riding) return;
   const hit = interaction.pick(x, y);
   if (!hit) {
     // 没点到东西：点的是地面，让小人走过去
@@ -513,7 +542,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
-  if (inRide) updateRide(dt);
+  if (inRide) updateRide(dt, t);
   player.update(dt);
   pose.x = player.pos.x;
   pose.y = player.pos.y;
