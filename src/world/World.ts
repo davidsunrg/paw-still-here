@@ -10,6 +10,7 @@ import { buildHall } from './Hall';
 import { Kit } from './Kit';
 import { buildMemorial } from './Memorial';
 import { buildOutdoor } from './Outdoor';
+import { buildRiver, type River } from './River';
 import { MOON_DIR, Sky } from './Sky';
 
 export interface Collider {
@@ -60,7 +61,10 @@ export class World {
   readonly slots = new Map<string, SlotInfo>();
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击留言簿 / 接待台时触发 */
-  hooks = { guestbook: () => {}, reception: () => {} };
+  hooks = { guestbook: () => {}, reception: () => {}, river: () => {} };
+  /** 访客脚下的地面高度，目前只有桥面高出地面 */
+  heightAt: (x: number, z: number) => number = () => 0;
+  river!: River;
 
   private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
@@ -75,6 +79,7 @@ export class World {
     return [
       ['sky', () => this.buildLights()],
       ['outdoor', () => buildOutdoor(this)],
+      ['river', () => (this.river = buildRiver(this))],
       ['hall', () => buildHall(this)],
       ['corridor', () => buildCorridor(this)],
       ['memorial', () => buildMemorial(this)],

@@ -594,6 +594,47 @@ form button {
   border-radius: 12px;
 }
 
+/* 放河灯：已选好的宠物 */
+.chosen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+}
+.chosen span {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--warm-soft);
+  letter-spacing: 0.08em;
+}
+.chosen button {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+#river-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+#river-picker .results {
+  max-height: 34vh;
+  overflow-y: auto;
+}
+#river-go {
+  align-self: flex-end;
+  border-radius: 12px;
+  padding: 9px 22px;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* ---------- 弹窗 ---------- */
 .modal {
   position: fixed;

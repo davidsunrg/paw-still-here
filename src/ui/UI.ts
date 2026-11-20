@@ -2,7 +2,7 @@ import { PETS, type Pet } from '../data/pets';
 import { store, type Message, type OfferKind } from '../data/store';
 import { STR } from '../strings';
 
-export type TeleportTarget = 'gate' | 'hall' | 'memorial';
+export type TeleportTarget = 'gate' | 'river' | 'hall' | 'memorial';
 
 export interface UIHooks {
   onEnter(): void;
@@ -17,6 +17,10 @@ export interface UIHooks {
   onOffering(pet: Pet, kind: OfferKind): void;
   /** 在单宠物视角里切换到旁边的宠物：-1 上一只，1 下一只 */
   onStep(dir: -1 | 1): void;
+  /** 在单宠物视角里选择为它放河灯：把访客带到码头 */
+  onRite(kind: 'river', pet: Pet): void;
+  /** 访客在码头放下了一盏写着这只宠物名字的河灯 */
+  onRiverLantern(pet: Pet): void;
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
   /** 有面板打开时需要暂停走动 */
@@ -38,6 +42,7 @@ export class UI {
   private toastTimer = 0;
   private hintTimer = 0;
   private shrineHinted = false;
+  private riverPet: Pet | null = null;
   private tooltip = $('tooltip');
 
   constructor(private hooks: UIHooks) {
@@ -52,6 +57,7 @@ export class UI {
     $<HTMLInputElement>('lantern-input').placeholder = STR.lanternPlaceholder;
     $<HTMLInputElement>('guestbook-input').placeholder = STR.guestbookPlaceholder;
     $<HTMLInputElement>('search-input').placeholder = STR.searchPlaceholder;
+    $<HTMLInputElement>('river-search').placeholder = STR.riverPlaceholder;
     $('btn-sound').textContent = STR.soundOff;
 
     $('btn-enter').addEventListener('click', () => {
@@ -122,6 +128,20 @@ export class UI {
       this.toast(STR.giftToast.letter(pet.name));
     });
 
+    // 河灯
+    $('btn-rite-river').addEventListener('click', () => {
+      if (this.pet) hooks.onRite('river', this.pet);
+    });
+    $('river-search').addEventListener('input', () => this.renderRiverPicker());
+    $('river-change').addEventListener('click', () => this.chooseRiverPet(null));
+    $('river-go').addEventListener('click', () => {
+      const pet = this.riverPet;
+      if (!pet) return;
+      this.closeModals();
+      hooks.onRiverLantern(pet);
+      this.toast(STR.riverToast(pet.name));
+    });
+
     // 孔明灯
     $('lantern-form').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -174,6 +194,15 @@ export class UI {
     el.classList.add('show');
     clearTimeout(this.hintTimer);
     this.hintTimer = window.setTimeout(() => el.classList.remove('show'), 8000);
+  }
+
+  /** 底部淡入淡出的一行小字，不打断走动 */
+  whisper(text: string) {
+    const el = $('hint');
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(this.hintTimer);
+    this.hintTimer = window.setTimeout(() => el.classList.remove('show'), 7000);
   }
 
   toast(text: string) {
@@ -347,14 +376,7 @@ export class UI {
     const q = $<HTMLInputElement>('search-input').value.trim().toLowerCase();
     const list = $('search-results');
     list.replaceChildren();
-    const found = PETS.filter(
-      (p) =>
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.species.includes(q) ||
-        (p.breed ?? '').toLowerCase().includes(q) ||
-        p.cabinet.toLowerCase() === q,
-    ).slice(0, 30);
+    const found = this.findPets(q);
     if (!found.length) {
       const li = document.createElement('li');
       li.className = 'empty';
@@ -364,13 +386,7 @@ export class UI {
     }
     for (const p of found) {
       const li = document.createElement('li');
-      const info = document.createElement('div');
-      info.className = 'info';
-      const b = document.createElement('b');
-      b.textContent = p.name;
-      const small = document.createElement('small');
-      small.textContent = `${p.breed ?? p.species} · ${STR.detailLocation(p.cabinet, p.slot + 1)}`;
-      info.append(b, small);
+      const info = this.petInfo(p);
       const guide = document.createElement('button');
       guide.textContent = STR.searchGuide;
       guide.addEventListener('click', () => {
@@ -387,6 +403,69 @@ export class UI {
       li.append(info, guide, go);
       list.append(li);
     }
+  }
+
+  // ---------- 河灯 ----------
+
+  /** 打开放河灯的弹窗；从单宠物视角过来时已经选好了宠物 */
+  openRiver(pet: Pet | null = null) {
+    $<HTMLInputElement>('river-search').value = '';
+    this.chooseRiverPet(pet);
+    this.openModal('modal-river', pet ? undefined : 'river-search');
+  }
+
+  private chooseRiverPet(pet: Pet | null) {
+    this.riverPet = pet;
+    $('river-chosen').classList.toggle('hidden', !pet);
+    $('river-picker').classList.toggle('hidden', !!pet);
+    $<HTMLButtonElement>('river-go').disabled = !pet;
+    if (pet) $('river-chosen-name').textContent = STR.riverFor(pet.name);
+    else this.renderRiverPicker();
+  }
+
+  private renderRiverPicker() {
+    const q = $<HTMLInputElement>('river-search').value.trim().toLowerCase();
+    const list = $('river-results');
+    list.replaceChildren();
+    const found = this.findPets(q);
+    if (!found.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = STR.searchEmpty;
+      list.append(li);
+      return;
+    }
+    for (const p of found) {
+      const li = document.createElement('li');
+      const pick = document.createElement('button');
+      pick.className = 'primary';
+      pick.textContent = STR.riverPick;
+      pick.addEventListener('click', () => this.chooseRiverPet(p));
+      li.append(this.petInfo(p), pick);
+      list.append(li);
+    }
+  }
+
+  private findPets(q: string) {
+    return PETS.filter(
+      (p) =>
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.species.includes(q) ||
+        (p.breed ?? '').toLowerCase().includes(q) ||
+        p.cabinet.toLowerCase() === q,
+    ).slice(0, 30);
+  }
+
+  private petInfo(p: Pet) {
+    const info = document.createElement('div');
+    info.className = 'info';
+    const b = document.createElement('b');
+    b.textContent = p.name;
+    const small = document.createElement('small');
+    small.textContent = `${p.breed ?? p.species} · ${STR.detailLocation(p.cabinet, p.slot + 1)}`;
+    info.append(b, small);
+    return info;
   }
 
   // ---------- 触屏摇杆 ----------

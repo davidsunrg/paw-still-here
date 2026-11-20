@@ -20,6 +20,8 @@ export class Player {
   enabled = true;
   /** 摇杆输入：x 向右，y 向前 */
   readonly stick = new THREE.Vector2();
+  /** 脚下的地面高度（桥面会高出地面） */
+  heightAt: (x: number, z: number) => number = () => 0;
   /** 点击（非拖拽）时回调 */
   onTap: (x: number, y: number) => void = () => {};
 
@@ -119,7 +121,8 @@ export class Player {
       this.focusGoal = null;
       return;
     }
-    this.focusGoal = { pos: s.pos.clone().setY(CONFIG.player.eye), yaw: s.yaw, pitch: s.pitch, back: true };
+    const y = CONFIG.player.eye + this.heightAt(s.pos.x, s.pos.z);
+    this.focusGoal = { pos: s.pos.clone().setY(y), yaw: s.yaw, pitch: s.pitch, back: true };
   }
 
   private get wantsToMove() {
@@ -183,7 +186,8 @@ export class Player {
           this.bob += dt * speed * 1.9;
         }
       }
-      this.camY += (eye - this.camY) * (1 - Math.exp(-dt * 5));
+      const ground = this.heightAt(this.pos.x, this.pos.z);
+      this.camY += (eye + ground - this.camY) * (1 - Math.exp(-dt * 5));
     }
 
     const bobY = moving ? Math.sin(this.bob) * 0.028 : 0;

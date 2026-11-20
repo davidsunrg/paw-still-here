@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 
-/** 地面上的一串光点，指引访客走到某个格子前 */
+/** 地面上的一串光点，指引访客走到某个格子前，或者走到河边的码头 */
 export class Guide {
   private mesh: THREE.InstancedMesh;
   private dots: THREE.Vector3[] = [];
@@ -9,6 +9,9 @@ export class Guide {
   private onArrive: (() => void) | null = null;
   private m = new THREE.Matrix4();
   private static readonly MAX = 260;
+
+  /** 地面高度，让光点在桥上时贴着桥面 */
+  heightAt: (x: number, z: number) => number = () => 0;
 
   constructor(scene: THREE.Scene) {
     this.mesh = new THREE.InstancedMesh(
@@ -32,7 +35,9 @@ export class Guide {
       const b = points[i + 1];
       const n = Math.max(1, Math.round(a.distanceTo(b) / 0.55));
       for (let k = 0; k < n && this.dots.length < Guide.MAX; k++) {
-        this.dots.push(a.clone().lerp(b, k / n));
+        const d = a.clone().lerp(b, k / n);
+        d.y = this.heightAt(d.x, d.z);
+        this.dots.push(d);
       }
     }
     this.target = points[points.length - 1] ?? null;
@@ -57,7 +62,7 @@ export class Guide {
     // 光点像水波一样朝目的地流动
     this.dots.forEach((d, i) => {
       const s = 0.55 + 0.75 * Math.max(0, Math.sin(i * 0.5 - t * 4));
-      this.m.makeScale(s, s, s).setPosition(d.x, 0.14, d.z);
+      this.m.makeScale(s, s, s).setPosition(d.x, d.y + 0.14, d.z);
       this.mesh.setMatrixAt(i, this.m);
     });
     this.mesh.instanceMatrix.needsUpdate = true;

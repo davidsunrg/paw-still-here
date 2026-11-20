@@ -45,6 +45,7 @@
       <div class="bottom-bar">
         <div class="group">
           <button data-tp="gate" data-t="tpGate"></button>
+          <button data-tp="river" data-t="tpRiver"></button>
           <button data-tp="hall" data-t="tpHall"></button>
           <button data-tp="memorial" data-t="tpMemorial"></button>
         </div>
@@ -64,10 +65,10 @@
       <p class="meta" id="detail-meta"></p>
       <p class="meta" id="detail-dates"></p>
       <blockquote id="detail-message"></blockquote>
-      <!-- 河灯和烧信在后续阶段启用 -->
-      <div class="rites hidden" id="detail-rites">
+      <div class="rites" id="detail-rites">
         <button id="btn-rite-river" data-t="riteRiver"></button>
-        <button id="btn-rite-fire" data-t="riteFire"></button>
+        <!-- 烧信在后续阶段启用 -->
+        <button id="btn-rite-fire" class="hidden" data-t="riteFire"></button>
       </div>
     </aside>
 
@@ -131,6 +132,23 @@
           <textarea id="letter-input" maxlength="300" rows="4"></textarea>
           <button class="primary" data-t="letterSend"></button>
         </form>
+      </div>
+    </div>
+
+    <div class="modal" id="modal-river">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 data-t="riverTitle"></h2>
+        <p data-t="riverDesc"></p>
+        <div class="chosen hidden" id="river-chosen">
+          <span id="river-chosen-name"></span>
+          <button id="river-change" data-t="riverChange"></button>
+        </div>
+        <div id="river-picker">
+          <input id="river-search" autocomplete="off" />
+          <ul class="results" id="river-results"></ul>
+        </div>
+        <button class="primary" id="river-go" data-t="riverGo" disabled></button>
       </div>
     </div>
 

@@ -15,6 +15,7 @@ import { UI } from './ui/UI';
 import './ui/style.css';
 import type { PhotoEntry } from './world/Batches';
 import { pathX } from './world/Outdoor';
+import { DOCK_SPOT, routeToDock } from './world/River';
 import { Shrine } from './world/Shrine';
 import { World } from './world/World';
 
@@ -58,6 +59,7 @@ const ui = new UI({
   onTeleport(target) {
     guide.clear();
     if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
+    else if (target === 'river') toDock();
     else if (target === 'hall') player.teleport(0, -2.2, 0);
     else player.teleport(0, ZONES.memFront - 2.5, 0);
   },
@@ -95,6 +97,18 @@ const ui = new UI({
     const next = group[(group.indexOf(current) + dir + group.length) % group.length];
     if (next && next !== current) openPet(next);
   },
+  onRite(_kind, pet) {
+    // 从格子里选择为它放河灯：直接来到码头，名字已经写好
+    ui.closeAll();
+    guide.clear();
+    toDock();
+    ui.openRiver(pet);
+  },
+  onRiverLantern(pet) {
+    store.addRite('river', pet);
+    world.river.launch(pet.name);
+    audio.chime(true);
+  },
   onGuide(pet) {
     ui.closeAll();
     const entry = cabinetEntry(pet);
@@ -122,6 +136,24 @@ const ui = new UI({
 
 world.hooks.guestbook = () => ui.openGuestbook();
 world.hooks.reception = () => ui.openSearch();
+world.hooks.river = () => ui.openRiver();
+
+/** 站到码头上，面向河面 */
+function toDock() {
+  seen.river = true;
+  player.teleport(DOCK_SPOT.x, DOCK_SPOT.z, DOCK_SPOT.yaw);
+  player.pitch = DOCK_SPOT.pitch;
+}
+
+/** 第一次沿步道走近室外的纪念地点时，用一行小字和地上的光点告诉访客这里可以做什么 */
+const seen = { river: false };
+function updateDiscovery() {
+  if (!entered || blocked || seen.river) return;
+  if (Math.hypot(player.pos.x - DOCK_SPOT.x, player.pos.z - DOCK_SPOT.z) > 9) return;
+  seen.river = true;
+  ui.whisper(STR.riverHint);
+  if (!guide.active) guide.show(routeToDock(player.pos), () => {});
+}
 
 /** 宠物在纪念柜里的那张相框（照片墙上的不算） */
 function cabinetEntry(pet: Pet) {
@@ -239,6 +271,7 @@ function frame() {
   guide.update(t, player.pos);
   interaction?.update(t);
   shrine?.update(dt);
+  updateDiscovery();
   updateHover();
 
   // 资料面板打开时，把画面主体让到面板左侧
@@ -257,6 +290,7 @@ async function boot() {
   ui.setQualityLabel(quality);
   player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
 
+  player.heightAt = guide.heightAt = (x, z) => world.heightAt(x, z);
   const steps = world.steps();
   for (let i = 0; i < steps.length; i++) {
     const [key, run] = steps[i];

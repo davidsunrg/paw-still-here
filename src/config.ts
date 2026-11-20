@@ -63,6 +63,32 @@ export const CONFIG = {
     caps: { flower: 14, candle: 6, snack: 4, toy: 4, letter: 5 },
   },
 
+  /**
+   * 河流：在 z 处横穿石头路，沿 x 方向流向 +x。步道在这里变成一座石拱桥，
+   * 码头在桥的下游一侧、靠入口的岸边。
+   */
+  river: {
+    z: 29,
+    /** 水面宽度，以及两侧岸坡各占的水平宽度 */
+    width: 5,
+    bank: 0.5,
+    depth: 0.55,
+    /** 水面高度（地面是 0） */
+    level: -0.2,
+    /** 河道向两侧各延伸多远 */
+    halfLength: 130,
+    /** 水流速度（米 / 秒） */
+    flow: 0.45,
+    /** 河面上平时漂着的河灯数量，以及访客的河灯最多同时存在几盏 */
+    presetLanterns: 36,
+    maxUserLanterns: 10,
+    /** 访客的河灯漂到离码头这么远时完全淡出 */
+    fadeDistance: 46,
+    bridge: { halfW: 1.8, len: 7.4, rise: 0.5, rail: 0.42 },
+    /** 码头：中心线离桥中心 offsetX，宽 w，从岸边伸进河里 len */
+    dock: { offsetX: 4.4, w: 2.2, len: 1.7 },
+  },
+
   /** 宠物数量（上限 100，受照片图集大小限制） */
   petCount: 96,
   /** 大厅照片墙展示的精选数量 */
@@ -89,6 +115,12 @@ export const CONFIG = {
     warm: 0xffc47a,
     stone: 0x8d8a84,
   },
+};
+
+/** 河道两岸的 Z 坐标：north 靠大厅一侧，south 靠入口一侧 */
+export const RIVER_BANKS = {
+  north: CONFIG.river.z - CONFIG.river.width / 2 - CONFIG.river.bank,
+  south: CONFIG.river.z + CONFIG.river.width / 2 + CONFIG.river.bank,
 };
 
 /** 派生出的各区域 Z 坐标 */

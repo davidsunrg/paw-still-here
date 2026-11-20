@@ -1,15 +1,41 @@
 import * as THREE from 'three';
-import { CONFIG, ZONES } from '../config';
+import { CONFIG, RIVER_BANKS, ZONES } from '../config';
 import { mulberry32 } from '../data/pets';
 import { STR } from '../strings';
 import { Instancer } from './Kit';
 import { textMesh } from './textures';
 import type { World } from './World';
 
-/** 石头路中心线：略带弯曲，靠近大门时收直 */
-export function pathX(z: number) {
+function curveX(z: number) {
   const k = THREE.MathUtils.smoothstep(z, 2, 14);
   return 2.6 * Math.sin(z * 0.13) * k;
+}
+
+/** 石头路中心线：略带弯曲，靠近大门时收直；过河的一段也收直，好让桥正对着路 */
+export function pathX(z: number) {
+  const rz = CONFIG.river.z;
+  const straight = 1 - THREE.MathUtils.smoothstep(Math.abs(z - rz), 3.6, 8);
+  return THREE.MathUtils.lerp(curveX(z), curveX(rz), straight);
+}
+
+/** 桥的中心线，以及码头的中心线 */
+export const BRIDGE_X = pathX(CONFIG.river.z);
+export const DOCK_X = BRIDGE_X + CONFIG.river.dock.offsetX;
+
+/** z 是否落在河道（含岸坡）范围内，margin 是额外留出的距离 */
+export function inRiver(z: number, margin = 0) {
+  return z > RIVER_BANKS.north - margin && z < RIVER_BANKS.south + margin;
+}
+
+/** 把落在河道附近的东西挪到最近的岸上 */
+function clearOfRiver(z: number, margin: number) {
+  if (!inRiver(z, margin)) return z;
+  return z < CONFIG.river.z ? RIVER_BANKS.north - margin : RIVER_BANKS.south + margin;
+}
+
+/** 是否挡在通往码头的路上 */
+function nearDock(x: number, z: number) {
+  return Math.abs(x - DOCK_X) < 2.2 && z > RIVER_BANKS.south - 0.5 && z < RIVER_BANKS.south + 3.5;
 }
 
 function swayMaterial(uTime: { value: number }) {
@@ -38,12 +64,14 @@ export function buildOutdoor(w: World) {
   const R = (a: number, b: number) => a + rnd() * (b - a);
 
   // ---------- 草地与远山 ----------
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(700, 700).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: C.ground, roughness: 1 }),
-  );
-  ground.receiveShadow = true;
-  scene.add(ground);
+  // 草地在河道处断开，分成南北两块，中间的河床和水面由 River.ts 搭建
+  const groundMat = new THREE.MeshStandardMaterial({ color: C.ground, roughness: 1 });
+  for (const [zMin, zMax] of [[-350, RIVER_BANKS.north], [RIVER_BANKS.south, 350]]) {
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(700, zMax - zMin).rotateX(-Math.PI / 2), groundMat);
+    ground.position.z = (zMin + zMax) / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+  }
 
   for (let i = 0; i < 16; i++) {
     const a = (i / 16) * Math.PI * 2 + R(-0.15, 0.15);
@@ -56,6 +84,8 @@ export function buildOutdoor(w: World) {
   const stones = new Instancer(new THREE.CylinderGeometry(1, 1.08, 1, 7), stoneMat);
   const half = CONFIG.path.width / 2;
   for (let z = CONFIG.path.startZ; z > 1.9; z -= 0.62) {
+    // 桥面那一段不铺石头
+    if (Math.abs(z - CONFIG.river.z) < CONFIG.river.bridge.len / 2) continue;
     const cx = pathX(z);
     for (let k = 0; k < 4; k++) {
       const lx = -half + (k + 0.5) * (CONFIG.path.width / 4) + R(-0.14, 0.14);
@@ -106,7 +136,9 @@ export function buildOutdoor(w: World) {
   };
 
   let i = 0;
-  for (let z = 43; z > 6; z -= 5.5, i++) {
+  for (let z0 = 43; z0 > 6; z0 -= 5.5, i++) {
+    // 原本落在河边的树和路灯退到岸上
+    const z = clearOfRiver(z0, i % 2 === 1 ? 1.6 : 1.3);
     const cx = pathX(z);
     if (i % 2 === 1) {
       tree(cx - 3.7 + R(-0.3, 0.3), z + R(-0.5, 0.5), R(0.95, 1.25), i % 4 === 0 ? 0 : 1);
@@ -124,7 +156,7 @@ export function buildOutdoor(w: World) {
     const z = R(ZONES.memBack - 40, 80);
     const nearPath = z > -1 && z < 62 && Math.abs(x - pathX(Math.min(Math.max(z, 0), CONFIG.path.startZ))) < 8.5;
     const inBuilding = z < 3 && z > ZONES.memBack - 4 && Math.abs(x) < (z > ZONES.memFront - 2 ? 15 : 25);
-    if (nearPath || inBuilding) continue;
+    if (nearPath || inBuilding || inRiver(z, 3.2)) continue;
     tree(x, z, R(0.9, 1.9), rnd() < 0.6 ? 0 : 1);
   }
   coneCanopy.build(scene);
@@ -135,7 +167,9 @@ export function buildOutdoor(w: World) {
     const z = R(2, 50);
     const side = rnd() < 0.5 ? -1 : 1;
     const x = pathX(z) + side * R(2.6, 9);
-    if (rnd() < 0.6) kit.ball(x, 0.25, z, R(0.4, 0.8), greens[k % 4], 0.75, R(0, 6));
+    const kind = rnd();
+    if (inRiver(z, 0.8) || nearDock(x, z)) continue;
+    if (kind < 0.6) kit.ball(x, 0.25, z, R(0.4, 0.8), greens[k % 4], 0.75, R(0, 6));
     else kit.ball(x, 0.1, z, R(0.2, 0.45), 0x77767a, 0.6, R(0, 6));
   }
   const flowerColors = [0xfff2a8, 0xffb7c5, 0xffffff, 0xc9b6ff, 0xffd08a];
@@ -143,7 +177,9 @@ export function buildOutdoor(w: World) {
     const z = R(1, 52);
     const side = rnd() < 0.5 ? -1 : 1;
     const x = pathX(z) + side * R(1.75, 10);
-    if (rnd() < 0.7) {
+    const tall = rnd() < 0.7;
+    if (inRiver(z, 0.25) || nearDock(x, z)) continue;
+    if (tall) {
       kit.cone(x, 0, z, R(0.04, 0.07), R(0.18, 0.36), rnd() < 0.5 ? 0x4c8a55 : 0x5fa064, R(0, 6));
     } else {
       kit.cone(x, 0, z, 0.02, 0.16, 0x4c8a55);
@@ -166,14 +202,15 @@ export function buildOutdoor(w: World) {
     scene.add(m);
   }
   kit.glowBox(sx, 2.2, sz + 0.06, 2.4, 0.03, 0.03, C.warm, 2.5, ry);
-  w.collide(sx, sz, 2.6, 0.9);
+  // 碰撞范围比木牌略窄，免得从出生点笔直往前走时被牌子的一角卡住
+  w.collide(sx + 0.3, sz, 2.0, 0.9);
 
   // ---------- 萤火虫 ----------
   const n = 140;
   const pos = new Float32Array(n * 3);
   const phase = new Float32Array(n);
   for (let k = 0; k < n; k++) {
-    const z = R(-2, 54);
+    const z = clearOfRiver(R(-2, 54), 0.6);
     pos.set([pathX(Math.max(z, 0)) + R(-11, 11), R(0.4, 2.8), z], k * 3);
     phase[k] = R(0, 100);
   }

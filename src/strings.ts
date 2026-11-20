@@ -6,6 +6,7 @@ export const STR = {
   loadingSteps: {
     sky: '正在点亮星空…',
     outdoor: '正在铺好石头路…',
+    river: '正在引来河水…',
     hall: '正在布置大厅…',
     corridor: '正在点亮通道…',
     memorial: '正在摆放相框…',
@@ -22,6 +23,7 @@ export const STR = {
   help: '帮助',
 
   tpGate: '入口',
+  tpRiver: '河边',
   tpHall: '大厅',
   tpMemorial: '纪念区',
   search: '找宠物',
@@ -35,6 +37,17 @@ export const STR = {
   tipPet: '点击打开',
   tipGuestbook: '翻开留言簿',
   tipReception: '接待台 · 查找宠物',
+  tipDock: '放一盏河灯',
+
+  riverHint: '河边的码头可以为它放一盏河灯',
+  riverTitle: '放一盏河灯',
+  riverDesc: '灯上会写着它的名字，顺着河水漂向远方。',
+  riverPlaceholder: '输入名字，找到想念的那个小家伙…',
+  riverFor: (name: string) => `这盏灯写着：${name}`,
+  riverChange: '换一只',
+  riverPick: '选它',
+  riverGo: '放下河灯',
+  riverToast: (name: string) => `写着${name}的河灯已经放下，目送它漂远吧`,
 
   giftFlower: '花',
   giftCandle: '蜡烛',

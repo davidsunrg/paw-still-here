@@ -34,10 +34,25 @@ interface PetRecord {
   letters: Message[];
 }
 
+/** 室外的纪念仪式：河灯、篝火烧信。只记录为谁做过、什么时候做的 */
+export type RiteKind = 'river' | 'fire';
+interface Rite {
+  petId: string;
+  time: number;
+}
+
 interface State {
   pets: Record<string, PetRecord>;
   guestbook: Message[];
   lanterns: number;
+  rites: Record<RiteKind, Rite[]>;
+}
+
+function rites(list: unknown): Rite[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((r): r is Rite => !!r && typeof (r as Rite).petId === 'string')
+    .map((r) => ({ petId: r.petId, time: Number(r.time) || 0 }));
 }
 
 const KEY = 'jinian:v2';
@@ -70,7 +85,7 @@ function migrateV1(old: Record<string, unknown>): State {
     for (let i = 0; i < count(r.candles); i++) gifts.push({ kind: 'candle', v: i % GIFT_VARIANTS.candle, time: 0 });
     pets[id] = { gifts, letters: messages(r.comments, id) };
   }
-  return { pets, guestbook: messages(old.guestbook), lanterns: count(old.lanterns) };
+  return { pets, guestbook: messages(old.guestbook), lanterns: count(old.lanterns), rites: { river: [], fire: [] } };
 }
 
 function normalize(s: Record<string, unknown>): State {
@@ -83,7 +98,13 @@ function normalize(s: Record<string, unknown>): State {
       .map((g) => ({ kind: g.kind, v: Math.abs(Math.floor(Number(g.v) || 0)), time: Number(g.time) || 0 }));
     pets[id] = { gifts, letters: messages(r.letters, id) };
   }
-  return { pets, guestbook: messages(s.guestbook), lanterns: Math.max(0, Math.floor(Number(s.lanterns) || 0)) };
+  const r = (s.rites && typeof s.rites === 'object' ? s.rites : {}) as Record<string, unknown>;
+  return {
+    pets,
+    guestbook: messages(s.guestbook),
+    lanterns: Math.max(0, Math.floor(Number(s.lanterns) || 0)),
+    rites: { river: rites(r.river), fire: rites(r.fire) },
+  };
 }
 
 function load(): State {
@@ -100,7 +121,7 @@ function load(): State {
   } catch {
     // 数据损坏或无法访问 localStorage 时，从空状态开始
   }
-  return { pets: {}, guestbook: [], lanterns: 0 };
+  return { pets: {}, guestbook: [], lanterns: 0, rites: { river: [], fire: [] } };
 }
 
 const state = load();
@@ -183,6 +204,14 @@ export const store = {
     all.sort((a, b) => b.time - a.time);
     const samples = STR.sampleGuestbook.map((text) => ({ text, time: 0 }));
     return [...all, ...samples].slice(0, limit);
+  },
+  /** 记下为某只宠物做过一次室外仪式（放河灯 / 烧信） */
+  addRite(kind: RiteKind, pet: Pet) {
+    state.rites[kind].push({ petId: pet.id, time: Date.now() });
+    save();
+  },
+  riteCount(kind: RiteKind, pet: Pet) {
+    return state.rites[kind].filter((r) => r.petId === pet.id).length;
   },
   addLantern() {
     state.lanterns++;
