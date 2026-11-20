@@ -18,7 +18,7 @@ export interface Tree {
 
 /**
  * 纪念树：石砌的圆形底座、白色的树干、发光的树冠和树冠下面挂着的木牌。
- * 每块木牌是一封信；朝大门的一侧立着一个小木架，上面摊着一本本子，在这里写信。
+ * 每块木牌是一封信，点树可以读。
  */
 export function buildTree(w: World): Tree {
   const { kit, scene } = w;
@@ -60,70 +60,99 @@ export function buildTree(w: World): Tree {
     }
   }
   canopy.build(scene);
-  // 树冠下面挂着的木牌：一根细绳，下面一块小木牌，木牌底下坠一颗小木珠。牌子上不写字，只是一个意象
+  // 树冠下面挂着的木牌：一根细绳，下面一块小木牌，木牌底下坠一颗小木珠。牌子上不写字，只是一个意象。
+  // 每块都绕着绳子顶上的挂点轻轻摆，节奏各不相同
   const P = CONFIG.tree.plaques;
+  const S = P.sway;
   const woods = [C.wood, C.woodLight, 0x9a7650];
+  interface Hang { x: number; top: number; z: number; len: number; ry: number; ph: number; sp: number; amp: number }
+  const hang = (x: number, top: number, z: number, y: number, ry: number): Hang => ({
+    x, top, z, len: top - y, ry,
+    ph: R(0, Math.PI * 2),
+    sp: (Math.PI * 2) / R(S.period[0], S.period[1]),
+    amp: S.angle * R(0.6, 1),
+  });
+  /** 这一刻的姿态：前后、左右各摆一点，再慢慢拧一点。两个方向的快慢不一样，看起来不会像钟摆 */
+  const pose = (o: THREE.Object3D, h: Hang, t: number) => {
+    o.position.set(h.x, h.top, h.z);
+    o.rotation.set(
+      Math.sin(t * h.sp + h.ph) * h.amp,
+      h.ry + Math.sin(t * h.sp * 0.37 + h.ph * 2) * S.twist,
+      Math.sin(t * h.sp * 0.83 + h.ph * 1.7) * h.amp * 0.7,
+      'XZY',
+    );
+  };
+  const hangs: Hang[] = [];
   for (let k = 0; k < P.count; k++) {
     const a = R(0, Math.PI * 2);
     const r = R(P.ring[0], P.ring[1]);
     const top = R(3.7, 4.3);
     const y = R(P.y[0], P.y[1]);
-    const x = tx + Math.cos(a) * r;
-    const z = tz + Math.sin(a) * r;
-    const ry = R(0, Math.PI);
-    kit.box(x, (top + y) / 2 + P.h / 4, z, 0.012, top - y - P.h / 2, 0.012, 0x3a2c22);
-    kit.box(x, y, z, P.w, P.h, P.t, woods[k % woods.length], ry);
-    kit.ball(x, y - P.h / 2 - 0.035, z, 0.022, C.woodDark);
+    hangs.push(hang(tx + Math.cos(a) * r, top, tz + Math.sin(a) * r, y, R(0, Math.PI)));
   }
+  const unit = new THREE.BoxGeometry(1, 1, 1);
+  const cordMat = new THREE.MeshStandardMaterial({ color: 0x3a2c22, roughness: 0.9 });
+  const cords = new THREE.InstancedMesh(unit, cordMat, P.count);
+  const boards = new THREE.InstancedMesh(unit, new THREE.MeshStandardMaterial({ roughness: 0.85 }), P.count);
+  const beads = new THREE.InstancedMesh(
+    new THREE.IcosahedronGeometry(0.022, 1),
+    new THREE.MeshStandardMaterial({ color: C.woodDark, roughness: 0.85 }),
+    P.count,
+  );
+  const tint = new THREE.Color();
+  hangs.forEach((_, k) => boards.setColorAt(k, tint.set(woods[k % woods.length])));
+  scene.add(cords, boards, beads);
+  const pivot = new THREE.Object3D();
+  const part = new THREE.Matrix4();
+  const out = new THREE.Matrix4();
+  const place = (t: number) => {
+    hangs.forEach((h, k) => {
+      pose(pivot, h, t);
+      pivot.updateMatrix();
+      const cl = h.len - P.h / 2;
+      cords.setMatrixAt(k, out.multiplyMatrices(pivot.matrix, part.makeScale(0.012, cl, 0.012).setPosition(0, -cl / 2, 0)));
+      boards.setMatrixAt(k, out.multiplyMatrices(pivot.matrix, part.makeScale(P.w, P.h, P.t).setPosition(0, -h.len, 0)));
+      beads.setMatrixAt(k, out.multiplyMatrices(pivot.matrix, part.makeTranslation(0, -h.len - P.h / 2 - 0.035, 0)));
+    });
+    for (const m of [cords, boards, beads]) m.instanceMatrix.needsUpdate = true;
+  };
+  place(0);
+  for (const m of [cords, boards, beads]) m.computeBoundingSphere();
+
   // 访客自己的木牌：挂在朝大门的一侧、低一点的地方，颜色浅，底下坠一颗亮着的小珠。先都做好藏着
   const ownWood = new THREE.MeshStandardMaterial({ color: 0xe6c79a, emissive: 0xff9d5a, emissiveIntensity: 0.22, roughness: 0.8 });
-  const cordMat = new THREE.MeshStandardMaterial({ color: 0x3a2c22, roughness: 0.9 });
   const beadMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(C.warm).multiplyScalar(2.6) });
   const plaqueGeo = new THREE.BoxGeometry(P.w, P.h, P.t);
   const beadGeo = new THREE.IcosahedronGeometry(0.026, 1);
-  const own: THREE.Group[] = [];
+  const own: Array<{ g: THREE.Group; h: Hang }> = [];
   for (let k = 0; k < P.own; k++) {
     // 从正对大门的方向往两边排开
     const a = Math.PI / 2 + (k % 2 ? 1 : -1) * (0.18 + Math.floor(k / 2) * 0.26) + R(-0.05, 0.05);
     const r = R(1.9, 2.75);
     const top = R(3.7, 4.2);
     const y = R(P.y[0] - 0.15, P.y[0] + 0.35);
+    const h = hang(tx + Math.cos(a) * r, top, tz + Math.sin(a) * r, y, R(-0.5, 0.5));
     const g = new THREE.Group();
-    g.position.set(tx + Math.cos(a) * r, y, tz + Math.sin(a) * r);
-    g.rotation.y = R(-0.5, 0.5);
-    const cord = new THREE.Mesh(new THREE.BoxGeometry(0.012, top - y - P.h / 2, 0.012), cordMat);
-    cord.position.y = (top - y) / 2 + P.h / 4;
+    const cl = h.len - P.h / 2;
+    const cord = new THREE.Mesh(new THREE.BoxGeometry(0.012, cl, 0.012), cordMat);
+    cord.position.y = -cl / 2;
+    const board = new THREE.Mesh(plaqueGeo, ownWood);
+    board.position.y = -h.len;
     const bead = new THREE.Mesh(beadGeo, beadMat);
-    bead.position.y = -P.h / 2 - 0.04;
-    g.add(cord, new THREE.Mesh(plaqueGeo, ownWood), bead);
+    bead.position.y = -h.len - P.h / 2 - 0.04;
+    g.add(cord, board, bead);
+    pose(g, h, 0);
     g.visible = false;
     scene.add(g);
-    own.push(g);
+    own.push({ g, h });
   }
+  // 离树远了看不清摆动，就不算了
+  w.updaters.push((_dt, t, who) => {
+    if (Math.hypot(who.x - tx, who.z - tz) > S.range) return;
+    place(t);
+    for (const o of own) if (o.g.visible) pose(o.g, o.h, t);
+  });
 
-  // 树前写信的小木架：两条腿，上面一块朝着来人倾斜的板，板上摊着一本本子
-  const D = CONFIG.tree.desk;
-  const dz = tz + D.z;
-  for (const s of [-1, 1]) kit.box(tx + s * (D.w / 2 - 0.06), D.h / 2 - 0.04, dz, 0.06, D.h - 0.08, 0.3, C.woodDark);
-  kit.box(tx, 0.34, dz, D.w - 0.12, 0.05, 0.05, C.woodDark);
-  const desk = new THREE.Group();
-  desk.position.set(tx, D.h, dz);
-  desk.rotation.x = D.tilt;
-  const part = (sx: number, sy: number, sz: number, x: number, y: number, z: number, color: number, ry = 0) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
-    m.position.set(x, y, z);
-    m.rotation.y = ry;
-    m.castShadow = true;
-    desk.add(m);
-  };
-  part(D.w, 0.04, D.d, 0, 0, 0, C.wood);
-  part(D.w, 0.05, 0.03, 0, 0.03, D.d / 2 - 0.015, C.woodLight);
-  part(0.6, 0.02, 0.37, 0, 0.03, -0.02, 0x7b3f3f);
-  part(0.27, 0.03, 0.34, -0.14, 0.045, -0.02, 0xfaf4e6, 0.04);
-  part(0.27, 0.03, 0.34, 0.14, 0.045, -0.02, 0xf3ecdb, -0.04);
-  scene.add(desk);
-  w.collide(tx, dz, D.w, D.d);
-  w.proxy(tx, D.h + 0.1, dz, D.w, 0.5, D.d + 0.1, STR.tipGuestbook, () => w.hooks.guestbook());
   // 点树干或者木牌那一圈：读树上的信
   w.proxy(tx, 2.2, tz, 1.4, 3.4, 1.4, STR.tipTree, () => w.hooks.tree());
 
@@ -138,7 +167,7 @@ export function buildTree(w: World): Tree {
 
   return {
     setOwn(n) {
-      own.forEach((g, i) => (g.visible = i < n));
+      own.forEach((o, i) => (o.g.visible = i < n));
     },
   };
 }

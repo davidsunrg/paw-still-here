@@ -69,9 +69,8 @@ export const en = {
   tipPet: 'Visit their courtyard',
   tipLetters: 'Read the letters written to them',
   tipBench: 'Sit for a while',
-  /** 纪念树：点树、点树前那本摊开的本子 */
+  /** 纪念树：点树 */
   tipTree: 'Read the letters on the tree',
-  tipGuestbook: 'Write a letter',
   tipReception: 'Front desk · Find a pet',
   tipDock: 'Float a river lantern',
   tipLantern: 'Release a sky lantern',

@@ -80,8 +80,8 @@ export class World {
   readonly slots = new Map<string, SlotInfo>();
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
-  /** 由 main 注入：点击树前的本子 / 纪念树 / 接待台 / 影厅入口 / 河的洞口 / 沙发时触发；sit 收到的是这张沙发上的座位 */
-  hooks = { guestbook: () => {}, tree: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, cinema: () => {}, cave: () => {}, gate: () => {}, board: (_seat: number) => {}, sit: (_seats: Seat[]) => {} };
+  /** 由 main 注入：点击纪念树 / 接待台 / 影厅入口 / 河的洞口 / 沙发时触发；sit 收到的是这张沙发上的座位 */
+  hooks = { tree: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, cinema: () => {}, cave: () => {}, gate: () => {}, board: (_seat: number) => {}, sit: (_seats: Seat[]) => {} };
   /** 访客脚下的地面高度：桥面高出地面，影厅里的座位一排比一排高 */
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;

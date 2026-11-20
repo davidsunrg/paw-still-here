@@ -158,7 +158,6 @@ const ui = new UI({
   },
 });
 
-world.hooks.guestbook = () => ui.openLetters(null, true);
 world.hooks.tree = () => ui.openLetters();
 world.hooks.reception = () => ui.openSearch();
 world.hooks.river = () => ui.openRite('river');
