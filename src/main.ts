@@ -14,6 +14,7 @@ import { Player } from './systems/Player';
 import { UI } from './ui/UI';
 import './ui/style.css';
 import type { PhotoEntry } from './world/Batches';
+import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
 import { DOCK_SPOT, routeToDock } from './world/River';
@@ -46,6 +47,8 @@ const world = new World(scene);
 const player = new Player(camera, canvas, world.colliders);
 const audio = new AudioSystem();
 const guide = new Guide(scene);
+const avatar = new AvatarBatch(scene, 1);
+const pose = defaultPose(CONFIG.player.color);
 let interaction: Interaction | null = null;
 let shrine: Shrine | null = null;
 let entered = false;
@@ -66,11 +69,8 @@ const ui = new UI({
     else player.teleport(0, ZONES.memFront - 2.5, 0);
   },
   onLantern(text) {
-    const from = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw))
-      .multiplyScalar(2.4)
-      .add(player.pos)
-      .setY(1.25);
-    world.sky.launch(from, text);
+    // 孔明灯从小人面前升起
+    world.sky.launch(inFront(1.3, 1.2), text);
     store.addLantern();
     audio.chime(true);
   },
@@ -109,12 +109,8 @@ const ui = new UI({
   },
   onBurnLetter(pet) {
     store.addRite('fire', pet);
-    // 信从访客胸前的位置飞向火堆
-    const from = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw))
-      .multiplyScalar(0.55)
-      .add(player.pos)
-      .setY(1.25);
-    world.bonfire.burn(from);
+    // 信从小人手里飞向火堆
+    world.bonfire.burn(inFront(0.35, 1.0));
     audio.chime(false);
   },
   onRiverLantern(pet) {
@@ -152,18 +148,21 @@ world.hooks.reception = () => ui.openSearch();
 world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
 
-/** 站到码头上，面向河面 */
-function toDock() {
-  seen.river = true;
-  player.teleport(DOCK_SPOT.x, DOCK_SPOT.z, DOCK_SPOT.yaw);
-  player.pitch = DOCK_SPOT.pitch;
+/** 小人面前 dist 米、离地 y 米的位置 */
+function inFront(dist: number, y: number) {
+  return player.forward().multiplyScalar(dist).add(player.pos).setY(player.pos.y + y);
 }
 
-/** 站到篝火旁，面向火堆 */
+/** 小人站到码头上，面向河面；镜头在它身后斜上方 */
+function toDock() {
+  seen.river = true;
+  player.teleport(DOCK_SPOT.x, DOCK_SPOT.z, DOCK_SPOT.yaw, DOCK_SPOT.pitch, DOCK_SPOT.facing);
+}
+
+/** 小人站到篝火旁，面向火堆 */
 function toFire() {
   seen.fire = true;
-  player.teleport(FIRE_SPOT.x, FIRE_SPOT.z, FIRE_SPOT.yaw);
-  player.pitch = FIRE_SPOT.pitch;
+  player.teleport(FIRE_SPOT.x, FIRE_SPOT.z, FIRE_SPOT.yaw, FIRE_SPOT.pitch, FIRE_SPOT.facing);
 }
 
 /** 第一次沿步道走近室外的纪念地点时，用一行小字和地上的光点告诉访客这里可以做什么 */
@@ -199,12 +198,12 @@ function shrineDistance() {
   return Math.max(byHeight, byWidth) + d / 2;
 }
 
-/** 进入单宠物视角：这一格展开成小龛，镜头推到它正前方 */
+/** 进入单宠物视角：这一格展开成小龛，镜头推到它正前方，小人走到旁边站好 */
 function openPet(entry: PhotoEntry) {
   if (!shrine) return;
   ui.openDetail(entry.pet);
   shrine.open(entry);
-  player.focus(shrine.center, entry.normal, shrineDistance());
+  player.refocus(shrine.center, entry.normal, shrineDistance());
   interaction?.setHighlight(null);
 }
 
@@ -282,7 +281,7 @@ function resize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   // 窗口变化后重新计算镜头距离，保证小龛仍然完整可见
-  if (shrine?.isOpen && shrine.entry) player.focus(shrine.center, shrine.entry.normal, shrineDistance());
+  if (shrine?.isOpen && shrine.entry) player.focusOn(shrine.center, shrine.entry.normal, shrineDistance());
 }
 window.addEventListener('resize', resize);
 
@@ -295,7 +294,18 @@ function frame() {
   const t = clock.elapsedTime;
 
   player.update(dt);
-  world.update(dt, t, camera, pixelRatio());
+  pose.x = player.pos.x;
+  pose.y = player.pos.y;
+  pose.z = player.pos.z;
+  pose.facing = player.facing;
+  pose.phase = player.phase;
+  pose.stride = player.stride;
+  // 站在格子前时微微低头
+  pose.bow += ((player.focused && player.stride < 0.1 ? 0.3 : 0) - pose.bow) * (1 - Math.exp(-dt * 4));
+  avatar.set(0, pose, t);
+  avatar.opacity = player.fade;
+  avatar.commit();
+  world.update(dt, t, camera, player.pos, pixelRatio());
   guide.update(t, player.pos);
   interaction?.update(t);
   shrine?.update(dt);
@@ -326,7 +336,7 @@ async function boot() {
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     run();
   }
-  interaction = new Interaction(camera, world);
+  interaction = new Interaction(camera, world, player.pos);
   shrine = new Shrine(world);
   applyQuality();
   ui.setProgress(1, '');
@@ -336,7 +346,7 @@ async function boot() {
   ui.ready();
 
   if (import.meta.env.DEV) {
-    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, shrine } });
+    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, shrine, avatar } });
   }
 }
 

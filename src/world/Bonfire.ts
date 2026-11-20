@@ -11,7 +11,8 @@ const FX = FIRE_X;
 const FZ = BF.z;
 
 /** 站在篝火旁写信的位置和朝向：在靠步道的一侧，面向火堆、略微低头 */
-export const FIRE_SPOT = { x: FX + 2.5, z: FZ, yaw: Math.PI / 2, pitch: -0.2 };
+/** 小人站在火堆旁、面向火；镜头从它的斜后方看过去，火不会被小人挡住 */
+export const FIRE_SPOT = { x: FX + 1.6, z: FZ, facing: Math.PI / 2, yaw: Math.PI / 2 - 0.6, pitch: -0.32 };
 
 /** 信纸从手里飞进火堆的时长（秒），之后才开始燃烧 */
 const FLY_TIME = 1.1;
@@ -235,7 +236,7 @@ export function buildBonfire(w: World): Bonfire {
       const ease = k * k * (3 - 2 * k);
       paper.position.lerpVectors(from, into, ease);
       paper.position.y += Math.sin(Math.PI * ease) * 0.45;
-      paper.rotation.set(-0.5 - ease * 0.6, FIRE_SPOT.yaw + ease * 1.2, Math.sin(ease * 5) * 0.2);
+      paper.rotation.set(-0.5 - ease * 0.6, FIRE_SPOT.facing + ease * 1.2, Math.sin(ease * 5) * 0.2);
       paper.scale.setScalar(1);
       paperMat.color.copy(CREAM);
     } else {

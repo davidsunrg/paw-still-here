@@ -42,6 +42,8 @@ export class Interaction {
   constructor(
     private camera: THREE.Camera,
     private world: World,
+    /** 小人的位置：能不能点到，看的是小人离得够不够近，而不是镜头 */
+    private who: THREE.Vector3,
   ) {
     const [c, ctx] = makeCanvas(128, 128);
     ctx.strokeStyle = '#fff';
@@ -67,9 +69,10 @@ export class Interaction {
   pick(clientX: number, clientY: number): Hit | null {
     this.ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
     this.ray.setFromCamera(this.ndc, this.camera);
-    this.ray.far = 16;
+    this.ray.far = 30;
     const hit = this.ray.intersectObjects(this.targets, false)[0];
     if (!hit) return null;
+    const reach = Math.hypot(hit.point.x - this.who.x, hit.point.z - this.who.z);
 
     // 视线被墙或柜子挡住时不算
     const o = this.ray.ray.origin;
@@ -82,11 +85,11 @@ export class Interaction {
 
     if (hit.object === this.world.photos.mesh) {
       const entry = this.world.photos.entryOfFace(hit.faceIndex ?? 0);
-      if (!entry) return null;
+      if (!entry || reach > CONFIG.player.reachPhoto) return null;
       return { kind: 'pet', entry, label: `${entry.pet.name} · ${STR.tipPet}` };
     }
     const item = this.world.interactables.find((i) => i.object === hit.object);
-    if (!item || hit.distance > 9) return null;
+    if (!item || reach > CONFIG.player.reachObject) return null;
     return { kind: 'object', item, label: item.label };
   }
 

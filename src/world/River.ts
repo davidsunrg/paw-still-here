@@ -14,8 +14,11 @@ const DOCK_END = Z_S - RV.dock.len;
 /** 河灯放下水的位置 */
 const LAUNCH = new THREE.Vector3(DOCK_X, RV.level, DOCK_END - 0.55);
 
-/** 站在码头上放河灯的位置和朝向：斜对着下游、略微低头，放下的河灯会从眼前漂向远处 */
-export const DOCK_SPOT = { x: DOCK_X - 0.3, z: DOCK_END + 0.8, yaw: -0.6, pitch: -0.42 };
+/**
+ * 小人站在码头上放河灯的位置：facing 是小人的朝向（斜对着下游），
+ * yaw / pitch 是镜头的朝向——从岸上另一侧斜着看过去，避开码头入口的灯杆，放下的河灯会从画面里漂向远处。
+ */
+export const DOCK_SPOT = { x: DOCK_X - 0.3, z: DOCK_END + 0.8, facing: -0.6, yaw: 0.3, pitch: -0.36 };
 
 /** 桥面在 z 处的高度：两端平滑地接到地面，中间拱起 */
 function deckHeight(z: number) {
@@ -345,7 +348,7 @@ export function buildRiver(w: World): River {
   kit.glowBox(px + 0.5, 2.2, pz, 0.2, 0.28, 0.2, C.warm, 2.8);
   kit.cone(px + 0.5, 2.34, pz, 0.19, 0.12, 0x2b2b33);
   w.collide(px, pz, 0.3, 0.3);
-  w.pointLight(DOCK_X, 2.1, Z_S - 0.4, 13, 12);
+  w.pointLight(DOCK_X, 2.8, Z_S - 0.4, 15, 12);
   // 码头尽头两根木桩上的小灯
   for (const sx of [-1, 1]) kit.glowBall(DOCK_X + sx * (D.w / 2 - 0.06), deckY + 0.2, DOCK_END + 0.1, 0.045, C.warm, 1.6);
   kit.pool(DOCK_X, DOCK_END - 1.0, 4.5, C.warm, 0.2, RV.level + 0.008);

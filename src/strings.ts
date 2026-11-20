@@ -14,8 +14,8 @@ export const STR = {
     finish: '马上就好…',
   },
   enter: '进入纪念馆',
-  hintDesktop: 'WASD / 方向键移动 · 按住鼠标拖动转视角 · Shift 加速 · 点击相框打开格子',
-  hintTouch: '左下摇杆移动 · 滑动屏幕转视角 · 点击相框打开格子',
+  hintDesktop: 'WASD / 方向键移动 · 按住鼠标拖动转视角 · 滚轮缩放 · Shift 加速 · 点击相框打开格子',
+  hintTouch: '左下摇杆移动 · 滑动屏幕转视角 · 双指缩放 · 点击相框打开格子',
 
   soundOn: '声音：开',
   soundOff: '声音：关',

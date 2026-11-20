@@ -205,17 +205,17 @@ export class World {
     return pts;
   }
 
-  /** 让月光阴影范围跟着玩家走 */
-  update(dt: number, t: number, camera: THREE.Camera, pixelRatio: number) {
+  /** who 是小人的位置：月光阴影范围、点亮哪几盏灯都跟着它走 */
+  update(dt: number, t: number, camera: THREE.Camera, who: THREE.Vector3, pixelRatio: number) {
     this.uTime.value = t;
     this.kit.update(t);
     tickFlames(t);
     this.sky.update(dt, t, camera, pixelRatio);
-    const px = Math.round(camera.position.x);
-    const pz = Math.round(camera.position.z);
+    const px = Math.round(who.x);
+    const pz = Math.round(who.z);
     this.moonLight.target.position.set(px, 0, pz);
     this.moonLight.position.set(px, 0, pz).addScaledVector(MOON_DIR, 80);
-    this.updateLights(camera.position);
-    for (const u of this.updaters) u(dt, t, camera.position);
+    this.updateLights(who);
+    for (const u of this.updaters) u(dt, t, who);
   }
 }

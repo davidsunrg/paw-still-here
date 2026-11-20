@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import type { Collider } from '../world/World';
 
 const TAU = Math.PI * 2;
+const CAM = CONFIG.camera;
 
 function angleLerp(a: number, b: number, k: number) {
   let d = (b - a) % TAU;
@@ -11,11 +12,61 @@ function angleLerp(a: number, b: number, k: number) {
   return a + d * k;
 }
 
-/** 第一人称漫步：键盘 / 摇杆移动，拖拽转视角，简单的 AABB 碰撞 */
+/**
+ * 从 (x0,z0) 出发的线段在多远处（0–1）碰到包围盒；碰不到返回 1。
+ * 起点已经在盒子里时返回 0。
+ */
+function segmentEnter(c: Collider, pad: number, x0: number, z0: number, x1: number, z1: number) {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const tests = [
+    [-dx, x0 - (c.minX - pad)],
+    [dx, c.maxX + pad - x0],
+    [-dz, z0 - (c.minZ - pad)],
+    [dz, c.maxZ + pad - z0],
+  ];
+  for (const [p, q] of tests) {
+    if (p === 0) {
+      if (q < 0) return 1;
+    } else {
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return 1;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return 1;
+        if (r < t1) t1 = r;
+      }
+    }
+  }
+  return t0;
+}
+
+interface Focus {
+  /** 镜头的位置和朝向 */
+  cam: THREE.Vector3;
+  yaw: number;
+  /** 小人站到哪里、面向哪里 */
+  stand: THREE.Vector3;
+  look: THREE.Vector3;
+}
+
+/**
+ * 第三人称漫步：键盘 / 摇杆控制小人移动，拖拽让镜头绕着小人转，滚轮 / 双指缩放。
+ * pos 是小人脚下的位置；yaw / pitch 是镜头的朝向，facing 是小人自己的朝向。
+ */
 export class Player {
   readonly pos = new THREE.Vector3();
   yaw = 0;
-  pitch = 0;
+  pitch = CAM.pitch;
+  facing = 0;
+  /** 步伐相位和幅度，交给小人模型做走路动画 */
+  phase = 0;
+  stride = 0;
+  /** 镜头贴近小人时，小人应有的不透明度 */
+  fade = 1;
   /** 打开面板时暂停移动 */
   enabled = true;
   /** 摇杆输入：x 向右，y 向前 */
@@ -26,15 +77,23 @@ export class Player {
   onTap: (x: number, y: number) => void = () => {};
 
   private keys = new Set<string>();
-  private camY = CONFIG.player.eye;
-  private bob = 0;
-  /** back 为 true 表示正在从聚焦状态退回原来的位置 */
-  private focusGoal: { pos: THREE.Vector3; yaw: number; pitch: number; back: boolean } | null = null;
-  /** 聚焦之前的位置和朝向，退出时回到这里 */
-  private saved: { pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
+  /** 镜头想要的距离，和避开遮挡之后实际的距离 */
+  private dist = CAM.dist;
+  private boom = CAM.dist;
+  /** 单宠物特写：focus 不为空时镜头推到格子前，blend 是特写镜头占的比重 */
+  private focus: Focus | null = null;
+  private lastFocus: Focus | null = null;
+  private blend = 0;
+  private pointers = new Map<number, { x: number; y: number }>();
   private lookId = -1;
-  private last = { x: 0, y: 0 };
-  private down = { x: 0, y: 0, t: 0 };
+  private pinch = 0;
+  private down = { x: 0, y: 0, t: 0, multi: false };
+
+  private pivot = new THREE.Vector3();
+  private orbit = new THREE.Vector3();
+  private qa = new THREE.Quaternion();
+  private qb = new THREE.Quaternion();
+  private euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -51,86 +110,130 @@ export class Player {
     window.addEventListener('blur', () => this.keys.clear());
 
     dom.addEventListener('pointerdown', (e) => {
-      if (this.lookId !== -1) return;
-      this.lookId = e.pointerId;
-      this.last = { x: e.clientX, y: e.clientY };
-      this.down = { x: e.clientX, y: e.clientY, t: performance.now() };
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.pointers.size === 1) {
+        this.lookId = e.pointerId;
+        this.down = { x: e.clientX, y: e.clientY, t: performance.now(), multi: false };
+      } else {
+        this.down.multi = true;
+        this.pinch = this.pinchSpan();
+      }
       dom.setPointerCapture(e.pointerId);
     });
     dom.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== this.lookId) return;
-      const dx = e.clientX - this.last.x;
-      const dy = e.clientY - this.last.y;
-      this.last = { x: e.clientX, y: e.clientY };
-      if (!this.enabled) return;
-      if (this.focusGoal) {
-        // 退回途中拖动视角，就把控制权交还给访客
-        if (!this.focusGoal.back) return;
-        this.focusGoal = null;
+      const last = this.pointers.get(e.pointerId);
+      if (!last) return;
+      const dx = e.clientX - last.x;
+      const dy = e.clientY - last.y;
+      last.x = e.clientX;
+      last.y = e.clientY;
+      if (!this.enabled || this.focus) return;
+      if (this.pointers.size >= 2) {
+        // 双指缩放
+        const span = this.pinchSpan();
+        if (this.pinch > 0 && span > 0) this.zoom(this.pinch / span);
+        this.pinch = span;
+        return;
       }
+      if (e.pointerId !== this.lookId) return;
       const k = 0.0042;
       this.yaw += dx * k;
-      this.pitch = THREE.MathUtils.clamp(this.pitch + dy * k, -1.2, 1.35);
+      this.pitch = THREE.MathUtils.clamp(this.pitch + dy * k, CAM.pitchMin, CAM.pitchMax);
     });
     const end = (e: PointerEvent) => {
+      if (!this.pointers.delete(e.pointerId)) return;
       if (e.pointerId !== this.lookId) return;
       this.lookId = -1;
       const moved = Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y);
-      if (e.type === 'pointerup' && moved < 7 && performance.now() - this.down.t < 500) {
+      if (e.type === 'pointerup' && !this.down.multi && moved < 7 && performance.now() - this.down.t < 500) {
         this.onTap(e.clientX, e.clientY);
       }
     };
     dom.addEventListener('pointerup', end);
     dom.addEventListener('pointercancel', end);
+    dom.addEventListener(
+      'wheel',
+      (e) => {
+        if (this.enabled && !this.focus) this.zoom(Math.exp(THREE.MathUtils.clamp(e.deltaY, -120, 120) * 0.0016));
+      },
+      { passive: true },
+    );
+  }
+
+  private pinchSpan() {
+    const [a, b] = [...this.pointers.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  }
+
+  private zoom(factor: number) {
+    this.dist = THREE.MathUtils.clamp(this.dist * factor, CAM.min, CAM.max);
   }
 
   get dragging() {
-    return this.lookId !== -1;
+    return this.pointers.size > 0;
   }
 
   get focused() {
-    return this.focusGoal !== null && !this.focusGoal.back;
+    return this.focus !== null;
   }
 
-  teleport(x: number, z: number, yaw: number) {
-    this.focusGoal = null;
-    this.saved = null;
+  /** 小人面朝的方向（水平单位向量） */
+  forward(out = new THREE.Vector3()) {
+    return out.set(-Math.sin(this.facing), 0, -Math.cos(this.facing));
+  }
+
+  /** 小人脚下的高度 */
+  get ground() {
+    return this.heightAt(this.pos.x, this.pos.z);
+  }
+
+  /** 把小人放到某处；yaw / pitch 是镜头的朝向，小人默认面向同一个方向 */
+  teleport(x: number, z: number, yaw: number, pitch = CAM.pitch, facing = yaw) {
+    this.focus = this.lastFocus = null;
+    this.blend = 0;
     this.pos.set(x, 0, z);
     this.yaw = yaw;
-    this.pitch = 0;
+    this.facing = facing;
+    this.pitch = pitch;
+    this.boom = this.dist;
+    this.stride = 0;
   }
 
-  /** 把镜头平滑推到某个目标正前方 dist 米处；第一次聚焦时记下当前位置，供退出时返回 */
-  focus(target: THREE.Vector3, normal: THREE.Vector3, dist: number) {
-    if (!this.focusGoal) this.saved = { pos: this.pos.clone(), yaw: this.yaw, pitch: this.pitch };
-    this.focusGoal = {
-      pos: target.clone().addScaledVector(normal, dist),
-      yaw: Math.atan2(normal.x, normal.z),
-      pitch: 0,
-      back: false,
-    };
-    this.focusGoal.pos.y = Math.max(0.95, target.y);
-  }
-
-  /** 结束聚焦，镜头退回聚焦前的位置和朝向 */
-  release() {
-    if (!this.focusGoal || this.focusGoal.back) return;
-    const s = this.saved;
-    this.saved = null;
-    if (!s) {
-      this.focusGoal = null;
-      return;
+  /**
+   * 单宠物特写：镜头平滑推到目标正前方 dist 米处，小人走到目标旁边站好、面向它。
+   */
+  focusOn(target: THREE.Vector3, normal: THREE.Vector3, dist: number) {
+    const yaw = Math.atan2(normal.x, normal.z);
+    const cam = target.clone().addScaledVector(normal, dist);
+    cam.y = Math.max(0.95, target.y);
+    // 站在目标的一侧，不挡住镜头；左边站不下就站右边，都不行就留在原地
+    const { standOff, standSide } = CAM;
+    const stand = this.focus?.stand ?? this.pos.clone();
+    if (!this.focus) {
+      for (const side of [-1, 1]) {
+        const x = target.x + normal.x * standOff + Math.cos(yaw) * standSide * side;
+        const z = target.z + normal.z * standOff - Math.sin(yaw) * standSide * side;
+        if (this.blocked(x, z)) continue;
+        stand.set(x, 0, z);
+        break;
+      }
     }
-    const y = CONFIG.player.eye + this.heightAt(s.pos.x, s.pos.z);
-    this.focusGoal = { pos: s.pos.clone().setY(y), yaw: s.yaw, pitch: s.pitch, back: true };
+    this.focus = { cam, yaw, stand, look: target.clone() };
   }
 
-  private get wantsToMove() {
-    const K = this.keys;
-    return (
-      this.stick.lengthSq() > 0.0025 ||
-      ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown'].some((c) => K.has(c))
-    );
+  /** 换到同一组里的另一只宠物时，让小人重新选站的位置 */
+  refocus(target: THREE.Vector3, normal: THREE.Vector3, dist: number) {
+    this.focus = null;
+    this.focusOn(target, normal, dist);
+  }
+
+  /** 结束特写：小人留在原地，镜头回到它身后 */
+  release() {
+    if (!this.focus) return;
+    this.lastFocus = this.focus;
+    this.yaw = this.focus.yaw;
+    this.pitch = CAM.pitch;
+    this.focus = null;
   }
 
   private blocked(x: number, z: number) {
@@ -141,57 +244,110 @@ export class Player {
     return Math.abs(x) > 90 || z > 78 || z < -130;
   }
 
-  update(dt: number) {
-    const { eye, walk, run } = CONFIG.player;
-    let moving = false;
+  /** 朝某个方向迈一步；返回这一步的速度 */
+  private step(dx: number, dz: number, speed: number, dt: number, collide: boolean) {
+    const mx = dx * speed * dt;
+    const mz = dz * speed * dt;
+    if (!collide || !this.blocked(this.pos.x + mx, this.pos.z)) this.pos.x += mx;
+    if (!collide || !this.blocked(this.pos.x, this.pos.z + mz)) this.pos.z += mz;
+    this.facing = angleLerp(this.facing, Math.atan2(-dx, -dz), 1 - Math.exp(-dt * CONFIG.player.turn));
+    this.phase += dt * 9.5 * Math.sqrt(speed / CONFIG.player.walk);
+    return speed;
+  }
 
-    const goal = this.focusGoal;
-    if (goal?.back) {
-      // 已经回到原位，或者访客开始自己走动，就结束退回
-      const near = Math.hypot(goal.pos.x - this.pos.x, goal.pos.z - this.pos.z) < 0.03;
-      if (near || (this.enabled && this.wantsToMove)) this.focusGoal = null;
-    }
-
-    if (this.focusGoal) {
-      const g = this.focusGoal;
-      const k = 1 - Math.exp(-dt * 4.5);
-      this.pos.x += (g.pos.x - this.pos.x) * k;
-      this.pos.z += (g.pos.z - this.pos.z) * k;
-      this.camY += (g.pos.y - this.camY) * k;
-      this.yaw = angleLerp(this.yaw, g.yaw, k);
-      this.pitch += (g.pitch - this.pitch) * k;
-    } else {
-      if (this.enabled) {
-        const K = this.keys;
-        let f = this.stick.y;
-        let s = this.stick.x;
-        if (K.has('KeyW') || K.has('ArrowUp')) f += 1;
-        if (K.has('KeyS') || K.has('ArrowDown')) f -= 1;
-        if (K.has('KeyD')) s += 1;
-        if (K.has('KeyA')) s -= 1;
-        if (K.has('ArrowLeft') || K.has('KeyQ')) this.yaw += dt * 1.9;
-        if (K.has('ArrowRight') || K.has('KeyE')) this.yaw -= dt * 1.9;
-        const len = Math.hypot(f, s);
-        if (len > 0.05) {
-          const speed = (K.has('ShiftLeft') || K.has('ShiftRight') ? run : walk) * Math.min(1, len);
-          f /= len;
-          s /= len;
-          const sin = Math.sin(this.yaw);
-          const cos = Math.cos(this.yaw);
-          const dx = (-sin * f + cos * s) * speed * dt;
-          const dz = (-cos * f - sin * s) * speed * dt;
-          if (!this.blocked(this.pos.x + dx, this.pos.z)) this.pos.x += dx;
-          if (!this.blocked(this.pos.x, this.pos.z + dz)) this.pos.z += dz;
-          moving = true;
-          this.bob += dt * speed * 1.9;
-        }
+  private move(dt: number) {
+    const { walk, run } = CONFIG.player;
+    const f = this.focus;
+    if (f) {
+      // 走到格子旁边站好，然后转身面向它
+      const dx = f.stand.x - this.pos.x;
+      const dz = f.stand.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 0.04) {
+        const speed = Math.min(Math.max(walk, d * 1.6), d / dt);
+        return this.step(dx / d, dz / d, speed, dt, false);
       }
-      const ground = this.heightAt(this.pos.x, this.pos.z);
-      this.camY += (eye + ground - this.camY) * (1 - Math.exp(-dt * 5));
+      const to = Math.atan2(-(f.look.x - this.pos.x), -(f.look.z - this.pos.z));
+      this.facing = angleLerp(this.facing, to, 1 - Math.exp(-dt * 6));
+      return 0;
+    }
+    if (!this.enabled) return 0;
+    const K = this.keys;
+    let fw = this.stick.y;
+    let sd = this.stick.x;
+    if (K.has('KeyW') || K.has('ArrowUp')) fw += 1;
+    if (K.has('KeyS') || K.has('ArrowDown')) fw -= 1;
+    if (K.has('KeyD')) sd += 1;
+    if (K.has('KeyA')) sd -= 1;
+    if (K.has('ArrowLeft') || K.has('KeyQ')) this.yaw += dt * 1.9;
+    if (K.has('ArrowRight') || K.has('KeyE')) this.yaw -= dt * 1.9;
+    const len = Math.hypot(fw, sd);
+    if (len < 0.05) return 0;
+    const speed = (K.has('ShiftLeft') || K.has('ShiftRight') ? run : walk) * Math.min(1, len);
+    fw /= len;
+    sd /= len;
+    // 移动方向相对镜头
+    const sin = Math.sin(this.yaw);
+    const cos = Math.cos(this.yaw);
+    return this.step(-sin * fw + cos * sd, -cos * fw - sin * sd, speed, dt, true);
+  }
+
+  /** 镜头最远能拉到多远而不穿进墙或柜子 */
+  private clearance(dirX: number, dirZ: number, want: number) {
+    const x0 = this.pivot.x;
+    const z0 = this.pivot.z;
+    const horizontal = want * Math.cos(this.pitch);
+    const x1 = x0 + dirX * horizontal;
+    const z1 = z0 + dirZ * horizontal;
+    let t = 1;
+    for (const c of this.colliders) {
+      if (c.tall) t = Math.min(t, segmentEnter(c, CAM.pad, x0, z0, x1, z1));
+    }
+    let max = want * t;
+    // 仰视时镜头不能钻到地面以下
+    const sinP = Math.sin(this.pitch);
+    if (sinP > 0.01) max = Math.min(max, (this.pivot.y - this.pos.y - CAM.floor) / sinP);
+    return Math.max(CAM.near, max);
+  }
+
+  update(dt: number) {
+    const speed = this.move(dt);
+    const amount = speed / CONFIG.player.walk;
+    this.stride += (amount - this.stride) * (1 - Math.exp(-dt * 10));
+    this.pos.y += (this.ground - this.pos.y) * (1 - Math.exp(-dt * 12));
+
+    // 镜头绕着小人头部附近的一点转
+    this.pivot.set(this.pos.x, this.pos.y + CAM.pivot, this.pos.z);
+    const cp = Math.cos(this.pitch);
+    const backX = Math.sin(this.yaw);
+    const backZ = Math.cos(this.yaw);
+    const room = this.clearance(backX, backZ, this.dist);
+    // 被挡住时立刻拉近，离开遮挡后慢慢恢复
+    this.boom = room < this.boom ? room : this.boom + (room - this.boom) * (1 - Math.exp(-dt * 4));
+    this.orbit.set(
+      this.pivot.x + backX * cp * this.boom,
+      this.pivot.y - Math.sin(this.pitch) * this.boom,
+      this.pivot.z + backZ * cp * this.boom,
+    );
+    this.qa.setFromEuler(this.euler.set(this.pitch, this.yaw, 0));
+
+    // 特写镜头和跟随镜头之间平滑过渡
+    this.blend += ((this.focus ? 1 : 0) - this.blend) * (1 - Math.exp(-dt * 4.5));
+    if (!this.focus && this.blend < 0.002) {
+      this.blend = 0;
+      this.lastFocus = null;
+    }
+    const f = this.focus ?? this.lastFocus;
+    if (f && this.blend > 0) {
+      this.qb.setFromEuler(this.euler.set(0, f.yaw, 0));
+      this.camera.position.lerpVectors(this.orbit, f.cam, this.blend);
+      this.camera.quaternion.slerpQuaternions(this.qa, this.qb, this.blend);
+    } else {
+      this.camera.position.copy(this.orbit);
+      this.camera.quaternion.copy(this.qa);
     }
 
-    const bobY = moving ? Math.sin(this.bob) * 0.028 : 0;
-    this.camera.position.set(this.pos.x, this.camY + bobY, this.pos.z);
-    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+    const near = this.camera.position.distanceTo(this.pivot);
+    this.fade = THREE.MathUtils.smoothstep(near, CAM.fadeNear, CAM.fadeFar);
   }
 }
