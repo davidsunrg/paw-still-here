@@ -2,9 +2,26 @@ import { STR } from '../strings';
 import { petById, type Pet } from './pets';
 
 /**
- * 数据层：献花、蜡烛、留言目前保存在 localStorage。
+ * 数据层：礼物、信、留言簿、孔明灯目前保存在 localStorage。
  * 以后接后端时，只需要替换这个文件里的读写实现。
  */
+
+/** 可以放进格子的礼物种类 */
+export type GiftKind = 'flower' | 'candle' | 'snack' | 'toy';
+/** 礼物 + 信 */
+export type OfferKind = GiftKind | 'letter';
+
+export const GIFT_KINDS: GiftKind[] = ['flower', 'candle', 'snack', 'toy'];
+
+/** 每种礼物有几种外观（花色、蜡烛高矮、罐头 / 小鱼干 / 骨头、球 / 毛线团） */
+export const GIFT_VARIANTS: Record<GiftKind, number> = { flower: 5, candle: 3, snack: 3, toy: 2 };
+
+export interface Gift {
+  kind: GiftKind;
+  /** 外观序号 */
+  v: number;
+  time: number;
+}
 
 export interface Message {
   text: string;
@@ -13,9 +30,8 @@ export interface Message {
 }
 
 interface PetRecord {
-  flowers: number;
-  candles: number;
-  comments: Message[];
+  gifts: Gift[];
+  letters: Message[];
 }
 
 interface State {
@@ -24,14 +40,62 @@ interface State {
   lanterns: number;
 }
 
-const KEY = 'jinian:v1';
+const KEY = 'jinian:v2';
+/** 旧版本的键名：每只宠物只记了 花数 / 蜡烛数 / 留言 */
+const KEY_V1 = 'jinian:v1';
+/** 读取旧数据时单只宠物最多转换的礼物数，防止异常数据撑爆存储 */
+const MIGRATE_CAP = 500;
+
+function isMessage(m: unknown): m is Message {
+  return !!m && typeof (m as Message).text === 'string';
+}
+
+function messages(list: unknown, petId?: string): Message[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter(isMessage).map((m) => ({ text: m.text, time: Number(m.time) || 0, ...(petId ? { petId } : {}) }));
+}
+
+function count(n: unknown) {
+  return Math.max(0, Math.min(MIGRATE_CAP, Math.floor(Number(n) || 0)));
+}
+
+/** 旧格式 → 新格式：花数和蜡烛数展开成礼物列表，留言变成信 */
+function migrateV1(old: Record<string, unknown>): State {
+  const pets: Record<string, PetRecord> = {};
+  const oldPets = (old.pets && typeof old.pets === 'object' ? old.pets : {}) as Record<string, Record<string, unknown>>;
+  for (const [id, r] of Object.entries(oldPets)) {
+    if (!r || typeof r !== 'object') continue;
+    const gifts: Gift[] = [];
+    for (let i = 0; i < count(r.flowers); i++) gifts.push({ kind: 'flower', v: i % GIFT_VARIANTS.flower, time: 0 });
+    for (let i = 0; i < count(r.candles); i++) gifts.push({ kind: 'candle', v: i % GIFT_VARIANTS.candle, time: 0 });
+    pets[id] = { gifts, letters: messages(r.comments, id) };
+  }
+  return { pets, guestbook: messages(old.guestbook), lanterns: count(old.lanterns) };
+}
+
+function normalize(s: Record<string, unknown>): State {
+  const pets: Record<string, PetRecord> = {};
+  const raw = (s.pets && typeof s.pets === 'object' ? s.pets : {}) as Record<string, Record<string, unknown>>;
+  for (const [id, r] of Object.entries(raw)) {
+    if (!r || typeof r !== 'object') continue;
+    const gifts = (Array.isArray(r.gifts) ? r.gifts : [])
+      .filter((g): g is Gift => !!g && GIFT_KINDS.includes((g as Gift).kind))
+      .map((g) => ({ kind: g.kind, v: Math.abs(Math.floor(Number(g.v) || 0)), time: Number(g.time) || 0 }));
+    pets[id] = { gifts, letters: messages(r.letters, id) };
+  }
+  return { pets, guestbook: messages(s.guestbook), lanterns: Math.max(0, Math.floor(Number(s.lanterns) || 0)) };
+}
 
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const s = JSON.parse(raw) as Partial<State>;
-      return { pets: s.pets ?? {}, guestbook: s.guestbook ?? [], lanterns: s.lanterns ?? 0 };
+    if (raw) return normalize(JSON.parse(raw));
+    const old = localStorage.getItem(KEY_V1);
+    if (old) {
+      const state = migrateV1(JSON.parse(old));
+      // 旧数据原样保留，只是另存一份新格式
+      localStorage.setItem(KEY, JSON.stringify(state));
+      return state;
     }
   } catch {
     // 数据损坏或无法访问 localStorage 时，从空状态开始
@@ -50,39 +114,71 @@ function save() {
 }
 
 function record(id: string): PetRecord {
-  return (state.pets[id] ??= { flowers: 0, candles: 0, comments: [] });
+  return (state.pets[id] ??= { gifts: [], letters: [] });
+}
+
+function seed(pet: Pet) {
+  return Number(pet.id.replace(/\D/g, '')) || 0;
+}
+
+/** 示例宠物自带的礼物数量，让格子不显得空 */
+function presetCounts(pet: Pet): Record<GiftKind, number> {
+  const n = seed(pet);
+  return { flower: pet.flowers, candle: pet.candles, snack: (n * 7) % 4, toy: (n * 5) % 3 };
+}
+
+function presetLetters(pet: Pet): Message[] {
+  const n = seed(pet);
+  if (n % 3 !== 0) return [];
+  const pool = STR.sampleLetters;
+  return Array.from({ length: 1 + (n % 2) }, (_, i) => ({ text: pool[(n + i * 3) % pool.length], time: 0 }));
 }
 
 export const store = {
-  /** 宠物当前的献花 / 蜡烛总数（示例基数 + 访客新增） */
-  stats(pet: Pet) {
+  /** 每种礼物和信的总数（示例基数 + 访客新增） */
+  counts(pet: Pet): Record<OfferKind, number> {
+    const c: Record<OfferKind, number> = { ...presetCounts(pet), letter: presetLetters(pet).length };
     const r = state.pets[pet.id];
-    return { flowers: pet.flowers + (r?.flowers ?? 0), candles: pet.candles + (r?.candles ?? 0) };
+    if (r) {
+      for (const g of r.gifts) c[g.kind]++;
+      c.letter += r.letters.length;
+    }
+    return c;
   },
-  addFlower(pet: Pet) {
-    record(pet.id).flowers++;
+  /** 每种礼物按放入顺序排列的外观序号，用来在格子里摆出实物 */
+  gifts(pet: Pet): Record<GiftKind, number[]> {
+    const n = seed(pet);
+    const preset = presetCounts(pet);
+    const out = {} as Record<GiftKind, number[]>;
+    for (const kind of GIFT_KINDS) {
+      out[kind] = Array.from({ length: preset[kind] }, (_, i) => (n + i) % GIFT_VARIANTS[kind]);
+    }
+    for (const g of state.pets[pet.id]?.gifts ?? []) out[g.kind].push(g.v % GIFT_VARIANTS[g.kind]);
+    return out;
+  },
+  addGift(pet: Pet, kind: GiftKind): Gift {
+    const gift: Gift = { kind, v: Math.floor(Math.random() * GIFT_VARIANTS[kind]), time: Date.now() };
+    record(pet.id).gifts.push(gift);
     save();
+    return gift;
   },
-  addCandle(pet: Pet) {
-    record(pet.id).candles++;
-    save();
+  /** 写给这只宠物的信，最新的在前 */
+  letters(pet: Pet): Message[] {
+    return [...(state.pets[pet.id]?.letters ?? [])].reverse().concat(presetLetters(pet));
   },
-  comments(pet: Pet): Message[] {
-    return [...(state.pets[pet.id]?.comments ?? [])].reverse();
-  },
-  addComment(pet: Pet, text: string) {
-    record(pet.id).comments.push({ text, time: Date.now(), petId: pet.id });
+  addLetter(pet: Pet, text: string) {
+    record(pet.id).letters.push({ text, time: Date.now(), petId: pet.id });
     save();
   },
   addGuestbook(text: string) {
     state.guestbook.push({ text, time: Date.now() });
     save();
   },
-  /** 全馆最新留言：留言簿 + 各宠物留言，按时间倒序 */
+  /** 全馆最新留言：留言簿 + 写给各宠物的信，按时间倒序 */
   recent(limit = 40): Array<Message & { petName?: string }> {
     const all: Array<Message & { petName?: string }> = [...state.guestbook];
     for (const [id, r] of Object.entries(state.pets)) {
-      for (const c of r.comments) all.push({ ...c, petName: petById.get(id)?.name });
+      for (const c of r.letters) all.push({ ...c, petName: petById.get(id)?.name });
     }
     all.sort((a, b) => b.time - a.time);
     const samples = STR.sampleGuestbook.map((text) => ({ text, time: 0 }));

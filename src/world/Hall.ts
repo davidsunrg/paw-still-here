@@ -85,7 +85,7 @@ export function buildHall(w: World) {
     const z = -2.3 - c * ((d - 4.6) / (cols - 1)) + R(-0.12, 0.12);
     const y = 1.3 + r * 1.2 + R(-0.04, 0.04);
     kit.box(wallX + 0.03, y, z, 0.06, s + 0.16, s + 0.16, frameColors[i % frameColors.length]);
-    w.photos.add(pet, new THREE.Vector3(wallX + 0.07, y, z), Math.PI / 2, s, s, 2.0);
+    w.photos.add(pet, new THREE.Vector3(wallX + 0.07, y, z), Math.PI / 2, s, s, 'wall');
     kit.glowBox(wallX + 0.12, y + s / 2 + 0.17, z, 0.05, 0.035, s * 0.5, C.warm, 2.6);
   });
   const wallTitle = textMesh(STR.wallTitle, { height: 0.4, color: '#6b4a2e' });

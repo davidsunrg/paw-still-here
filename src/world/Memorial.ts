@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
 import { mulberry32, PETS, type Pet } from '../data/pets';
+import { store, type OfferKind } from '../data/store';
 import { STR } from '../strings';
+import { CELL_SPOT, MINI_TOY_COLORS } from './gifts';
 import { Instancer } from './Kit';
 import { archWall, bench, plant, sconce, wallStrip } from './parts';
 import { textMesh, tileTexture } from './textures';
@@ -171,8 +173,6 @@ function buildCabinet(
   const bySlot = new Map(pets.map((p) => [p.slot, p]));
   const frameColors = [0x2f2119, 0xd9c7a0, 0xf2efe8, 0xb08d57];
   const flowerColors = [0xffb7c5, 0xfff2a8, 0xffffff, 0xc9b6ff, 0xff9db0];
-  const toyColors = [0xff7a6b, 0x6bb8ff, 0xffd15c, 0x8fe08a];
-
   for (let s = 0; s < perCab; s++) {
     const r = Math.floor(s / cols);
     const c = s % cols;
@@ -187,31 +187,41 @@ function buildCabinet(
     const fy = y0 + 0.33;
     kit.box(x, fy, cz - 0.04, 0.45, 0.45, 0.03, frameColors[(s + index) % frameColors.length]);
     const frame = new THREE.Vector3(x, fy, cz - 0.02);
-    w.photos.add(pet, frame, 0, 0.38, 0.38, 1.05);
+    w.photos.add(pet, frame, 0, 0.38, 0.38, letter);
     w.labels.add(`${pet.name} · ${pet.passedDate.slice(0, 4)}`, new THREE.Vector3(x, y0 + 0.048, cz + D / 2 - 0.09), 0, 0.34, 0.085);
     kit.box(x, y0 + 0.048, cz + D / 2 - 0.1, 0.36, 0.095, 0.015, 0x6b4a2a);
 
-    const stats = w.statsOf(pet);
-    const slot = {
-      floor: new THREE.Vector3(x, y0, cz),
-      frame,
-      cabinetX: cx,
-      cabinetZ: cz,
-      hasFlower: stats.flowers > 0,
-      hasCandle: stats.candles > 0,
-    };
-    w.slots.set(pet.id, slot);
+    // 格子里的小摆件：有人放过哪类礼物，就摆出哪一样，从柜子前走过也能看出谁来过
+    const counts = store.counts(pet);
+    const shown = new Set(OFFER_KINDS.filter((k) => counts[k] > 0));
+    w.slots.set(pet.id, { floor: new THREE.Vector3(x, y0, cz), frame, cabinetX: cx, cabinetZ: cz, shown });
+    const at = (k: OfferKind) => [x + CELL_SPOT[k][0], cz + CELL_SPOT[k][1]] as const;
 
-    if (slot.hasCandle) {
-      kit.cyl(x - 0.27, y0, cz + 0.1, 0.018, 0.07, 0xf6ecd8);
-      kit.flame(x - 0.27, y0 + 0.092, cz + 0.1, 0.014);
+    if (shown.has('candle')) {
+      const [ix, iz] = at('candle');
+      kit.cyl(ix, y0, iz, 0.018, 0.07, 0xf6ecd8);
+      kit.flame(ix, y0 + 0.092, iz, 0.014);
     }
-    if (slot.hasFlower) {
-      kit.cyl(x + 0.27, y0, cz + 0.1, 0.005, 0.13, 0x4f8a4a);
-      kit.ball(x + 0.27, y0 + 0.14, cz + 0.1, 0.032, flowerColors[s % flowerColors.length]);
+    if (shown.has('flower')) {
+      const [ix, iz] = at('flower');
+      kit.cyl(ix, y0, iz, 0.005, 0.13, 0x4f8a4a);
+      kit.ball(ix, y0 + 0.14, iz, 0.032, flowerColors[s % flowerColors.length]);
     }
-    if (R(0, 1) < 0.3) {
-      kit.ball(x - 0.29, y0 + 0.04, cz - 0.05, 0.04, toyColors[s % toyColors.length]);
+    if (shown.has('toy')) {
+      const [ix, iz] = at('toy');
+      kit.ball(ix, y0 + 0.035, iz, 0.035, MINI_TOY_COLORS[s % MINI_TOY_COLORS.length]);
     }
+    if (shown.has('snack')) {
+      const [ix, iz] = at('snack');
+      kit.cyl(ix, y0, iz, 0.028, 0.035, 0xb9bcc2);
+    }
+    if (shown.has('letter')) {
+      const [ix, iz] = at('letter');
+      kit.box(ix, y0 + 0.003, iz, 0.085, 0.005, 0.055, 0xf4ecdb, 0.3);
+    }
+    // 这里原本用随机数决定是否摆玩具；保留这次取值，后面纪念树的随机造型才不会跟着变
+    R(0, 1);
   }
 }
+
+const OFFER_KINDS: OfferKind[] = ['flower', 'candle', 'snack', 'toy', 'letter'];

@@ -9,8 +9,8 @@ export interface PhotoEntry {
   rotY: number;
   w: number;
   h: number;
-  /** 点击后镜头停在相框前多远 */
-  focusDist: number;
+  /** 同一组里的相框可以用左右键互相切换：照片墙是 wall，纪念柜是柜子编号 */
+  group: string;
 }
 
 /** 把一批朝向任意的矩形合并进一个几何体 */
@@ -92,18 +92,28 @@ export class PhotoBatch {
     img.src = url;
   }
 
-  add(pet: Pet, center: THREE.Vector3, rotY: number, w: number, h: number, focusDist: number) {
+  /** 图集纹理，单宠物视角里的大相框也用它 */
+  get map() {
+    return this.texture;
+  }
+
+  /** 某只宠物在图集里的范围：[u0, vBottom, u1, vTop] */
+  uvOf(pet: Pet): [number, number, number, number] {
     const { CELL, COLS, SIZE } = PhotoBatch;
     const i = this.cellOf.get(pet.id) ?? 0;
     const inset = 2;
     const cx = (i % COLS) * CELL;
     const cy = Math.floor(i / COLS) * CELL;
-    this.quads.quad(center, rotY, w, h, [
+    return [
       (cx + inset) / SIZE,
       1 - (cy + CELL - inset) / SIZE,
       (cx + CELL - inset) / SIZE,
       1 - (cy + inset) / SIZE,
-    ]);
+    ];
+  }
+
+  add(pet: Pet, center: THREE.Vector3, rotY: number, w: number, h: number, group: string) {
+    this.quads.quad(center, rotY, w, h, this.uvOf(pet));
     this.entries.push({
       pet,
       center: center.clone(),
@@ -111,7 +121,7 @@ export class PhotoBatch {
       rotY,
       w,
       h,
-      focusDist,
+      group,
     });
   }
 

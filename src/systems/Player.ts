@@ -26,7 +26,10 @@ export class Player {
   private keys = new Set<string>();
   private camY = CONFIG.player.eye;
   private bob = 0;
-  private focusGoal: { pos: THREE.Vector3; yaw: number } | null = null;
+  /** back 为 true 表示正在从聚焦状态退回原来的位置 */
+  private focusGoal: { pos: THREE.Vector3; yaw: number; pitch: number; back: boolean } | null = null;
+  /** 聚焦之前的位置和朝向，退出时回到这里 */
+  private saved: { pos: THREE.Vector3; yaw: number; pitch: number } | null = null;
   private lookId = -1;
   private last = { x: 0, y: 0 };
   private down = { x: 0, y: 0, t: 0 };
@@ -57,7 +60,12 @@ export class Player {
       const dx = e.clientX - this.last.x;
       const dy = e.clientY - this.last.y;
       this.last = { x: e.clientX, y: e.clientY };
-      if (!this.enabled || this.focusGoal) return;
+      if (!this.enabled) return;
+      if (this.focusGoal) {
+        // 退回途中拖动视角，就把控制权交还给访客
+        if (!this.focusGoal.back) return;
+        this.focusGoal = null;
+      }
       const k = 0.0042;
       this.yaw += dx * k;
       this.pitch = THREE.MathUtils.clamp(this.pitch + dy * k, -1.2, 1.35);
@@ -79,27 +87,47 @@ export class Player {
   }
 
   get focused() {
-    return this.focusGoal !== null;
+    return this.focusGoal !== null && !this.focusGoal.back;
   }
 
   teleport(x: number, z: number, yaw: number) {
     this.focusGoal = null;
+    this.saved = null;
     this.pos.set(x, 0, z);
     this.yaw = yaw;
     this.pitch = 0;
   }
 
-  /** 把镜头平滑推到相框前 */
+  /** 把镜头平滑推到某个目标正前方 dist 米处；第一次聚焦时记下当前位置，供退出时返回 */
   focus(target: THREE.Vector3, normal: THREE.Vector3, dist: number) {
+    if (!this.focusGoal) this.saved = { pos: this.pos.clone(), yaw: this.yaw, pitch: this.pitch };
     this.focusGoal = {
       pos: target.clone().addScaledVector(normal, dist),
       yaw: Math.atan2(normal.x, normal.z),
+      pitch: 0,
+      back: false,
     };
     this.focusGoal.pos.y = Math.max(0.95, target.y);
   }
 
+  /** 结束聚焦，镜头退回聚焦前的位置和朝向 */
   release() {
-    this.focusGoal = null;
+    if (!this.focusGoal || this.focusGoal.back) return;
+    const s = this.saved;
+    this.saved = null;
+    if (!s) {
+      this.focusGoal = null;
+      return;
+    }
+    this.focusGoal = { pos: s.pos.clone().setY(CONFIG.player.eye), yaw: s.yaw, pitch: s.pitch, back: true };
+  }
+
+  private get wantsToMove() {
+    const K = this.keys;
+    return (
+      this.stick.lengthSq() > 0.0025 ||
+      ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown'].some((c) => K.has(c))
+    );
   }
 
   private blocked(x: number, z: number) {
@@ -114,13 +142,21 @@ export class Player {
     const { eye, walk, run } = CONFIG.player;
     let moving = false;
 
+    const goal = this.focusGoal;
+    if (goal?.back) {
+      // 已经回到原位，或者访客开始自己走动，就结束退回
+      const near = Math.hypot(goal.pos.x - this.pos.x, goal.pos.z - this.pos.z) < 0.03;
+      if (near || (this.enabled && this.wantsToMove)) this.focusGoal = null;
+    }
+
     if (this.focusGoal) {
+      const g = this.focusGoal;
       const k = 1 - Math.exp(-dt * 4.5);
-      this.pos.x += (this.focusGoal.pos.x - this.pos.x) * k;
-      this.pos.z += (this.focusGoal.pos.z - this.pos.z) * k;
-      this.camY += (this.focusGoal.pos.y - this.camY) * k;
-      this.yaw = angleLerp(this.yaw, this.focusGoal.yaw, k);
-      this.pitch += (0 - this.pitch) * k;
+      this.pos.x += (g.pos.x - this.pos.x) * k;
+      this.pos.z += (g.pos.z - this.pos.z) * k;
+      this.camY += (g.pos.y - this.camY) * k;
+      this.yaw = angleLerp(this.yaw, g.yaw, k);
+      this.pitch += (g.pitch - this.pitch) * k;
     } else {
       if (this.enabled) {
         const K = this.keys;

@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
 import { PETS, type Pet } from '../data/pets';
-import { store } from '../data/store';
+import type { OfferKind } from '../data/store';
 import { STR } from '../strings';
 import { LabelBatch, PhotoBatch } from './Batches';
 import { buildCorridor } from './Corridor';
+import { CELL_SPOT, cellMini, tickFlames } from './gifts';
 import { buildHall } from './Hall';
 import { Kit } from './Kit';
 import { buildMemorial } from './Memorial';
@@ -33,8 +34,18 @@ export interface SlotInfo {
   frame: THREE.Vector3;
   cabinetX: number;
   cabinetZ: number;
-  hasFlower: boolean;
-  hasCandle: boolean;
+  /** 格子里已经摆出了哪几类礼物的小摆件 */
+  shown: Set<OfferKind>;
+}
+
+/** 一盏登记过的灯。位置和亮度可以随时改（单宠物视角的灯会跟着小龛移动） */
+export interface Lamp {
+  pos: THREE.Vector3;
+  intensity: number;
+  distance: number;
+  color: THREE.Color;
+  /** 到玩家的水平距离，每帧更新 */
+  d: number;
 }
 
 type Updater = (dt: number, t: number, player: THREE.Vector3) => void;
@@ -51,7 +62,7 @@ export class World {
   /** 由 main 注入：点击留言簿 / 接待台时触发 */
   hooks = { guestbook: () => {}, reception: () => {} };
 
-  private lamps: Array<{ pos: THREE.Vector3; intensity: number; distance: number; color: THREE.Color; d: number }> = [];
+  private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
 
   sky!: Sky;
@@ -114,8 +125,10 @@ export class World {
    * 登记一盏暖光灯。场景里的灯很多，真正参与渲染的只有离玩家最近的几盏：
    * 固定数量的 PointLight 每帧被分配给最近的灯位，远处的灯在被换下之前已经淡出到 0。
    */
-  pointLight(x: number, y: number, z: number, intensity: number, distance = 22, color = CONFIG.colors.warm) {
-    this.lamps.push({ pos: new THREE.Vector3(x, y, z), intensity, distance, color: new THREE.Color(color), d: 0 });
+  pointLight(x: number, y: number, z: number, intensity: number, distance = 22, color = CONFIG.colors.warm): Lamp {
+    const lamp: Lamp = { pos: new THREE.Vector3(x, y, z), intensity, distance, color: new THREE.Color(color), d: 0 };
+    this.lamps.push(lamp);
+    return lamp;
   }
 
   /** 同时点亮的灯的数量（低画质时减少） */
@@ -153,45 +166,14 @@ export class World {
     this.interact(m, label, onClick);
   }
 
-  /** 访客献花 / 点蜡烛后，在对应格子里放上实物 */
-  addOffering(pet: Pet, kind: 'flower' | 'candle') {
+  /** 访客放入礼物后，如果柜子格子里还没有这一类的小摆件，就补上一个 */
+  showInCell(pet: Pet, kind: OfferKind) {
     const slot = this.slots.get(pet.id);
-    if (!slot) return;
-    const g = new THREE.Group();
-    const { x, y, z } = slot.floor;
-    if (kind === 'flower') {
-      if (slot.hasFlower) return;
-      slot.hasFlower = true;
-      const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.005, 0.005, 0.13, 5),
-        new THREE.MeshStandardMaterial({ color: 0x4f8a4a }),
-      );
-      stem.position.y = 0.065;
-      const bloom = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(0.032, 1),
-        new THREE.MeshStandardMaterial({ color: 0xff9db0, flatShading: true }),
-      );
-      bloom.position.y = 0.14;
-      g.add(stem, bloom);
-      g.position.set(x + 0.27, y, z + 0.1);
-    } else {
-      if (slot.hasCandle) return;
-      slot.hasCandle = true;
-      const body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.018, 0.018, 0.07, 8),
-        new THREE.MeshStandardMaterial({ color: 0xf6ecd8 }),
-      );
-      body.position.y = 0.035;
-      const flame = new THREE.Mesh(
-        new THREE.SphereGeometry(0.014, 8, 6),
-        new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffb45a).multiplyScalar(3.2) }),
-      );
-      flame.scale.set(0.75, 1.5, 0.75);
-      flame.position.y = 0.092;
-      g.add(body, flame);
-      g.position.set(x - 0.27, y, z + 0.1);
-    }
-    this.scene.add(g);
+    if (!slot || slot.shown.has(kind)) return;
+    slot.shown.add(kind);
+    const mini = cellMini(kind, pet.slot);
+    mini.position.add(new THREE.Vector3(slot.floor.x + CELL_SPOT[kind][0], slot.floor.y, slot.floor.z + CELL_SPOT[kind][1]));
+    this.scene.add(mini);
   }
 
   /** 从当前位置走到某只宠物格子前的大致路线（用于地面光点指引） */
@@ -219,6 +201,7 @@ export class World {
   update(dt: number, t: number, camera: THREE.Camera, pixelRatio: number) {
     this.uTime.value = t;
     this.kit.update(t);
+    tickFlames(t);
     this.sky.update(dt, t, camera, pixelRatio);
     const px = Math.round(camera.position.x);
     const pz = Math.round(camera.position.z);
@@ -226,10 +209,5 @@ export class World {
     this.moonLight.position.set(px, 0, pz).addScaledVector(MOON_DIR, 80);
     this.updateLights(camera.position);
     for (const u of this.updaters) u(dt, t, camera.position);
-  }
-
-  /** 首次搭建时读取已保存的献花 / 蜡烛，决定格子里是否摆放实物 */
-  statsOf(pet: Pet) {
-    return store.stats(pet);
   }
 }

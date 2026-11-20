@@ -15,6 +15,7 @@ import { UI } from './ui/UI';
 import './ui/style.css';
 import type { PhotoEntry } from './world/Batches';
 import { pathX } from './world/Outdoor';
+import { Shrine } from './world/Shrine';
 import { World } from './world/World';
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
@@ -44,6 +45,7 @@ const player = new Player(camera, canvas, world.colliders);
 const audio = new AudioSystem();
 const guide = new Guide(scene);
 let interaction: Interaction | null = null;
+let shrine: Shrine | null = null;
 let entered = false;
 let blocked = false;
 let quality: 'high' | 'low' = 'high';
@@ -79,11 +81,19 @@ const ui = new UI({
   },
   onDetailClosed() {
     player.release();
-    interaction?.setHighlight(null);
+    shrine?.close();
   },
   onOffering(pet, kind) {
-    world.addOffering(pet, kind);
+    shrine?.drop(kind);
+    world.showInCell(pet, kind);
     audio.chime(kind === 'candle');
+  },
+  onStep(dir) {
+    const current = shrine?.entry;
+    if (!current || !shrine?.isOpen) return;
+    const group = world.photos.entries.filter((e) => e.group === current.group);
+    const next = group[(group.indexOf(current) + dir + group.length) % group.length];
+    if (next && next !== current) openPet(next);
   },
   onGuide(pet) {
     ui.closeAll();
@@ -119,10 +129,23 @@ function cabinetEntry(pet: Pet) {
   return world.photos.entries.find((e) => e.pet === pet && slot && e.center.equals(slot.frame));
 }
 
+/** 镜头离小龛中心多远，才能让它完整地出现在资料面板以外的画面里 */
+function shrineDistance() {
+  const { w, h, d } = CONFIG.shrine;
+  const t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const aspect = (window.innerWidth - ui.detailWidth) / window.innerHeight;
+  const byHeight = h / 0.6 / (2 * t);
+  const byWidth = w / 0.86 / (2 * t * aspect);
+  return Math.max(byHeight, byWidth) + d / 2;
+}
+
+/** 进入单宠物视角：这一格展开成小龛，镜头推到它正前方 */
 function openPet(entry: PhotoEntry) {
-  player.focus(entry.center, entry.normal, entry.focusDist);
+  if (!shrine) return;
   ui.openDetail(entry.pet);
-  interaction?.setHighlight(entry);
+  shrine.open(entry);
+  player.focus(shrine.center, entry.normal, shrineDistance());
+  interaction?.setHighlight(null);
 }
 
 // ---------- 悬停与点击 ----------
@@ -150,7 +173,10 @@ window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 player.onTap = (x, y) => {
   if (!entered || !interaction) return;
   if (ui.detailOpen) {
-    ui.closeDetail();
+    // 单宠物视角里：点信可以读信，点小龛本身不做事，点外面退出
+    const hit = shrine?.pick(x, y, camera) ?? null;
+    if (hit === 'letter') ui.openLetters();
+    else if (!hit) ui.closeDetail();
     return;
   }
   if (blocked) return;
@@ -195,6 +221,8 @@ function resize() {
   composer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // 窗口变化后重新计算镜头距离，保证小龛仍然完整可见
+  if (shrine?.isOpen && shrine.entry) player.focus(shrine.center, shrine.entry.normal, shrineDistance());
 }
 window.addEventListener('resize', resize);
 
@@ -210,9 +238,10 @@ function frame() {
   world.update(dt, t, camera, pixelRatio());
   guide.update(t, player.pos);
   interaction?.update(t);
+  shrine?.update(dt);
   updateHover();
 
-  // 详情面板打开时，把画面主体让到面板左侧
+  // 资料面板打开时，把画面主体让到面板左侧
   const targetShift = ui.detailWidth / 2;
   viewShift += (targetShift - viewShift) * (1 - Math.exp(-dt * 6));
   if (viewShift > 0.5) camera.setViewOffset(window.innerWidth, window.innerHeight, viewShift, 0, window.innerWidth, window.innerHeight);
@@ -236,6 +265,7 @@ async function boot() {
     run();
   }
   interaction = new Interaction(camera, world);
+  shrine = new Shrine(world);
   applyQuality();
   ui.setProgress(1, '');
   renderer.setAnimationLoop(frame);
@@ -244,7 +274,7 @@ async function boot() {
   ui.ready();
 
   if (import.meta.env.DEV) {
-    Object.assign(window, { __memorial: { player, world, ui, camera, renderer } });
+    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, shrine } });
   }
 }
 

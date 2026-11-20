@@ -1,7 +1,6 @@
 import { PETS, type Pet } from '../data/pets';
-import { store, type Message } from '../data/store';
+import { store, type Message, type OfferKind } from '../data/store';
 import { STR } from '../strings';
-import { portraitDataURL } from '../world/textures';
 
 export type TeleportTarget = 'gate' | 'hall' | 'memorial';
 
@@ -14,7 +13,10 @@ export interface UIHooks {
   /** 返回切换后的画质 */
   onToggleQuality(): 'high' | 'low';
   onDetailClosed(): void;
-  onOffering(pet: Pet, kind: 'flower' | 'candle'): void;
+  /** 访客往格子里放了一件礼物或一封信（数据已保存） */
+  onOffering(pet: Pet, kind: OfferKind): void;
+  /** 在单宠物视角里切换到旁边的宠物：-1 上一只，1 下一只 */
+  onStep(dir: -1 | 1): void;
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
   /** 有面板打开时需要暂停走动 */
@@ -35,6 +37,7 @@ export class UI {
   private pet: Pet | null = null;
   private toastTimer = 0;
   private hintTimer = 0;
+  private shrineHinted = false;
   private tooltip = $('tooltip');
 
   constructor(private hooks: UIHooks) {
@@ -45,7 +48,7 @@ export class UI {
       const v = (STR as Record<string, unknown>)[el.dataset.t!];
       if (typeof v === 'string') el.textContent = v;
     });
-    $<HTMLInputElement>('detail-input').placeholder = STR.detailPlaceholder;
+    $<HTMLTextAreaElement>('letter-input').placeholder = STR.letterPlaceholder;
     $<HTMLInputElement>('lantern-input').placeholder = STR.lanternPlaceholder;
     $<HTMLInputElement>('guestbook-input').placeholder = STR.guestbookPlaceholder;
     $<HTMLInputElement>('search-input').placeholder = STR.searchPlaceholder;
@@ -82,22 +85,41 @@ export class UI {
       m.querySelector('[data-close]')?.addEventListener('click', () => this.closeModals());
     });
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') this.closeAll();
+      if (e.key === 'Escape') {
+        // 先收起弹窗，再退出单宠物视角
+        if (this.modalOpen) this.closeModals();
+        else this.closeDetail();
+        return;
+      }
+      const el = e.target as HTMLElement | null;
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+      if (!this.pet || this.modalOpen || typing) return;
+      if (e.key === 'ArrowLeft') hooks.onStep(-1);
+      else if (e.key === 'ArrowRight') hooks.onStep(1);
     });
 
-    // 详情面板
+    // 单宠物视角
     $('detail-close').addEventListener('click', () => this.closeDetail());
-    $('btn-flower').addEventListener('click', () => this.offer('flower'));
-    $('btn-candle').addEventListener('click', () => this.offer('candle'));
-    $('detail-form').addEventListener('submit', (e) => {
+    $('shrine-prev').setAttribute('aria-label', STR.shrinePrev);
+    $('shrine-next').setAttribute('aria-label', STR.shrineNext);
+    $('shrine-prev').addEventListener('click', () => hooks.onStep(-1));
+    $('shrine-next').addEventListener('click', () => hooks.onStep(1));
+    document.querySelectorAll<HTMLElement>('[data-offer]').forEach((b) =>
+      b.addEventListener('click', () => this.offer(b.dataset.offer as OfferKind)),
+    );
+    $('letter-form').addEventListener('submit', (e) => {
       e.preventDefault();
-      const input = $<HTMLInputElement>('detail-input');
+      const input = $<HTMLTextAreaElement>('letter-input');
       const text = input.value.trim();
-      if (!text || !this.pet) return;
-      store.addComment(this.pet, text);
+      const pet = this.pet;
+      if (!text || !pet) return;
+      store.addLetter(pet, text);
       input.value = '';
-      this.renderComments();
-      this.toast(STR.commentToast);
+      // 收起弹窗，让访客看到信落在台面上
+      this.closeModals();
+      this.renderCounts();
+      hooks.onOffering(pet, 'letter');
+      this.toast(STR.giftToast.letter(pet.name));
     });
 
     // 孔明灯
@@ -179,7 +201,7 @@ export class UI {
     return this.pet !== null;
   }
 
-  /** 详情面板在桌面端占据的宽度，用来把画面主体让到左边 */
+  /** 资料面板在桌面端占据的宽度，用来把画面主体让到左边 */
   get detailWidth() {
     return this.pet && window.innerWidth > 640 ? $('detail').offsetWidth : 0;
   }
@@ -215,17 +237,25 @@ export class UI {
   openDetail(pet: Pet) {
     this.closeModals();
     this.pet = pet;
-    $<HTMLImageElement>('detail-photo').src = pet.photoUrl ?? portraitDataURL(pet);
     $('detail-name').textContent = pet.name;
     $('detail-meta').textContent = [pet.species, pet.breed, STR.detailLocation(pet.cabinet, pet.slot + 1)]
       .filter(Boolean)
       .join(' · ');
     $('detail-dates').textContent = `${pet.birthDate ?? '?'} — ${pet.passedDate}`;
     $('detail-message').textContent = pet.message;
-    this.renderStats();
-    this.renderComments();
+    this.renderCounts();
     $('detail').classList.add('open');
     $('detail').scrollTop = 0;
+    document.body.classList.add('in-shrine');
+    // 操作提示只在第一次打开格子时出现
+    if (!this.shrineHinted) {
+      this.shrineHinted = true;
+      const el = $('hint');
+      el.textContent = this.isTouch ? STR.shrineHintTouch : STR.shrineHint;
+      el.classList.add('show');
+      clearTimeout(this.hintTimer);
+      this.hintTimer = window.setTimeout(() => el.classList.remove('show'), 6000);
+    }
     this.notify();
   }
 
@@ -233,25 +263,43 @@ export class UI {
     if (!this.pet) return;
     this.pet = null;
     $('detail').classList.remove('open');
+    document.body.classList.remove('in-shrine');
+    $('hint').classList.remove('show');
     (document.activeElement as HTMLElement | null)?.blur?.();
     this.hooks.onDetailClosed();
     this.notify();
   }
 
-  private offer(kind: 'flower' | 'candle') {
+  /** 打开这只宠物的信：可以读已有的信，也可以再写一封 */
+  openLetters(write = false) {
     if (!this.pet) return;
-    if (kind === 'flower') store.addFlower(this.pet);
-    else store.addCandle(this.pet);
-    this.renderStats();
-    this.hooks.onOffering(this.pet, kind);
-    this.toast(kind === 'flower' ? STR.flowerToast(this.pet.name) : STR.candleToast(this.pet.name));
+    $('letter-title').textContent = STR.letterTitle(this.pet.name);
+    this.renderMessages($('letter-list'), store.letters(this.pet), STR.letterEmpty);
+    this.openModal('modal-letter', write ? 'letter-input' : undefined);
+    $('letter-list').scrollTop = 0;
   }
 
-  private renderStats() {
+  private offer(kind: OfferKind) {
+    const pet = this.pet;
+    if (!pet) return;
+    if (kind === 'letter') {
+      this.openLetters(true);
+      return;
+    }
+    store.addGift(pet, kind);
+    this.renderCounts();
+    this.hooks.onOffering(pet, kind);
+    this.toast(STR.giftToast[kind](pet.name));
+  }
+
+  /** 礼物栏每个图标右上角的数量 */
+  private renderCounts() {
     if (!this.pet) return;
-    const s = store.stats(this.pet);
-    $('count-flower').textContent = String(s.flowers);
-    $('count-candle').textContent = String(s.candles);
+    const c = store.counts(this.pet);
+    document.querySelectorAll<HTMLElement>('[data-offer]').forEach((b) => {
+      const n = c[b.dataset.offer as OfferKind];
+      b.querySelector('b')!.textContent = n ? String(n) : '';
+    });
   }
 
   private renderMessages(list: HTMLElement, items: Array<Message & { petName?: string }>, empty: string) {
@@ -274,10 +322,6 @@ export class UI {
       }
       list.append(li);
     }
-  }
-
-  private renderComments() {
-    if (this.pet) this.renderMessages($('detail-comments'), store.comments(this.pet), STR.detailNoComments);
   }
 
   // ---------- 留言簿 ----------

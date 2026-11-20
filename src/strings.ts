@@ -12,8 +12,8 @@ export const STR = {
     finish: '马上就好…',
   },
   enter: '进入纪念馆',
-  hintDesktop: 'WASD / 方向键移动 · 按住鼠标拖动转视角 · Shift 加速 · 点击相框查看',
-  hintTouch: '左下摇杆移动 · 滑动屏幕转视角 · 点击相框查看',
+  hintDesktop: 'WASD / 方向键移动 · 按住鼠标拖动转视角 · Shift 加速 · 点击相框打开格子',
+  hintTouch: '左下摇杆移动 · 滑动屏幕转视角 · 点击相框打开格子',
 
   soundOn: '声音：开',
   soundOff: '声音：关',
@@ -32,16 +32,33 @@ export const STR = {
   cabinetZone: '区',
   treeLabel: '纪念树',
 
-  tipPet: '点击看看',
+  tipPet: '点击打开',
   tipGuestbook: '翻开留言簿',
   tipReception: '接待台 · 查找宠物',
 
-  detailFlower: '献花',
-  detailCandle: '点蜡烛',
-  detailComments: '留言',
-  detailNoComments: '还没有留言，写下第一句想念吧。',
-  detailPlaceholder: '写下想对它说的话…',
-  detailSend: '留言',
+  giftFlower: '花',
+  giftCandle: '蜡烛',
+  giftSnack: '零食',
+  giftToy: '玩具',
+  giftLetter: '信',
+  giftToast: {
+    flower: (name: string) => `你为${name}放下了一朵花`,
+    candle: (name: string) => `你为${name}点亮了一支蜡烛`,
+    snack: (name: string) => `你给${name}带来了好吃的`,
+    toy: (name: string) => `你给${name}带来了一个玩具`,
+    letter: (name: string) => `信已经放在${name}身边了`,
+  },
+  shrineHint: '点下方的图标，在它身边放下一点心意 · ← → 看看旁边的小家伙 · Esc 离开',
+  shrineHintTouch: '点下方的图标，在它身边放下一点心意 · 点格子外面离开',
+  shrinePrev: '上一只',
+  shrineNext: '下一只',
+  riteRiver: '为它放河灯',
+  riteFire: '给它烧一封信',
+
+  letterTitle: (name: string) => `写给${name}的信`,
+  letterPlaceholder: '想对它说的话，慢慢写…',
+  letterSend: '放进格子',
+  letterEmpty: '还没有人给它写信，写下第一封吧。',
   detailLocation: (cab: string, slot: number) => `${cab} 区 · 第 ${slot} 格`,
   close: '关闭',
 
@@ -64,8 +81,6 @@ export const STR = {
   guideToast: (name: string) => `沿着地上的光点，就能找到${name}`,
   guideArrive: (name: string) => `${name}就在这里`,
 
-  flowerToast: (name: string) => `你为${name}献上了一朵花`,
-  candleToast: (name: string) => `你为${name}点亮了一支蜡烛`,
   commentToast: '留言已留下',
 
   /** 通道墙上的短句 */
@@ -74,6 +89,16 @@ export const STR = {
     '谢谢你，陪我走过这一程',
     '想你的时候，就抬头看看',
     '爱不会因为离开而消失',
+  ],
+
+  /** 示例宠物格子里预先放着的信 */
+  sampleLetters: [
+    '今天做了你爱吃的鸡胸肉，习惯性多做了一份。',
+    '搬家了，新家的窗台很宽，你一定会喜欢在那里晒太阳。',
+    '昨晚梦见你了，你还是跑得那么快。',
+    '你的小碗我洗干净收起来了，舍不得扔。',
+    '又到了你来我们家的那一天，生日快乐呀。',
+    '谢谢你当了我这么多年的小闹钟。',
   ],
 
   /** 留言簿里默认展示的几条留言 */
