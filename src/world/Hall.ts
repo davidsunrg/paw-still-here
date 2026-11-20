@@ -186,7 +186,9 @@ export function buildHall(w: World) {
   kit.ball(mx + 0.035, 1.4, mz - 0.11, 0.014, 0x2a2320);
   kit.ball(mx, 1.3, mz - 0.07, 0.03, 0xe0504a);
 
-  w.proxy(cx, 0.55, cz - rad, 5.6, 1.0, 0.7, STR.tipReception, () => w.hooks.reception());
+  // 只罩住台面：矮盒子贴在脚边会把点地面的射线也拦成「找宠物」
+  const [rx, rz] = deskAt(180, 0.08);
+  w.proxy(rx, 1.02, rz + 0.18, 3.2, 0.45, 0.95, STR.tipReception, () => w.hooks.reception());
 
   // 背景墙：发光的馆名
   const faceZ = -T / 2;
