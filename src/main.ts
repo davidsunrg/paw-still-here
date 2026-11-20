@@ -457,12 +457,15 @@ function updateRide(dt: number, t: number) {
   player.yaw += p.turn;
   player.boomLimit = p.boom;
   world.setAmbience(p.ambience);
-  // 出洞的船到了终点：画面暗下去，再亮起来时站在室外的码头上
+  // 出洞的船到了终点：画面暗下去，再亮起来时站在洞口外那座码头上（不是步道上的河灯码头）
   if (p.done && !pending) {
     transition(() => {
       if (!inRide) return;
-      exitRide();
-      toDock();
+      stopRiding();
+      standAt('gate');
+      const land = world.ride.dockLanding('outer');
+      player.teleport(land.x, land.z, land.yaw, land.pitch);
+      player.pos.y = player.ground;
       ui.whisper(STR.rideEnd);
     });
   }

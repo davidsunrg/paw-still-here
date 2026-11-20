@@ -93,7 +93,7 @@ export const en = {
   rideStart: 'Drag to look around. The boat will carry you to the dock.',
   rideStartIn: 'Drag to look around. The boat will carry you into the cave.',
   rideArrive: 'Take the steps up to the lobby.',
-  rideEnd: 'The river brought you to the dock.',
+  rideEnd: 'The boat brought you to the dock outside the cave. Take the steps up when you are ready.',
   rideLeave: 'Leave the boat',
 
   /** 三处小木头路牌上的名字（两三个词） */

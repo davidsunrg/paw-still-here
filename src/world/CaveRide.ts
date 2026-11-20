@@ -380,6 +380,14 @@ export class CaveRide {
     for (const l of this.lamps) l.intensity = 0;
   }
 
+  /** 船靠岸后站在哪座码头的木板上（内侧是大厅那头，外侧是洞口外那头） */
+  dockLanding(which: 'inner' | 'outer') {
+    const st = which === 'inner' ? this.inner : this.outer;
+    const x = (st.x0 + st.x1) / 2 + 0.15;
+    const z = st.oz + (ST.foot + 0.35) * st.dir;
+    return { x, z, yaw: st.spawn.yaw, pitch: st.spawn.pitch };
+  }
+
   /** 访客是不是走进了哪个石台后面的门洞：通往大厅的，还是通往大门的 */
   portalAt(x: number, z: number): 'lobby' | 'gate' | null {
     const inside = (st: Station) => along(st, z) > ST.top + 0.3 && x > st.x0 && x < st.x1;
