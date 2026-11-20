@@ -432,6 +432,11 @@ export class CaveRide {
     this.mine = null;
   }
 
+  /** 自己已经坐到船上（等开船或正在漂），不能靠点码头再走下来 */
+  aboard() {
+    return this.mine !== null;
+  }
+
   // ---------- 从船上放河灯 ----------
 
   /**

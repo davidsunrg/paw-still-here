@@ -352,6 +352,8 @@ function leaveCinema() {
 let inRide = false;
 /** 现在在哪一头：洞里通往大厅的码头，还是洞口外通往大门的码头。中途下船、走回头路都回到这一头的入口前 */
 let rideSide: 'lobby' | 'gate' = 'lobby';
+/** 这一趟开船提示是否已经出过（坐下不等开船也会先锁在船上） */
+let rideSailHinted = false;
 
 /** 站到这一头的码头上面的石台上 */
 function standAt(side: 'lobby' | 'gate') {
@@ -371,6 +373,7 @@ function enterRide(side: 'lobby' | 'gate') {
   transition(() => {
     if (inCinema) exitCinema();
     inRide = true;
+    rideSailHinted = false;
     world.ride.solo = prefs.solo;
     world.ride.start();
     const { spawn } = standAt(side);
@@ -395,6 +398,7 @@ function stopRiding() {
   player.riding = false;
   player.lookUp = CONFIG.camera.pitchMax;
   player.boomLimit = Infinity;
+  rideSailHinted = false;
   ui.setRiding(false);
 }
 
@@ -410,7 +414,7 @@ function leaveRide(side = rideSide) {
 
 /** 走到船边，坐到（离点的那个座位最近的）空座上 */
 function boardBoat(want: number) {
-  if (!inRide || player.riding) return;
+  if (!inRide || player.riding || world.ride.aboard()) return;
   const seat = world.ride.seatNear(want);
   if (!seat) return ui.toast(STR.boatComing);
   player.walkTo(seat.exit.x, seat.exit.z, 0.3, () => {
@@ -419,6 +423,9 @@ function boardBoat(want: number) {
     if (!now || !world.ride.claim(now.code)) return ui.toast(STR.boatComing);
     player.sit(now.x, now.z, now.facing, now.exit);
     seatLift = now.lift;
+    player.riding = true;
+    player.lookUp = CONFIG.cave.lookUp;
+    ui.setRiding(true);
     ui.whisper(STR.boatWait);
   });
 }
@@ -442,13 +449,9 @@ function updateRide(dt: number, t: number) {
     if (out) leaveRide(out);
     return;
   }
-  if (!player.riding) {
-    // 船还没开：站起来就让出座位；船开了就不能再走动
-    if (!player.seated) return world.ride.release();
-    if (!p.sailing) return;
-    player.riding = true;
-    player.lookUp = CONFIG.cave.lookUp;
-    ui.setRiding(true);
+  if (!player.riding) return;
+  if (p.sailing && !rideSailHinted) {
+    rideSailHinted = true;
     ui.whisper(rideSide === 'lobby' ? STR.rideStart : STR.rideStartIn);
   }
   player.pos.x = p.x;
@@ -519,7 +522,7 @@ canvas.addEventListener('pointerdown', () => canvas.classList.add('dragging'));
 window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 
 player.onTap = (x, y) => {
-  if (!entered || !interaction || blocked || pending || player.riding) return;
+  if (!entered || !interaction || blocked || pending || player.riding || (inRide && world.ride.aboard())) return;
   if (ui.detailOpen) {
     // 单宠物视角里：点信可以读信，点桌子、照片这些不做事，点外面退出
     const part = world.shrine.pick(x, y, camera);
