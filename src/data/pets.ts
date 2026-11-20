@@ -17,7 +17,7 @@ export interface Pet {
   passedDate: string;
   /** 真实照片地址；为空时使用程序生成的占位画像 */
   photoUrl?: string;
-  /** 相册里另外的照片地址（不含上面那张）。打开它的小龛时挂在主相框两侧 */
+  /** 相册里另外的照片地址（不含上面那张）。打开它的纪念角时出现在右侧的缩略图里 */
   photos?: string[];
   /** 主人寄语 */
   message: string;

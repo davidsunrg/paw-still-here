@@ -39,6 +39,8 @@ export interface SlotInfo {
   entry: PhotoEntry;
   /** 相框下面小石台的台面中心 */
   ledge: THREE.Vector3;
+  /** 相框的颜色 */
+  frame: number;
 }
 
 /** 一个可以坐下的位置（沙发、长椅、树桩凳），模拟访客会走过来坐一会儿 */

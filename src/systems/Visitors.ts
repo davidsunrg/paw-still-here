@@ -44,9 +44,14 @@ export class Crowd {
   limit: number;
   /** 「独自参观」时整个隐藏 */
   hidden = false;
-  /** 访客在看某一只宠物的小龛时，其他人慢慢淡出，不挡在镜头和小龛之间 */
+  /** 访客在看某一只宠物的纪念角时，其他人慢慢淡出，不挡在镜头和纪念角之间 */
   away = false;
   private show = 1;
+
+  /** 立刻藏起来 / 显示出来，不淡入淡出（画面暗着换场景的时候用） */
+  snap() {
+    this.show = this.away ? 0 : 1;
+  }
 
   private batch: AvatarBatch;
   private poses: AvatarPose[];

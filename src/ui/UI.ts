@@ -19,7 +19,7 @@ export interface UIHooks {
   /** 切换「独自参观」，返回切换后是否隐藏其他访客 */
   onToggleSolo(): boolean;
   onDetailClosed(): void;
-  /** 访客往它的小龛里放了一件礼物（数据已保存） */
+  /** 访客往它的纪念角里放了一件礼物（数据已保存） */
   onOffering(pet: Pet, kind: OfferKind): void;
   /** 在单宠物视角里选择为它放河灯 / 烧信：把访客带到码头 / 篝火旁 */
   onRite(kind: RiteKind, pet: Pet): void;
@@ -29,7 +29,7 @@ export interface UIHooks {
   onBurnLetter(pet: Pet): void;
   /**
    * 访客写了一封信（数据已保存）：树上多一块木牌。pet 是写给谁的，没有选就是 null；
-   * here 是访客此刻正开着这只宠物的小龛（信会落在台面上）
+   * here 是访客此刻正开着这只宠物的纪念角（信会落在台面上）
    */
   onLetter(pet: Pet | null, here: boolean): void;
   onGuide(pet: Pet): void;
@@ -173,7 +173,7 @@ export class UI {
       else store.addGuestbook(text);
       input.value = '';
       const here = pet !== null && pet === this.pet;
-      // 正开着它的小龛时写的：收起弹窗，让访客看到信落在台面上；别的时候收起写信的那一块，新写的这封排在最前面
+      // 正开着它的纪念角时写的：收起弹窗，让访客看到信落在台面上；别的时候收起写信的那一块，新写的这封排在最前面
       if (here) this.closeModals();
       else {
         this.showCompose(false);
@@ -351,7 +351,7 @@ export class UI {
     this.renderAlbum(pet);
     $('detail').classList.add('open');
     document.body.classList.add('in-shrine');
-    // 操作提示只在第一次打开小龛时出现
+    // 操作提示只在第一次打开纪念角时出现
     if (!this.shrineHinted) {
       this.shrineHinted = true;
       const el = $('hint');
@@ -461,7 +461,7 @@ export class UI {
     $('album').children[i]?.scrollIntoView({ block: 'nearest' });
   }
 
-  /** 在小龛里点那摞信：看写给这只宠物的 */
+  /** 在纪念角里点那摞信：看写给这只宠物的 */
   openPetLetters() {
     if (this.pet) this.openLetters(this.pet);
   }
@@ -534,7 +534,7 @@ export class UI {
     const when = [timeLabel(item.time), item.mine ? STR.letterMine : ''].filter(Boolean).join(' · ');
     if (when) who.append(el('small', '', when));
     head.append(who);
-    // 已经在看写给它的信（多半就开着它的小龛），就不用再去了
+    // 已经在看写给它的信（多半就开着它的纪念角），就不用再去了
     if (pet && pet !== this.lettersPet) {
       const visit = el('button', 'visit', STR.letterVisit(pet.name));
       visit.type = 'button';

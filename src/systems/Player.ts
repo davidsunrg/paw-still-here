@@ -116,7 +116,7 @@ export class Player {
   /** 镜头想要的距离，和避开遮挡之后实际的距离 */
   private dist = CAM.dist;
   private boom = CAM.dist;
-  /** 单宠物特写：focus 不为空时镜头推到小龛前，blend 是特写镜头占的比重 */
+  /** 单宠物特写：focus 不为空时镜头推到纪念角前，blend 是特写镜头占的比重 */
   private focus: Focus | null = null;
   private lastFocus: Focus | null = null;
   private blend = 0;
@@ -168,7 +168,7 @@ export class Player {
       last.y = e.clientY;
       if (!this.enabled) return;
       if (this.focus) {
-        // 特写时左右拖动：镜头绕着小龛转，像把它拿在手里左右转着看
+        // 特写时左右拖动：镜头绕着纪念角转，像把它拿在手里左右转着看
         if (e.pointerId === this.lookId && this.pointers.size === 1) this.turnFocus(-dx * 0.005);
         return;
       }
@@ -336,6 +336,12 @@ export class Player {
     this.focusOn(target, normal, dist, allow);
   }
 
+  /** 特写镜头和跟随镜头之间不做过渡，直接切过去（画面暗着换场景的时候用） */
+  snapFocus() {
+    this.blend = this.focus ? 1 : 0;
+    if (!this.focus) this.lastFocus = null;
+  }
+
   /** 结束特写：小人留在原地，镜头回到它身后 */
   release() {
     if (!this.focus) return;
@@ -371,7 +377,7 @@ export class Player {
     const { walk, run } = CONFIG.player;
     const f = this.focus;
     if (f) {
-      // 走到小龛旁边站好，然后转身面向它
+      // 看纪念角时小人留在原地（stand 就是打开时站的位置），只转身面向它
       const dx = f.stand.x - this.pos.x;
       const dz = f.stand.z - this.pos.z;
       const d = Math.hypot(dx, dz);

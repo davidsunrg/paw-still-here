@@ -115,12 +115,13 @@ export function buildGallery(w: World): Gallery {
       w.labels.add('', label, rotY, F - 0.08, 0.105, String(cell.cell), true);
       return;
     }
-    box(p(T + 0.02), F + 0.06, F + 0.06, 0.04, frameColors[i % frameColors.length]);
+    const frame = frameColors[i % frameColors.length];
+    box(p(T + 0.02), F + 0.06, F + 0.06, 0.04, frame);
     const entry = w.photos.add(pet, p(T + 0.045), rotY, F, F);
     const lamp = p(T + 0.07, F / 2 + 0.045);
     kit.glowBox(lamp.x, lamp.y, lamp.z, F * 0.6, 0.016, 0.03, C.warm, 2.3, rotY);
     w.labels.add(`${pet.name} · ${pet.passedDate.slice(0, 4)}`, label, rotY, F - 0.08, 0.105, String(cell.cell));
-    w.slots.set(pet.id, { entry, ledge: ledge.clone().setY(ledge.y + 0.015) });
+    w.slots.set(pet.id, { entry, ledge: ledge.clone().setY(ledge.y + 0.015), frame });
   });
 
   // 每个区两端的铭牌：区名和这个区的格号范围

@@ -98,8 +98,8 @@ const ui = new UI({
     return prefs.solo;
   },
   onDetailClosed() {
-    player.release();
-    world.shrine.close();
+    // 画面暗一下再回到大厅；收起角落的事在 transition 里做
+    transition(() => {});
   },
   onOffering(pet, kind) {
     world.shrine.drop(kind);
@@ -107,7 +107,7 @@ const ui = new UI({
     audio.chime(kind === 'candle');
   },
   onRite(kind, pet) {
-    // 在它的小龛前选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
+    // 在它的纪念角前选择为它放河灯 / 烧信：直接来到码头 / 篝火旁，宠物已经选好
     ui.closeAll();
     guide.clear();
     travel(kind === 'river' ? toDock : toFire);
@@ -126,7 +126,7 @@ const ui = new UI({
     audio.chime(true);
   },
   onLetter(pet, here) {
-    // 写了一封信：树上多一块自己的木牌；写给某一只的，它相框下面的数字跟着变，正开着它的小龛时信落在台面上
+    // 写了一封信：树上多一块自己的木牌；写给某一只的，它相框下面的数字跟着变，正开着它的纪念角时信落在台面上
     world.tree.setOwn(store.ownLetters());
     if (pet) world.gallery.refresh(pet);
     if (here) world.shrine.drop('letter');
@@ -242,38 +242,59 @@ function frameOf(pet: Pet) {
 }
 
 // ---------- 单宠物视角 ----------
-/** 镜头离小龛中心多远，才能让它完整地出现在资料面板以外的画面里 */
 let selfShow = 1;
+/** 镜头离它的角落多远，才能把桌子和墙上的照片都框进画面 */
 function shrineDistance() {
-  const { d, view } = CONFIG.shrine;
+  const { table, view } = CONFIG.shrine;
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   const aspect = window.innerWidth / window.innerHeight;
-  const byHeight = view.body[1] / view.fill[1] / t + d / 2;
-  const byWidth = view.body[0] / view.fill[0] / (t * aspect) + d / 2;
-  // 画面够宽就把打开的两扇门也框进来，但不让柜身因此缩得太小
-  const withDoors = Math.min(view.doors[0] / 0.96 / (t * aspect) + view.doors[1], byHeight * view.shrink);
-  return Math.max(byHeight, byWidth, withDoors);
+  const byHeight = view.body[1] / view.fill[1] / t;
+  const byWidth = view.body[0] / view.fill[0] / (t * aspect);
+  return Math.max(byHeight, byWidth) + table.d / 2;
 }
 
-/** 进入单宠物视角：这一格展开成小龛，镜头推到它正前方，小人走到旁边站好 */
-function openPet(entry: PhotoEntry) {
+/** 画面暗着的时候：布置成这只宠物的角落，镜头直接切到它正前方，小人和其他访客藏起来 */
+function showPet(entry: PhotoEntry) {
   ui.openDetail(entry.pet);
   world.shrine.open(entry);
   player.refocus(world.shrine.center, entry.normal, shrineDistance(), (x, z) => world.shrine.inside(x, z));
+  player.snapFocus();
+  selfShow = 0;
+  if (crowd) {
+    crowd.away = true;
+    crowd.snap();
+  }
   interaction?.setHighlight(null);
+  clearHover();
   marker.hide();
 }
 
-/** 直接去看这只宠物：就在它附近时原地打开；离得远（或者在影厅、河边）时，画面暗一下，来到它的相框前 */
+/** 画面暗着的时候：收起它的角落，镜头回到小人身后 */
+function leavePet() {
+  player.release();
+  player.snapFocus();
+  world.shrine.close();
+  selfShow = 1;
+  if (crowd) {
+    crowd.away = false;
+    crowd.snap();
+  }
+}
+
+/** 进入单宠物视角：画面暗一下，再亮起来就是它的角落 */
+function openPet(entry: PhotoEntry) {
+  transition(() => showPet(entry));
+}
+
+/** 直接去看这只宠物：离得远（或者在影厅、河边）时，小人同时来到它的相框前 */
 function visit(entry: PhotoEntry) {
   const { center, normal } = entry;
-  const near = !inCinema && !inRide && !pending && Math.hypot(player.pos.x - center.x, player.pos.z - center.z) < 5;
-  if (near) return openPet(entry);
   transition(() => {
+    const near = !inCinema && !inRide && Math.hypot(player.pos.x - center.x, player.pos.z - center.z) < 5;
     if (inCinema) exitCinema();
     if (inRide) exitRide();
-    player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
-    openPet(entry);
+    if (!near) player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
+    showPet(entry);
   });
 }
 
@@ -290,6 +311,8 @@ function transition(mid: () => void) {
   window.setTimeout(() => {
     const run = pending!;
     pending = null;
+    // 单宠物视角已经关掉了、它的角落还摆着：趁画面暗着收起来
+    if (world.shrine.isOpen && !ui.detailOpen) leavePet();
     run();
     ui.veil(false);
   }, CONFIG.fade * 1000);
@@ -495,7 +518,7 @@ window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 player.onTap = (x, y) => {
   if (!entered || !interaction || blocked || pending || player.riding) return;
   if (ui.detailOpen) {
-    // 单宠物视角里：点信可以读信，点小龛本身不做事，点外面退出
+    // 单宠物视角里：点信可以读信，点桌子、照片这些不做事，点外面退出
     const part = world.shrine.pick(x, y, camera);
     if (part === 'letter') ui.openPetLetters();
     else if (!part) ui.closeDetail();
@@ -571,7 +594,7 @@ function resize() {
   composer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  // 窗口变化后重新计算镜头距离，保证小龛仍然完整可见
+  // 窗口变化后重新计算镜头距离，保证纪念角仍然完整可见
   const entry = world.shrine?.entry;
   if (entry && player.focused) player.focusOn(world.shrine.center, entry.normal, shrineDistance());
 }
@@ -600,13 +623,11 @@ function frame() {
   pose.sit += ((player.seated ? 1 : 0) - pose.sit) * (1 - Math.exp(-dt * 3.5));
   pose.y += seatLift * pose.sit;
   avatar.set(0, pose, t);
-  // 看小龛的时候自己的小人也淡出，画面里只留小龛
-  selfShow += ((ui.detailOpen ? 0 : 1) - selfShow) * (1 - Math.exp(-dt * 5));
+  // 在它的角落里，自己的小人不出现
   avatar.opacity = player.fade * selfShow;
   avatar.commit();
   if (!player.walking) marker.hide();
   marker.update(dt, t);
-  if (crowd) crowd.away = ui.detailOpen;
   crowd?.update(dt, t);
   world.update(dt, t, camera, player.pos, pixelRatio());
   guide.update(t, player.pos);
@@ -641,7 +662,6 @@ async function boot() {
     run();
   }
   interaction = new Interaction(camera, world, player.pos);
-  world.shrine.reflect(renderer);
   world.tree.setOwn(store.ownLetters());
   // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
   crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);

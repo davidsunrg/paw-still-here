@@ -49,7 +49,7 @@ class QuadBatch {
 
 /**
  * 所有宠物照片共用一张图集和一个网格：
- * 每只宠物在图集里占一格，照片墙上的相框和小龛里的照片都引用同一格。
+ * 每只宠物在图集里占一格，照片墙上的相框和纪念角里的照片都引用同一格。
  */
 export class PhotoBatch {
   static readonly CELL = 204;
@@ -90,7 +90,7 @@ export class PhotoBatch {
     img.src = url;
   }
 
-  /** 图集纹理，小龛里的照片也用它 */
+  /** 图集纹理，纪念角里的照片也用它 */
   get map() {
     return this.texture;
   }

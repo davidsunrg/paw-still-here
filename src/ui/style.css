@@ -475,7 +475,7 @@ body.touch #joystick {
 #detail blockquote::after {
   content: '\201D';
 }
-/* 看小龛时四角压暗一点，视线收到中间 */
+/* 看纪念角时四角压暗一点，视线收到中间 */
 #shrine-shade {
   position: fixed;
   inset: 0;
@@ -1154,6 +1154,10 @@ button:disabled {
   }
   #btn-leave {
     left: 10px;
+  }
+  /* 窄屏上右上角四个按钮会压到 Back；看纪念角时其他访客本来就不显示，这个开关先收起 */
+  body.in-shrine #btn-solo {
+    display: none;
   }
   body.in-shrine #hint {
     bottom: calc(154px + env(safe-area-inset-bottom));
