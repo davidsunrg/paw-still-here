@@ -332,7 +332,25 @@ textarea::placeholder {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+#joystick.active {
+  opacity: 1;
+}
+/* 屏幕左侧这一块都可以按下去当摇杆用；右侧留给滑动转视角 */
+#stick-zone {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 64px;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  width: 46%;
   touch-action: none;
+}
+body.touch #stick-zone {
+  display: block;
 }
 #joystick i {
   position: absolute;
@@ -427,7 +445,8 @@ body.touch #joystick {
 
 /* 进入单宠物视角后，收起底部的传送栏，换成礼物栏 */
 body.in-shrine .bottom-bar,
-body.in-shrine #joystick {
+body.in-shrine #joystick,
+body.in-shrine #stick-zone {
   display: none;
 }
 body.in-shrine #hint {

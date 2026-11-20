@@ -504,14 +504,39 @@ export class UI {
 
   // ---------- 触屏摇杆 ----------
 
-  bindJoystick(onMove: (x: number, y: number) => void) {
+  /**
+   * 触屏摇杆：手指按在屏幕左侧任意位置，摇杆就出现在手指下面，松手回到左下角。
+   * 没有拖动的轻点会转交给 onTap（等同于点了场景里的那个位置）。
+   */
+  bindJoystick(onMove: (x: number, y: number) => void, onTap: (x: number, y: number) => void) {
+    const zone = $('stick-zone');
     const base = $('joystick');
     const stick = $('stick');
+    const R = 56;
     let id = -1;
-    const set = (e: PointerEvent) => {
-      const r = base.getBoundingClientRect();
-      let x = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
-      let y = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
+    let origin = { x: 0, y: 0, t: 0 };
+    let dragging = false;
+    zone.addEventListener('pointerdown', (e) => {
+      if (id !== -1) return;
+      id = e.pointerId;
+      origin = { x: e.clientX, y: e.clientY, t: performance.now() };
+      dragging = false;
+      zone.setPointerCapture(id);
+    });
+    zone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== id) return;
+      let x = e.clientX - origin.x;
+      let y = e.clientY - origin.y;
+      if (!dragging) {
+        if (Math.hypot(x, y) < 8) return;
+        dragging = true;
+        base.classList.add('active');
+        base.style.left = `${origin.x - R}px`;
+        base.style.top = `${origin.y - R}px`;
+        base.style.bottom = 'auto';
+      }
+      x /= R;
+      y /= R;
       const len = Math.hypot(x, y);
       if (len > 1) {
         x /= len;
@@ -519,22 +544,18 @@ export class UI {
       }
       stick.style.transform = `translate(${x * 34}px, ${y * 34}px)`;
       onMove(x, -y);
-    };
-    base.addEventListener('pointerdown', (e) => {
-      id = e.pointerId;
-      base.setPointerCapture(id);
-      set(e);
-    });
-    base.addEventListener('pointermove', (e) => {
-      if (e.pointerId === id) set(e);
     });
     const end = (e: PointerEvent) => {
       if (e.pointerId !== id) return;
       id = -1;
+      if (!dragging && e.type === 'pointerup' && performance.now() - origin.t < 500) onTap(e.clientX, e.clientY);
+      dragging = false;
+      base.classList.remove('active');
+      base.style.left = base.style.top = base.style.bottom = '';
       stick.style.transform = '';
       onMove(0, 0);
     };
-    base.addEventListener('pointerup', end);
-    base.addEventListener('pointercancel', end);
+    zone.addEventListener('pointerup', end);
+    zone.addEventListener('pointercancel', end);
   }
 }

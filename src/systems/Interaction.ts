@@ -5,7 +5,10 @@ import type { PhotoEntry } from '../world/Batches';
 import { canvasTexture, makeCanvas } from '../world/textures';
 import type { Collider, Interactable, World } from '../world/World';
 
-export type Hit = { kind: 'pet'; entry: PhotoEntry; label: string } | { kind: 'object'; item: Interactable; label: string };
+/** far 表示小人离得太远，要先走过去才能打开 */
+export type Hit =
+  | { kind: 'pet'; entry: PhotoEntry; label: string; far: boolean }
+  | { kind: 'object'; item: Interactable; label: string; far: boolean; at: THREE.Vector3 };
 
 /** 线段 (x0,z0)-(x1,z1) 是否穿过包围盒 */
 function segmentHits(c: Collider, x0: number, z0: number, x1: number, z1: number) {
@@ -30,6 +33,31 @@ function segmentHits(c: Collider, x0: number, z0: number, x1: number, z1: number
     }
   }
   return true;
+}
+
+/** 线段从起点出发，在多远处（0–1）进入包围盒；碰不到返回 1 */
+function segmentEnter(c: Collider, x0: number, z0: number, x1: number, z1: number) {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  for (const [p, q] of [
+    [-dx, x0 - c.minX], [dx, c.maxX - x0], [-dz, z0 - c.minZ], [dz, c.maxZ - z0],
+  ]) {
+    if (p === 0) {
+      if (q < 0) return 1;
+    } else {
+      const r = q / p;
+      if (p < 0) {
+        if (r > t1) return 1;
+        if (r > t0) t0 = r;
+      } else {
+        if (r < t0) return 1;
+        if (r < t1) t1 = r;
+      }
+    }
+  }
+  return t0;
 }
 
 /** 鼠标悬停 / 点击拾取：相框、留言簿、接待台 */
@@ -85,12 +113,35 @@ export class Interaction {
 
     if (hit.object === this.world.photos.mesh) {
       const entry = this.world.photos.entryOfFace(hit.faceIndex ?? 0);
-      if (!entry || reach > CONFIG.player.reachPhoto) return null;
-      return { kind: 'pet', entry, label: `${entry.pet.name} · ${STR.tipPet}` };
+      if (!entry || reach > CONFIG.player.walkRange) return null;
+      return { kind: 'pet', entry, label: `${entry.pet.name} · ${STR.tipPet}`, far: reach > CONFIG.player.reachPhoto };
     }
     const item = this.world.interactables.find((i) => i.object === hit.object);
-    if (!item || reach > CONFIG.player.reachObject) return null;
-    return { kind: 'object', item, label: item.label };
+    if (!item || reach > CONFIG.player.walkRange) return null;
+    return { kind: 'object', item, label: item.label, far: reach > CONFIG.player.reachObject, at: hit.object.position };
+  }
+
+  /**
+   * 点击处对应的地面位置，用来让小人走过去。点到天上、太远的地方返回 null；
+   * 视线被墙或柜子挡住时，返回挡住之前的位置（小人会走到墙边）。
+   */
+  ground(clientX: number, clientY: number): THREE.Vector3 | null {
+    this.ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+    this.ray.setFromCamera(this.ndc, this.camera);
+    const { origin: o, direction: d } = this.ray.ray;
+    if (d.y > -0.03) return null;
+    const p = o.clone().addScaledVector(d, -o.y / d.y);
+    let t = 1;
+    for (const c of this.world.colliders) {
+      if (c.tall) t = Math.min(t, segmentEnter(c, o.x, o.z, p.x, p.z));
+    }
+    if (t < 1) {
+      const len = Math.hypot(p.x - o.x, p.z - o.z);
+      p.lerpVectors(o, p, Math.max(0, t - 0.5 / Math.max(len, 0.5)));
+    }
+    p.y = 0;
+    if (Math.hypot(p.x - this.who.x, p.z - this.who.z) > CONFIG.player.walkRange) return null;
+    return p;
   }
 
   /** 把高亮框套在某个相框上；传 null 隐藏 */

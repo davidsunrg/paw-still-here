@@ -10,6 +10,7 @@ import { STR } from './strings';
 import { AudioSystem } from './systems/AudioSystem';
 import { Guide } from './systems/Guide';
 import { Interaction } from './systems/Interaction';
+import { Marker } from './systems/Marker';
 import { Player } from './systems/Player';
 import { SimulatedVisitors } from './systems/SimulatedVisitors';
 import { Crowd } from './systems/Visitors';
@@ -49,6 +50,7 @@ const world = new World(scene);
 const player = new Player(camera, canvas, world.colliders);
 const audio = new AudioSystem();
 const guide = new Guide(scene);
+const marker = new Marker(scene);
 const avatar = new AvatarBatch(scene, 1);
 const pose = defaultPose(CONFIG.player.color);
 let interaction: Interaction | null = null;
@@ -248,9 +250,26 @@ player.onTap = (x, y) => {
   }
   if (blocked) return;
   const hit = interaction.pick(x, y);
-  if (!hit) return;
-  if (hit.kind === 'pet') openPet(hit.entry);
-  else hit.item.onClick();
+  if (!hit) {
+    // 没点到东西：点的是地面，让小人走过去
+    const p = interaction.ground(x, y);
+    if (!p) return;
+    player.walkTo(p.x, p.z);
+    marker.show(p.x, world.heightAt(p.x, p.z), p.z);
+    return;
+  }
+  marker.hide();
+  if (hit.kind === 'pet') {
+    const { entry } = hit;
+    if (!hit.far) return openPet(entry);
+    // 离得远：先走到相框前，到了再打开
+    const x = entry.center.x + entry.normal.x * 1.5;
+    const z = entry.center.z + entry.normal.z * 1.5;
+    player.walkTo(x, z, 0.3, () => openPet(entry));
+    marker.show(x, world.heightAt(x, z), z);
+  } else if (hit.far) {
+    player.walkTo(hit.at.x, hit.at.z, 2.4, hit.item.onClick);
+  } else hit.item.onClick();
 };
 
 function updateHover() {
@@ -265,7 +284,10 @@ function updateHover() {
   interaction.setHighlight(hit.kind === 'pet' ? hit.entry : null);
 }
 
-ui.bindJoystick((x, y) => player.stick.set(x, y));
+ui.bindJoystick(
+  (x, y) => player.stick.set(x, y),
+  (x, y) => player.onTap(x, y),
+);
 
 // ---------- 画质与尺寸 ----------
 function pixelRatio() {
@@ -314,6 +336,8 @@ function frame() {
   avatar.set(0, pose, t);
   avatar.opacity = player.fade;
   avatar.commit();
+  if (!player.walking) marker.hide();
+  marker.update(dt, t);
   crowd?.update(dt, t);
   world.update(dt, t, camera, player.pos, pixelRatio());
   guide.update(t, player.pos);

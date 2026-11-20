@@ -44,6 +44,17 @@ function segmentEnter(c: Collider, pad: number, x0: number, z0: number, x1: numb
   return t0;
 }
 
+/** 点击地面后要走去的地方 */
+interface Goal {
+  x: number;
+  z: number;
+  /** 离目标这么近就算到了 */
+  radius: number;
+  done?: () => void;
+  /** 被挡住、几乎没有前进的时间 */
+  stuck: number;
+}
+
 interface Focus {
   /** 镜头的位置和朝向 */
   cam: THREE.Vector3;
@@ -84,6 +95,7 @@ export class Player {
   private focus: Focus | null = null;
   private lastFocus: Focus | null = null;
   private blend = 0;
+  private goal: Goal | null = null;
   private pointers = new Map<number, { x: number; y: number }>();
   private lookId = -1;
   private pinch = 0;
@@ -173,6 +185,45 @@ export class Player {
     return this.pointers.size > 0;
   }
 
+  /** 是否正在自己走向点击的地方 */
+  get walking() {
+    return this.goal !== null;
+  }
+
+  /**
+   * 让小人自己走到 (x, z)，到了以后调用 done。不做寻路：朝目标直走，碰到东西沿着它的边滑过去，
+   * 实在过不去就停下（如果已经离得不远，仍然算到了）。键盘、摇杆、打开面板都会取消。
+   */
+  walkTo(x: number, z: number, radius = 0.15, done?: () => void) {
+    if (this.focus) return;
+    this.goal = { x, z, radius, done, stuck: 0 };
+  }
+
+  private walk(dt: number) {
+    const g = this.goal!;
+    const dx = g.x - this.pos.x;
+    const dz = g.z - this.pos.z;
+    const d = Math.hypot(dx, dz);
+    const arrive = () => {
+      this.goal = null;
+      g.done?.();
+      return 0;
+    };
+    if (d <= g.radius) return arrive();
+    const fromX = this.pos.x;
+    const fromZ = this.pos.z;
+    const speed = Math.min(CONFIG.player.walk, d / dt);
+    this.step(dx / d, dz / d, speed, dt, true);
+    const moved = Math.hypot(this.pos.x - fromX, this.pos.z - fromZ);
+    g.stuck = moved < speed * dt * 0.3 ? g.stuck + dt : Math.max(0, g.stuck - dt);
+    if (g.stuck > 0.7) {
+      if (d <= g.radius + 2.5) return arrive();
+      this.goal = null;
+      return 0;
+    }
+    return moved / dt;
+  }
+
   get focused() {
     return this.focus !== null;
   }
@@ -190,6 +241,7 @@ export class Player {
   /** 把小人放到某处；yaw / pitch 是镜头的朝向，小人默认面向同一个方向 */
   teleport(x: number, z: number, yaw: number, pitch = CAM.pitch, facing = yaw) {
     this.focus = this.lastFocus = null;
+    this.goal = null;
     this.blend = 0;
     this.pos.set(x, 0, z);
     this.yaw = yaw;
@@ -219,6 +271,7 @@ export class Player {
       }
     }
     this.focus = { cam, yaw, stand, look: target.clone() };
+    this.goal = null;
   }
 
   /** 换到同一组里的另一只宠物时，让小人重新选站的位置 */
@@ -271,7 +324,10 @@ export class Player {
       this.facing = angleLerp(this.facing, to, 1 - Math.exp(-dt * 6));
       return 0;
     }
-    if (!this.enabled) return 0;
+    if (!this.enabled) {
+      this.goal = null;
+      return 0;
+    }
     const K = this.keys;
     let fw = this.stick.y;
     let sd = this.stick.x;
@@ -282,8 +338,11 @@ export class Player {
     if (K.has('ArrowLeft') || K.has('KeyQ')) this.yaw += dt * 1.9;
     if (K.has('ArrowRight') || K.has('KeyE')) this.yaw -= dt * 1.9;
     const len = Math.hypot(fw, sd);
-    if (len < 0.05) return 0;
-    const speed = (K.has('ShiftLeft') || K.has('ShiftRight') ? run : walk) * Math.min(1, len);
+    if (len < 0.05) return this.goal ? this.walk(dt) : 0;
+    // 自己动手走，就不再去刚才点的地方了
+    this.goal = null;
+    const fast = K.has('ShiftLeft') || K.has('ShiftRight') || this.stick.length() > CONFIG.player.stickRun;
+    const speed = (fast ? run : walk) * Math.min(1, len);
     fw /= len;
     sd /= len;
     // 移动方向相对镜头
