@@ -22,6 +22,14 @@ const COL = {
 const HALL_FACE = CONFIG.hall.w / 2 - T / 2;
 const GROTTO_X0 = CONFIG.hall.w / 2 + T / 2;
 
+/** 访客是不是已经走上了洞里的石台（该上船了） */
+export function inCaveDoor(x: number, z: number) {
+  return x > GROTTO_X0 + D.enter && x < GROTTO_X0 + D.depth && Math.abs(z - D.z) < D.half;
+}
+
+/** 中途下船后回到哪里：大厅里的洞口前，面向洞口 */
+export const CAVE_BACK = { x: HALL_FACE - 1.6, z: D.z, yaw: -Math.PI / 2 };
+
 /**
  * 思念之河在大厅右墙上的入口：石砌的拱形洞口，上方挂一块木牌，洞里是一小段岩洞，
  * 石台外面是水，停着一条小木船。门洞本身由 Hall 在砌墙时留出来。

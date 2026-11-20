@@ -39,6 +39,7 @@ export const en = {
     gallery: 'Hanging the frames…',
     space: 'Sweeping the courtyard…',
     cinema: 'Dimming the theater lights…',
+    cave: 'Filling the river in the cave…',
     finish: 'Almost there…',
   },
   enter: 'Enter',
@@ -82,8 +83,12 @@ export const en = {
   /** 思念之河：洞口上方木牌的两行字、鼠标悬停的提示、还没开放时点了之后的一行字 */
   caveSign: 'The River of Longing',
   caveSub: 'By boat, through the cave, to the dock',
-  tipCave: 'The River of Longing · not open yet',
-  caveSoon: 'The boat is not ready yet. It will be soon.',
+  tipCave: 'Board the boat · The River of Longing',
+  rideStart: 'Drag to look around. The boat will carry you to the dock.',
+  rideEnd: 'The river brought you to the dock.',
+  ridePause: 'Pause',
+  rideResume: 'Resume',
+  rideLeave: 'Leave the boat',
 
   tipFire: 'Burn a letter for them',
   fireHint: 'By the campfire you can write a letter and burn it for them',

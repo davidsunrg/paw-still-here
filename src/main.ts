@@ -20,6 +20,7 @@ import type { PhotoEntry } from './world/Batches';
 import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
+import { CAVE_BACK, inCaveDoor } from './world/Cave';
 import { CINEMA_BACK, CINEMA_ROOM, CINEMA_SPAWN, inCinemaDoor, inCinemaExit } from './world/Cinema';
 import { LANTERN_LAUNCH, LANTERN_SPOT } from './world/LanternTerrace';
 import { DOCK_SPOT, routeToDock } from './world/River';
@@ -139,6 +140,18 @@ const ui = new UI({
     const entry = frameOf(pet);
     if (entry) enterSpace(entry);
   },
+  onRidePause() {
+    world.ride.paused = !world.ride.paused;
+    return world.ride.paused;
+  },
+  onRideLeave() {
+    if (!inRide) return;
+    transition(() => {
+      if (!inRide) return;
+      exitRide();
+      player.teleport(CAVE_BACK.x, CAVE_BACK.z, CAVE_BACK.yaw);
+    });
+  },
   onBlockingChange(b) {
     blocked = b;
     player.enabled = !b;
@@ -152,7 +165,7 @@ world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
 world.hooks.lantern = () => ui.openLantern();
 world.hooks.cinema = () => enterCinema();
-world.hooks.cave = () => ui.toast(STR.caveSoon);
+world.hooks.cave = () => enterRide();
 world.hooks.sit = (seats) => {
   // 坐到这张沙发上离自己近的那一边
   const d = (s: { x: number; z: number }) => Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
@@ -260,11 +273,12 @@ function enterSpace(entry: PhotoEntry) {
   const free = !player.blocked(back.x, back.z);
   player.area = area;
   player.room = room;
-  if (!free) back = (inSpace ? home : null) ?? (inCinema ? CINEMA_BACK : { x: player.pos.x, z: player.pos.z, yaw: player.facing });
+  if (!free) back = (inSpace ? home : null) ?? (inCinema ? CINEMA_BACK : inRide ? CAVE_BACK : { x: player.pos.x, z: player.pos.z, yaw: player.facing });
   interaction?.setHighlight(null);
   marker.hide();
   transition(() => {
     if (inCinema) exitCinema();
+    if (inRide) exitRide();
     home = back;
     inSpace = true;
     world.space.open(entry.pet);
@@ -313,9 +327,66 @@ function leaveCinema() {
   });
 }
 
-/** 去别的地方：如果正在小院或影厅里（或正在进出），先让画面暗下去再过去 */
+// ---------- 思念之河：坐船穿过山洞 ----------
+let inRide = false;
+
+/** 上船：画面暗下去，再亮起来时已经坐在山洞里的木船上 */
+function enterRide() {
+  if (inRide) return;
+  marker.hide();
+  guide.clear();
+  transition(() => {
+    if (inSpace) exitSpace();
+    if (inCinema) exitCinema();
+    inRide = true;
+    world.ride.start();
+    const p = world.ride.update(0);
+    player.teleport(p.x, p.z, p.facing, 0.02);
+    player.sit(p.x, p.z, p.facing, p);
+    player.riding = true;
+    player.lookUp = CONFIG.cave.lookUp;
+    player.boomLimit = p.boom;
+    seatLift = RIDE_LIFT;
+    pose.sit = 1;
+    world.setAmbience(p.ambience);
+    ui.setRiding(true);
+    ui.whisper(STR.rideStart);
+  });
+}
+
+/** 下船（之后去哪里由调用的地方决定） */
+function exitRide() {
+  inRide = false;
+  world.ride.stop();
+  world.setAmbience(1);
+  player.riding = false;
+  player.lookUp = CONFIG.camera.pitchMax;
+  player.boomLimit = Infinity;
+  ui.setRiding(false);
+}
+
+/** 船每帧往前走：小人和镜头跟着；到了终点，画面暗下去，再亮起来时站在室外的码头上 */
+function updateRide(dt: number) {
+  const p = world.ride.update(pending ? 0 : dt);
+  player.pos.x = p.x;
+  player.pos.z = p.z;
+  player.facing = p.facing;
+  player.yaw += p.turn;
+  player.boomLimit += (p.boom - player.boomLimit) * (1 - Math.exp(-dt * 2));
+  world.setAmbience(p.ambience);
+  if (p.done && !pending) {
+    transition(() => {
+      if (!inRide) return;
+      exitRide();
+      toDock();
+      ui.whisper(STR.rideEnd);
+    });
+  }
+}
+
+/** 去别的地方：如果正在小院、影厅或船上（或正在进出），先让画面暗下去再过去 */
 function travel(dest: () => void) {
-  if (!inSpace && !inCinema && !pending) return dest();
+  if (!inSpace && !inCinema && !inRide && !pending) return dest();
   transition(() => {
     if (inSpace) {
       exitSpace();
@@ -323,6 +394,7 @@ function travel(dest: () => void) {
       if (home) player.teleport(home.x, home.z, home.yaw);
     }
     if (inCinema) exitCinema();
+    if (inRide) exitRide();
     dest();
   });
 }
@@ -332,6 +404,8 @@ let swing: number | null = null;
 
 /** 坐着时小人比站着高出多少（长椅和沙发的坐面高度不一样） */
 let seatLift = 0;
+/** 船上的横板 */
+const RIDE_LIFT = 0.42 - CONFIG.player.sitHip;
 
 /** 走到座位前坐下 */
 function sitDown(seat: { x: number; z: number; facing: number; yaw: number; lift: number; exit: { x: number; z: number } }) {
@@ -365,7 +439,7 @@ canvas.addEventListener('pointerdown', () => canvas.classList.add('dragging'));
 window.addEventListener('pointerup', () => canvas.classList.remove('dragging'));
 
 player.onTap = (x, y) => {
-  if (!entered || !interaction || blocked || pending) return;
+  if (!entered || !interaction || blocked || pending || inRide) return;
   const hit = interaction.pick(x, y);
   if (!hit) {
     // 没点到东西：点的是地面，让小人走过去
@@ -439,6 +513,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
 
+  if (inRide) updateRide(dt);
   player.update(dt);
   pose.x = player.pos.x;
   pose.y = player.pos.y;
@@ -475,7 +550,8 @@ function frame() {
   if (!pending && entered) {
     if (inCinema) {
       if (inCinemaExit(player.pos.x, player.pos.z)) leaveCinema();
-    } else if (!inSpace && inCinemaDoor(player.pos.x, player.pos.z)) enterCinema();
+    } else if (!inSpace && !inRide && inCinemaDoor(player.pos.x, player.pos.z)) enterCinema();
+    else if (!inSpace && !inRide && inCaveDoor(player.pos.x, player.pos.z)) enterRide();
   }
   updateDiscovery();
   updateHover();

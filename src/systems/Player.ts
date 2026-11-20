@@ -98,6 +98,13 @@ export class Player {
   area: Area | null = null;
   /** 不为空时，小人在这个矩形里活动，不再使用主场景的边界 */
   room: Room | null = null;
+  /**
+   * 坐在船上：小人的位置和朝向由别处每帧给出，自己不能走动，也不会因为想走而站起来。
+   * boomLimit 是镜头最远能离小人多远（洞里窄的地方要拉近），lookUp 是最多能仰视多少。
+   */
+  riding = false;
+  boomLimit = Infinity;
+  lookUp = CAM.pitchMax;
   /** 摇杆输入：x 向右，y 向前 */
   readonly stick = new THREE.Vector2();
   /** 脚下的地面高度（桥面会高出地面） */
@@ -163,7 +170,7 @@ export class Player {
       if (e.pointerId !== this.lookId) return;
       const k = 0.0042;
       this.yaw += dx * k;
-      this.pitch = THREE.MathUtils.clamp(this.pitch + dy * k, CAM.pitchMin, CAM.pitchMax);
+      this.pitch = THREE.MathUtils.clamp(this.pitch + dy * k, CAM.pitchMin, this.lookUp);
     });
     const end = (e: PointerEvent) => {
       if (!this.pointers.delete(e.pointerId)) return;
@@ -302,8 +309,13 @@ export class Player {
 
   private move(dt: number) {
     const { walk, run } = CONFIG.player;
-    if (!this.enabled) {
+    if (!this.enabled || this.riding) {
       this.goal = null;
+      // 在船上仍然可以用键盘转头
+      if (this.enabled && this.riding) {
+        if (this.keys.has('ArrowLeft') || this.keys.has('KeyQ')) this.yaw += dt * 1.9;
+        if (this.keys.has('ArrowRight') || this.keys.has('KeyE')) this.yaw -= dt * 1.9;
+      }
       return 0;
     }
     const K = this.keys;
@@ -379,7 +391,7 @@ export class Player {
     const cp = Math.cos(this.pitch);
     const backX = Math.sin(this.yaw);
     const backZ = Math.cos(this.yaw);
-    const room = this.clearance(backX, backZ, this.dist);
+    const room = this.clearance(backX, backZ, Math.min(this.dist, this.boomLimit));
     // 被挡住时立刻拉近，离开遮挡后慢慢恢复
     this.boom = room < this.boom ? room : this.boom + (room - this.boom) * (1 - Math.exp(-dt * 4));
     this.camera.position.set(

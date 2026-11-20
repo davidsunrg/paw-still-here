@@ -4,6 +4,7 @@ import { PETS, type Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
+import { CaveRide } from './CaveRide';
 import { buildCinema, type Cinema } from './Cinema';
 import { buildLanternTerrace } from './LanternTerrace';
 import { buildGallery, type Gallery } from './Gallery';
@@ -60,8 +61,10 @@ export interface Lamp {
   intensity: number;
   distance: number;
   color: THREE.Color;
-  /** 到玩家的水平距离，每帧更新 */
+  /** 到玩家的水平距离（减去 reach），每帧更新 */
   d: number;
+  /** 这盏灯比别的灯多远还亮着（大山洞里照远处洞壁的灯）。不写就是 0 */
+  reach?: number;
 }
 
 type Updater = (dt: number, t: number, player: THREE.Vector3) => void;
@@ -85,12 +88,14 @@ export class World {
   space!: Space;
   gallery!: Gallery;
   cinema!: Cinema;
+  ride!: CaveRide;
 
   private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
 
   sky!: Sky;
   moonLight!: THREE.DirectionalLight;
+  private skyLight!: THREE.HemisphereLight;
 
   constructor(readonly scene: THREE.Scene) {}
 
@@ -106,6 +111,7 @@ export class World {
       ['gallery', () => (this.gallery = buildGallery(this))],
       ['space', () => (this.space = new Space(this))],
       ['cinema', () => (this.cinema = buildCinema(this))],
+      ['cave', () => (this.ride = new CaveRide(this))],
       ['finish', () => this.finish()],
     ];
   }
@@ -116,7 +122,8 @@ export class World {
     scene.fog = new THREE.FogExp2(CONFIG.colors.fog, 0.011);
     this.sky = new Sky(scene);
 
-    scene.add(new THREE.HemisphereLight(0x5568b8, 0x1a1626, 1.5));
+    this.skyLight = new THREE.HemisphereLight(0x5568b8, 0x1a1626, 1.5);
+    scene.add(this.skyLight);
 
     const moon = new THREE.DirectionalLight(0x9fb6ff, 1.6);
     moon.castShadow = true;
@@ -159,6 +166,15 @@ export class World {
     return lamp;
   }
 
+  /**
+   * 夜空给场景的底光（天光和月光）有多亮：1 是室外平时的样子。
+   * 山洞里调得很暗，只剩洞里自己的灯；出洞时再亮回来。
+   */
+  setAmbience(k: number) {
+    this.skyLight.intensity = 1.5 * k;
+    this.moonLight.intensity = 1.6 * k;
+  }
+
   /** 同时点亮的灯的数量（低画质时减少） */
   setLightBudget(n: number) {
     this.pool.forEach((l, i) => (l.visible = i < n));
@@ -166,7 +182,7 @@ export class World {
 
   private updateLights(p: THREE.Vector3) {
     const { fadeStart, fadeEnd } = CONFIG.lights;
-    for (const l of this.lamps) l.d = Math.hypot(l.pos.x - p.x, l.pos.z - p.z);
+    for (const l of this.lamps) l.d = Math.hypot(l.pos.x - p.x, l.pos.z - p.z) - (l.reach ?? 0);
     this.lamps.sort((a, b) => a.d - b.d);
     this.pool.forEach((light, i) => {
       const lamp = this.lamps[i];
