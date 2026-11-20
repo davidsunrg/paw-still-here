@@ -30,17 +30,17 @@ const HUE = {
 
 /**
  * 照洞壁和洞顶的大灯：在河道上走了多远的地方、偏离中线多少（正数在右手边）、多高、颜色、亮度。
- * 灯本身看不见。洞厅很宽，灯挂得高、离洞壁远：洞壁和水面上只落下很淡的一层光，不会照出一块块亮斑。
+ * 灯本身看不见；洞厅很宽，但要有可读的暖光层，水面和远处洞壁能分得出明暗。
  */
 type Light = [s: number, side: number, y: number, color: number, intensity: number];
 const LIGHTS: Light[] = [
-  [6, -17, 17, HUE.amber, 150],
-  [26, 22, 18, HUE.honey, 120],
-  [46, -23, 18, HUE.ember, 120],
-  [56, 2, 30, HUE.pale, 70],
-  [66, 23, 18, HUE.pale, 90],
-  [84, -22, 18, HUE.honey, 110],
-  [98, 14, 10, HUE.moon, 90],
+  [6, -17, 12, HUE.amber, 280],
+  [26, 22, 13, HUE.honey, 300],
+  [46, -23, 13, HUE.ember, 300],
+  [56, 2, 22, HUE.pale, 175],
+  [66, 23, 13, HUE.pale, 225],
+  [84, -22, 13, HUE.honey, 280],
+  [98, 14, 11, HUE.moon, 200],
 ];
 
 /** 露天的一段从哪里开始（横截面里第一个洞顶高度为 0 的地方） */
@@ -971,9 +971,10 @@ export class CaveRide {
         const k = 1 + R(-0.09, 0.09);
         // 每一圈都正对着 z 方向，只是圆心跟着河道走：洞厅比河道拐弯的半径还宽，
         // 圈要是跟着河道转向，拐弯内侧的洞壁会叠在一起
-        const [x, z] = at(s + R(-1.6, 1.6), 0);
+        // 洞壁横截面跟着河道左右展开（用法线的 lateral），不能只在世界 x 上拉椭圆，否则弯道里三角面全指向河道中心，像菊花
+        const [x, z] = at(s + R(-1.6, 1.6), half * k * Math.cos(th));
         // 贴着水面的一圈埋到水下一点，水边不留缝
-        pos.push(x + half * k * Math.cos(th), i === 0 || i === SEG ? -1 : ceil * k * Math.sin(th), z);
+        pos.push(x, i === 0 || i === SEG ? -1 : ceil * k * Math.sin(th), z);
       }
     }
     const index: number[] = [];
@@ -1043,7 +1044,7 @@ export class CaveRide {
     // 照洞壁的大灯
     for (const [s, side, y, color, intensity] of LIGHTS) {
       const [x, z] = at(s, side);
-      this.world.pointLight(x, y, z, intensity, 75, color).reach = V.lightReach;
+      this.world.pointLight(x, y, z, intensity, 88, color).reach = V.lightReach;
     }
 
     // 水面上漂着的河灯：洞里稀疏的一片，洞口外也有，和码头那条河接上

@@ -178,7 +178,7 @@ export const CONFIG = {
     profile: [[0, 84, 52], [30, 110, 68], [70, 110, 68], [106, 24, 16], [112, 24, 0], [200, 24, 0]] as Array<[number, number, number]>,
     /** 洞壁的石块大概多大（半径）；照洞壁的灯比普通的灯多远还亮着 */
     rock: 7,
-    lightReach: 42,
+    lightReach: 50,
     /** 洞里的石台比水面高多少、码头的木板比水面高多少 */
     station: { ledge: 4, deck: 0.4 },
     /**
@@ -191,8 +191,8 @@ export const CONFIG = {
      * 落到水面要几秒；水面上那圈光有多大；灯放在自己坐的那一侧，离码头不到 dockClear 米、那一侧又正好是码头时换到另一侧
      */
     floats: { max: 10, reach: 0.4, ahead: 4.6, hand: 0.7, lower: 1.6, glow: 1.9, dockClear: 26 },
-    /** 洞里夜空的底光剩下多少（1 是室外） */
-    ambience: 0.08,
+    /** 洞里夜空的底光剩下多少（1 是室外）；太暗只靠远灯会显得一片黑 */
+    ambience: 0.2,
     /** 在船上最多能仰视多少（弧度） */
     lookUp: 0.85,
     /** 快到终点时，提前多少米开始让画面暗下去 */
