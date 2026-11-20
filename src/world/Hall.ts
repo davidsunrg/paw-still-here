@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
 import { STR } from '../i18n';
+import { buildCinemaEntrance } from './Cinema';
 import { buildFloorMap } from './FloorMap';
 import { archWall, plant, sofa, wallStrip } from './parts';
 import { buildTree } from './Tree';
 import { pawTexture, plankTexture, textMesh } from './textures';
 import type { World } from './World';
 
-/** 大厅：正中是纪念树，三面墙是照片墙（见 Gallery.ts），门墙两侧是接待台和电梯 */
+/** 大厅：正中是纪念树，三面墙是照片墙（见 Gallery.ts），门墙两侧是接待台和电梯，右墙正中是影厅入口（见 Cinema.ts） */
 export function buildHall(w: World) {
   const { kit, scene } = w;
   const C = CONFIG.colors;
@@ -32,9 +33,11 @@ export function buildHall(w: World) {
   // ---------- 墙 ----------
   archWall(w, ZONES.hallFront, CONFIG.hall.w + T, CONFIG.hall.doorHalf, CONFIG.hall.doorSpring, true);
   archWall(w, ZONES.hallBack, CONFIG.hall.w + T, L.backDoorHalf, L.backDoorSpring);
+  // 左墙是一整面；右墙正中是影厅的入口
+  kit.box(-hw, H / 2, zc, T, H, d + T, C.wall);
+  w.collide(-hw, zc, T, d + T, true);
+  buildCinemaEntrance(w);
   for (const sx of [-1, 1]) {
-    kit.box(sx * hw, H / 2, zc, T, H, d + T, C.wall);
-    w.collide(sx * hw, zc, T, d + T, true);
     wallStrip(kit, sx * hw, zc, 0, d + T);
     for (const z of [ZONES.hallFront, ZONES.hallBack]) {
       kit.box(sx * hw, (H + 0.3) / 2, z, 0.75, H + 0.3, 0.75, 0xc8bca9);

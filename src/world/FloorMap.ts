@@ -52,8 +52,15 @@ function mapTexture() {
 
   // 外墙：下面留出大门，上面是合着的石门
   const hw = L.w / 2;
+  const zc = -L.d / 2;
   line(-hw, 0, -hw, -L.d, 4, DIM);
-  line(hw, 0, hw, -L.d, 4, DIM);
+  // 右墙正中是影厅的入口：墙线在这里断开，外面画出门厅
+  const door = CONFIG.cinema.door;
+  line(hw, 0, hw, zc + door.half, 4, DIM);
+  line(hw, zc - door.half, hw, -L.d, 4, DIM);
+  ctx.strokeStyle = DIM;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(X(hw), Y(zc - door.half), door.depth * s, door.half * 2 * s);
   line(-hw, -L.d, hw, -L.d, 4, DIM);
   line(-hw, 0, -L.doorHalf, 0, 4, DIM);
   line(L.doorHalf, 0, hw, 0, 4, DIM);
@@ -63,19 +70,24 @@ function mapTexture() {
 
   // 三个区，和每个区两头的格号
   const sideHalf = (G.sideCols * G.pitch) / 2;
-  const zc = -L.d / 2;
+  /** C 区正中让给影厅入口的那一段，半长 */
+  const gapHalf = (G.doorCols * G.pitch) / 2;
   const outer = G.backInner + G.backCols * G.pitch - G.pitch / 2;
   const inner = G.backInner - G.pitch / 2;
   const in1 = 0.45;
   line(-hw + in1, zc + sideHalf, -hw + in1, zc - sideHalf, 10);
-  line(hw - in1, zc + sideHalf, hw - in1, zc - sideHalf, 10);
+  line(hw - in1, zc + sideHalf, hw - in1, zc + gapHalf, 10);
+  line(hw - in1, zc - gapHalf, hw - in1, zc - sideHalf, 10);
   line(-outer, -L.d + in1, -inner, -L.d + in1, 10);
   line(inner, -L.d + in1, outer, -L.d + in1, 10);
   const [n1, n2, n3] = SECTION_CELLS;
   text(STR.sectionName('A'), X(-hw) + 34, Y(zc) - 20, 30, INK, 'left');
   text(STR.map.cells(n1), X(-hw) + 34, Y(zc) + 22, 29, DIM, 'left');
-  text(STR.sectionName('C'), X(hw) - 34, Y(zc) - 20, 30, INK, 'right');
-  text(STR.map.cells(n3), X(hw) - 34, Y(zc) + 22, 29, DIM, 'right');
+  // C 区的名字写在靠后墙的那一半旁边，正中留给影厅
+  const cy = Y(zc - (gapHalf + sideHalf) / 2);
+  text(STR.sectionName('C'), X(hw) - 34, cy - 20, 30, INK, 'right');
+  text(STR.map.cells(n3), X(hw) - 34, cy + 22, 29, DIM, 'right');
+  text(STR.map.cinema, X(hw) - 34, Y(zc), 30, INK, 'right');
   text(`${STR.sectionName('B')}  ${STR.map.cells(n2)}`, W / 2, Y(-L.d) + 52, 36);
   // 格号从哪头开始：顺着大厅顺时针走，格号越来越大
   text('1', X(-hw) + 34, Y(zc + sideHalf) - 12, 26, DIM, 'left');

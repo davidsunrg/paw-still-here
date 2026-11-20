@@ -45,7 +45,7 @@ export const CUSTOM_PETS: Array<Partial<Pet> & Pick<Pet, 'name' | 'species' | 'p
 
 const G = CONFIG.gallery;
 /** 三个区各有多少格，顺序和 SECTIONS 一致 */
-export const SECTION_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows, G.sideCols * G.rows];
+export const SECTION_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows, (G.sideCols - G.doorCols) * G.rows];
 
 /** 可复现的伪随机数 */
 export function mulberry32(seed: number) {

@@ -56,7 +56,7 @@ export const CONFIG = {
   hall: { w: 24, d: 18, doorHalf: 2.0, doorSpring: 2.4, backDoorHalf: 1.6, backDoorSpring: 2.2, sofaX: 5.2, receptionX: 6.7, elevatorX: -7, mapX: -4.65, stringZ: [-2, -4.8, -13.2, -16] },
 
   /**
-   * 大厅三面墙上的照片墙。进门左手是 1 号墙，正对面（石门两侧）是 2 号墙，右手是 3 号墙。
+   * 大厅三面墙上的照片墙。进门左手是 1 号墙，正对面（石门两侧）是 2 号墙，右手是 3 号墙（正中是影厅入口）。
    * 每面墙 rows 行；格号按列编：面向墙从左到右，每列从上到下。
    */
   gallery: {
@@ -68,6 +68,8 @@ export const CONFIG = {
     frame: 0.5,
     /** 1、3 号墙各多少列；2 号墙石门两侧各多少列，以及最靠近石门的一列离中轴线多远 */
     sideCols: 20,
+    /** 3 号墙（C 区）正中为影厅入口让出几列，所以 C 区比 A 区少这么多列 */
+    doorCols: 4,
     backCols: 11,
     backInner: 2.5,
     /** 贴在墙上的石板：从多高到多高、多厚 */
@@ -107,6 +109,32 @@ export const CONFIG = {
      * sample 是示例宠物各有几张，variants 是占位画像一共有几种画法（和 textures 里的 POSES 一致）。
      */
     album: { angles: [102, -102, 80, -80, 124, -124], size: 0.6, y: 1.62, sample: [2, 4] as [number, number], variants: 4 },
+  },
+
+  /**
+   * 影厅：入口在大厅右墙（C 区）正中，走进门厅后画面暗下去，换到建在主场景之外很远处的放映厅。
+   * 放映厅里的坐标：银幕在 -Z 一端，出入口在 +Z 一端的后墙正中；座位一排比一排高。
+   */
+  cinema: {
+    x: -600,
+    z: 0,
+    /** 放映厅内部的宽和高；银幕墙和后墙各在 z 的哪里 */
+    w: 11,
+    h: 5.6,
+    front: -7,
+    back: 7.5,
+    /** 银幕的宽、高、中心高度 */
+    screen: { w: 7.2, h: 4.05, y: 3.05 },
+    /** 座位：几排、第一排在 z 的哪里、排距、每排比前一排高多少；中间过道两侧各几个座位、座位间距、中间过道的宽 */
+    rows: 4,
+    firstRow: -1.5,
+    rowPitch: 1.5,
+    rise: 0.22,
+    seatsPerSide: 4,
+    seatPitch: 0.8,
+    aisle: 1.6,
+    /** 门洞：半宽、高；门洞后面那段挂着帘子的门厅有多深；走进门厅多深就算进去了 */
+    door: { half: 1.2, h: 2.7, depth: 2.0, enter: 0.9 },
   },
 
   /**

@@ -70,6 +70,14 @@ export interface Area {
   out: number;
 }
 
+/** 一块矩形的活动范围（影厅）：墙本身有碰撞，这里只是代替主场景的边界 */
+export interface Room {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
 /**
  * 第三人称漫步：键盘 / 摇杆控制小人移动，拖拽让镜头绕着小人转，滚轮 / 双指缩放。
  * pos 是小人脚下的位置；yaw / pitch 是镜头的朝向，facing 是小人自己的朝向。
@@ -88,6 +96,8 @@ export class Player {
   enabled = true;
   /** 不为空时，小人只能在这块范围里活动 */
   area: Area | null = null;
+  /** 不为空时，小人在这个矩形里活动，不再使用主场景的边界 */
+  room: Room | null = null;
   /** 摇杆输入：x 向右，y 向前 */
   readonly stick = new THREE.Vector2();
   /** 脚下的地面高度（桥面会高出地面） */
@@ -274,6 +284,8 @@ export class Player {
       const open = Math.abs(Math.atan2(dx, dz)) < a.gap;
       return Math.hypot(dx, dz) > (open ? a.r + a.out : a.r - r);
     }
+    const m = this.room;
+    if (m) return x < m.minX || x > m.maxX || z < m.minZ || z > m.maxZ;
     return Math.abs(x) > 90 || z > 78 || z < -130;
   }
 

@@ -4,6 +4,7 @@ import { PETS, type Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
+import { buildCinema, type Cinema } from './Cinema';
 import { buildLanternTerrace } from './LanternTerrace';
 import { buildGallery, type Gallery } from './Gallery';
 import { tickFlames } from './gifts';
@@ -48,7 +49,9 @@ export interface Seat {
   facing: number;
   /** 走到这里再坐下 */
   approach: { x: number; z: number };
-  zone: 'fire' | 'hall';
+  /** 座位排得很密时（影厅）：这一排前面的窄道通到哪几条过道（过道的 x）。要先沿过道走到这一排，再拐进来 */
+  aisles?: number[];
+  zone: 'fire' | 'hall' | 'cinema';
 }
 
 /** 一盏登记过的灯。位置和亮度可以随时改 */
@@ -73,14 +76,15 @@ export class World {
   readonly slots = new Map<string, SlotInfo>();
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
-  /** 由 main 注入：点击留言簿 / 接待台 / 沙发时触发；sit 收到的是这张沙发上的座位 */
-  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, sit: (_seats: Seat[]) => {} };
-  /** 访客脚下的地面高度，目前只有桥面高出地面 */
+  /** 由 main 注入：点击留言簿 / 接待台 / 影厅入口 / 沙发时触发；sit 收到的是这张沙发上的座位 */
+  hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {}, lantern: () => {}, cinema: () => {}, sit: (_seats: Seat[]) => {} };
+  /** 访客脚下的地面高度：桥面高出地面，影厅里的座位一排比一排高 */
   heightAt: (x: number, z: number) => number = () => 0;
   river!: River;
   bonfire!: Bonfire;
   space!: Space;
   gallery!: Gallery;
+  cinema!: Cinema;
 
   private lamps: Lamp[] = [];
   private pool: THREE.PointLight[] = [];
@@ -101,6 +105,7 @@ export class World {
       ['hall', () => buildHall(this)],
       ['gallery', () => (this.gallery = buildGallery(this))],
       ['space', () => (this.space = new Space(this))],
+      ['cinema', () => (this.cinema = buildCinema(this))],
       ['finish', () => this.finish()],
     ];
   }
@@ -177,9 +182,9 @@ export class World {
   }
 
   /** 登记一个座位：(x, z) 是坐的位置，(fx, fz) 是座位正面的方向，访客从正面走过来坐下 */
-  seat(zone: Seat['zone'], x: number, z: number, top: number, fx: number, fz: number, approach = 0.85) {
+  seat(zone: Seat['zone'], x: number, z: number, top: number, fx: number, fz: number, approach = 0.85, aisles?: number[]) {
     const facing = Math.atan2(-fx, -fz);
-    this.seats.push({ x, z, top, facing, zone, approach: { x: x + fx * approach, z: z + fz * approach } });
+    this.seats.push({ x, z, top, facing, zone, aisles, approach: { x: x + fx * approach, z: z + fz * approach } });
   }
 
   interact(object: THREE.Object3D, label: string, onClick: () => void) {

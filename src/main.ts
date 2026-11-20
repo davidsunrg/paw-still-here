@@ -20,6 +20,7 @@ import type { PhotoEntry } from './world/Batches';
 import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
+import { CINEMA_BACK, CINEMA_ROOM, CINEMA_SPAWN, inCinemaDoor, inCinemaExit } from './world/Cinema';
 import { LANTERN_LAUNCH, LANTERN_SPOT } from './world/LanternTerrace';
 import { DOCK_SPOT, routeToDock } from './world/River';
 import { World } from './world/World';
@@ -150,11 +151,19 @@ world.hooks.reception = () => ui.openSearch();
 world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
 world.hooks.lantern = () => ui.openLantern();
+world.hooks.cinema = () => enterCinema();
 world.hooks.sit = (seats) => {
   // 坐到这张沙发上离自己近的那一边
   const d = (s: { x: number; z: number }) => Math.hypot(s.x - player.pos.x, s.z - player.pos.z);
   const seat = [...seats].sort((a, b) => d(a) - d(b))[0];
-  if (seat) sitDown({ x: seat.x, z: seat.z, facing: seat.facing, yaw: seat.facing, lift: seat.top - CONFIG.player.sitHip, exit: seat.approach });
+  if (!seat) return;
+  const go = () => sitDown({ x: seat.x, z: seat.z, facing: seat.facing, yaw: seat.facing, lift: seat.top - CONFIG.player.sitHip, exit: seat.approach });
+  const { approach, aisles } = seat;
+  // 已经在这一排前面的窄道里，或者座位前面是空地：直接走过去
+  if (!aisles || Math.abs(player.pos.z - approach.z) < 0.3) return go();
+  // 影厅里一排排座位挡着：先横着走到近的那条过道，沿过道走到这一排，再拐进去
+  const ax = [...aisles].sort((a, b) => Math.abs(a - player.pos.x) + Math.abs(a - approach.x) - Math.abs(b - player.pos.x) - Math.abs(b - approach.x))[0];
+  player.walkTo(ax, player.pos.z, 0.2, () => player.walkTo(ax, approach.z, 0.2, go));
 };
 
 /** 小人面前 dist 米、离地 y 米的位置 */
@@ -244,14 +253,17 @@ function enterSpace(entry: PhotoEntry) {
   const { center, normal } = entry;
   let back = { x: center.x + normal.x * 1.5, z: center.z + normal.z * 1.5, yaw: Math.atan2(normal.x, normal.z) };
   // 相框前站不下人时，回到进来之前站的地方（已经在别的小院里，就沿用上一次的）
-  const area = player.area;
-  player.area = null;
+  // （在影厅里找它时，就回到影厅的入口前）
+  const { area, room } = player;
+  player.area = player.room = null;
   const free = !player.blocked(back.x, back.z);
   player.area = area;
-  if (!free) back = (inSpace ? home : null) ?? { x: player.pos.x, z: player.pos.z, yaw: player.facing };
+  player.room = room;
+  if (!free) back = (inSpace ? home : null) ?? (inCinema ? CINEMA_BACK : { x: player.pos.x, z: player.pos.z, yaw: player.facing });
   interaction?.setHighlight(null);
   marker.hide();
   transition(() => {
+    if (inCinema) exitCinema();
     home = back;
     inSpace = true;
     world.space.open(entry.pet);
@@ -270,11 +282,46 @@ function leaveSpace() {
   });
 }
 
-/** 去别的地方：如果正在小院里（或正在进出），先让画面暗下去再过去 */
-function travel(dest: () => void) {
-  if (!inSpace && !pending) return dest();
+// ---------- 进出影厅 ----------
+let inCinema = false;
+
+/** 离开影厅：回到大厅里的入口前 */
+function exitCinema() {
+  inCinema = false;
+  player.room = null;
+  player.teleport(CINEMA_BACK.x, CINEMA_BACK.z, CINEMA_BACK.yaw);
+}
+
+/** 走进影厅：画面暗下去，再亮起来时站在放映厅后门口的平台上，面向银幕 */
+function enterCinema() {
+  if (inCinema) return;
+  marker.hide();
   transition(() => {
     if (inSpace) exitSpace();
+    inCinema = true;
+    player.room = CINEMA_ROOM;
+    player.teleport(CINEMA_SPAWN.x, CINEMA_SPAWN.z, CINEMA_SPAWN.yaw, CINEMA_SPAWN.pitch, CINEMA_SPAWN.facing);
+    // 平台比地面高，直接站上去，不让小人从地面升上来
+    player.pos.y = player.ground;
+  });
+}
+
+function leaveCinema() {
+  transition(() => {
+    if (inCinema) exitCinema();
+  });
+}
+
+/** 去别的地方：如果正在小院或影厅里（或正在进出），先让画面暗下去再过去 */
+function travel(dest: () => void) {
+  if (!inSpace && !inCinema && !pending) return dest();
+  transition(() => {
+    if (inSpace) {
+      exitSpace();
+      // 先回到相框前；dest 自己会换地方的话，这一步不影响它
+      if (home) player.teleport(home.x, home.z, home.yaw);
+    }
+    if (inCinema) exitCinema();
     dest();
   });
 }
@@ -422,6 +469,12 @@ function frame() {
   if (inSpace && !pending) {
     const { area } = world.space;
     if (Math.hypot(player.pos.x - area.x, player.pos.z - area.z) > area.r + CONFIG.space.leave) ui.closeDetail();
+  }
+  // 走进大厅右墙的门厅就进影厅；在影厅里走进后门的门厅就回大厅
+  if (!pending && entered) {
+    if (inCinema) {
+      if (inCinemaExit(player.pos.x, player.pos.z)) leaveCinema();
+    } else if (!inSpace && inCinemaDoor(player.pos.x, player.pos.z)) enterCinema();
   }
   updateDiscovery();
   updateHover();
