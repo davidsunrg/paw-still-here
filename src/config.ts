@@ -132,6 +132,23 @@ export const CONFIG = {
     burnTime: 4.8,
   },
 
+  /** 模拟的其他访客 */
+  visitors: {
+    /** 同时在场的人数：高画质 / 低画质 */
+    count: 10,
+    countLow: 5,
+    /** 行走速度（米 / 秒），比自己走得慢 */
+    speed: 1.3,
+    /** 在一个地方停留多久（秒） */
+    dwell: [15, 60] as [number, number],
+    /** 一位访客逛几个地方之后离开 */
+    visits: [2, 5] as [number, number],
+    /** 进场 / 离场时淡入淡出的时长（秒） */
+    fade: 2.5,
+    /** 衣服颜色 */
+    colors: [0x8fa7bf, 0xb99aa6, 0x9bb59a, 0xc2ad8a, 0xa69bc0, 0x8fb3b0, 0xc09a86, 0x9aa0a8],
+  },
+
   /** 宠物数量（上限 100，受照片图集大小限制） */
   petCount: 96,
   /** 大厅照片墙展示的精选数量 */

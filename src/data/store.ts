@@ -219,3 +219,23 @@ export const store = {
     return state.lanterns;
   },
 };
+
+/** 界面偏好（不属于纪念数据，单独存一个键） */
+const PREF_KEY = 'jinian:prefs';
+export const prefs = {
+  /** 是否「独自参观」：隐藏其他访客 */
+  get solo(): boolean {
+    try {
+      return JSON.parse(localStorage.getItem(PREF_KEY) ?? '{}').solo === true;
+    } catch {
+      return false;
+    }
+  },
+  set solo(on: boolean) {
+    try {
+      localStorage.setItem(PREF_KEY, JSON.stringify({ solo: on }));
+    } catch {
+      // 无法访问 localStorage 时只在本次参观里生效
+    }
+  },
+};

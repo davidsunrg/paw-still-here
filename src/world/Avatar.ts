@@ -18,18 +18,22 @@ export interface AvatarPose {
   bow: number;
   /** 衣服颜色 */
   color: THREE.ColorRepresentation;
-  /** 0–1，小于 1 时整个人缩小淡出 */
+  /** 整体缩放，0 表示不显示 */
   scale: number;
+  /** 0–1 的不透明度，进场 / 离场时用来淡入淡出 */
+  alpha: number;
 }
 
 export function defaultPose(color: THREE.ColorRepresentation): AvatarPose {
-  return { x: 0, y: 0, z: 0, facing: 0, phase: 0, stride: 0, sit: 0, bow: 0, color, scale: 1 };
+  return { x: 0, y: 0, z: 0, facing: 0, phase: 0, stride: 0, sit: 0, bow: 0, color, scale: 1, alpha: 1 };
 }
 
 // 身体各部分的尺寸，按 1.6 m 的身高搭好，再整体缩放到 CONFIG.player.height
 const HIP = 0.7;
 const SHOULDER = 1.2;
 const HEAD = 1.42;
+/** 小人受光的压缩程度，越大越不容易被灯照得发白 */
+const LIGHT_SOFTEN = 1.3;
 const SKIN = new THREE.Color(0xd9b494);
 const TROUSERS = new THREE.Color(0x2e3145);
 
@@ -62,13 +66,35 @@ export class AvatarBatch {
     scene: THREE.Scene,
     readonly count: number,
   ) {
-    this.mat = new THREE.MeshStandardMaterial({ roughness: 0.85, flatShading: true });
+    this.mat = new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true });
+    // 路灯、码头灯离小人的头很近，照在浅色衣服上会过曝发白。
+    // 这里把小人受到的光照做一次柔和的压缩：暗处几乎不变，越亮压得越多，最亮也不会超过 1 / LIGHT_SOFTEN。
+    // 每个小人自己的不透明度用「抖动丢弃像素」实现：材质仍然是不透明的，不用排序，也不影响其他小人。
+    this.mat.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'attribute float aAlpha;\nvarying float vAlpha;\nvoid main() {\n  vAlpha = aAlpha;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          'void main() {',
+          `varying float vAlpha;
+          void main() {
+            if (vAlpha < 0.995) {
+              float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+              if (n > vAlpha) discard;
+            }`,
+        )
+        .replace(
+          '#include <opaque_fragment>',
+          `outgoingLight = outgoingLight / (1.0 + outgoingLight * ${LIGHT_SOFTEN.toFixed(2)});\n#include <opaque_fragment>`,
+        );
+    };
     const make = (geo: THREE.BufferGeometry, n: number) => {
       const mesh = new THREE.InstancedMesh(geo, this.mat, n);
       mesh.frustumCulled = false;
       mesh.castShadow = true;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       for (let i = 0; i < n; i++) mesh.setColorAt(i, c.set(0xffffff));
+      geo.setAttribute('aAlpha', new THREE.InstancedBufferAttribute(new Float32Array(n).fill(1), 1));
       scene.add(mesh);
       return mesh;
     };
@@ -118,7 +144,11 @@ export class AvatarBatch {
       this.legs.setMatrixAt(j, m.multiplyMatrices(root, local(m, side * 0.095, HIP, 0, leg)));
       this.arms.setColorAt(j, c.set(p.color));
       this.legs.setColorAt(j, TROUSERS);
+      this.arms.geometry.attributes.aAlpha.setX(j, p.alpha);
+      this.legs.geometry.attributes.aAlpha.setX(j, p.alpha);
     }
+    this.torso.geometry.attributes.aAlpha.setX(i, p.alpha);
+    this.head.geometry.attributes.aAlpha.setX(i, p.alpha);
     this.torso.setColorAt(i, c.set(p.color));
     this.head.setColorAt(i, SKIN);
   }
@@ -128,6 +158,7 @@ export class AvatarBatch {
     for (const mesh of this.meshes) {
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.geometry.attributes.aAlpha.needsUpdate = true;
     }
   }
 }

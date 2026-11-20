@@ -40,6 +40,19 @@ export interface SlotInfo {
   shown: Set<OfferKind>;
 }
 
+/** 一个可以坐下的位置（沙发、长椅、树桩凳），模拟访客会走过来坐一会儿 */
+export interface Seat {
+  x: number;
+  z: number;
+  /** 坐面的高度 */
+  top: number;
+  /** 坐下后面朝的方向（和小人朝向的约定一致） */
+  facing: number;
+  /** 走到这里再坐下 */
+  approach: { x: number; z: number };
+  zone: 'fire' | 'hall' | 'memorial';
+}
+
 /** 一盏登记过的灯。位置和亮度可以随时改（单宠物视角的灯会跟着小龛移动） */
 export interface Lamp {
   pos: THREE.Vector3;
@@ -60,6 +73,7 @@ export class World {
   readonly interactables: Interactable[] = [];
   readonly updaters: Updater[] = [];
   readonly slots = new Map<string, SlotInfo>();
+  readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击留言簿 / 接待台时触发 */
   hooks = { guestbook: () => {}, reception: () => {}, river: () => {}, fire: () => {} };
@@ -159,6 +173,12 @@ export class World {
       light.distance = lamp.distance;
       light.intensity = lamp.intensity * (1 - THREE.MathUtils.smoothstep(lamp.d, fadeStart, fadeEnd));
     });
+  }
+
+  /** 登记一个座位：(x, z) 是坐的位置，(fx, fz) 是座位正面的方向，访客从正面走过来坐下 */
+  seat(zone: Seat['zone'], x: number, z: number, top: number, fx: number, fz: number, approach = 0.85) {
+    const facing = Math.atan2(-fx, -fz);
+    this.seats.push({ x, z, top, facing, zone, approach: { x: x + fx * approach, z: z + fz * approach } });
   }
 
   interact(object: THREE.Object3D, label: string, onClick: () => void) {

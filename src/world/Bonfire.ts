@@ -89,6 +89,8 @@ export function buildBonfire(w: World): Bonfire {
     kit.cyl(x, 0, z, r, 0.4, 0x5b4332);
     kit.cyl(x, 0.4, z, r - 0.025, 0.025, C.woodLight);
     w.collide(x, z, r * 1.7, r * 1.7);
+    // 面向火堆坐；访客从凳子后面（空地外侧）走过来
+    w.seat('fire', x, z, 0.425, -Math.cos(a), -Math.sin(a), -0.8);
   }
 
   // ---------- 火焰：几个会跳动的圆锥 ----------

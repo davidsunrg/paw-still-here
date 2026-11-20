@@ -62,10 +62,20 @@ export function wallStrip(kit: Kit, x: number, z: number, lenX: number, lenZ: nu
   kit.glowBox(x, CONFIG.wallH + 0.04, z, Math.max(lenX, 0.07), 0.07, Math.max(lenZ, 0.07), CONFIG.colors.warm, 2.2);
 }
 
+/** 在沙发 / 长椅上登记左右两个座位（局部 +Z 是正面） */
+function seats(w: World, P: ReturnType<typeof placer>, rot: number, lx: number, lz: number, top: number) {
+  const zone = P(0, 0)[1] > -CONFIG.hall.d ? 'hall' : 'memorial';
+  for (const side of [-1, 1]) {
+    const [x, z] = P(side * lx, lz);
+    w.seat(zone, x, z, top, Math.sin(rot), Math.cos(rot));
+  }
+}
+
 /** 沙发：局部 +Z 方向是正面 */
 export function sofa(w: World, cx: number, cz: number, rot: number, width: number, color: number, cushion: number) {
   const { kit } = w;
   const P = placer(cx, cz, rot);
+  seats(w, P, rot, width / 4, 0.12, 0.5);
   const b = (lx: number, y: number, lz: number, sx: number, sy: number, sz: number, c: number) => {
     const [x, z] = P(lx, lz);
     kit.box(x, y, z, sx, sy, sz, c, rot);
@@ -87,6 +97,7 @@ export function sofa(w: World, cx: number, cz: number, rot: number, width: numbe
 export function bench(w: World, cx: number, cz: number, rot: number, width = 1.8) {
   const { kit } = w;
   const P = placer(cx, cz, rot);
+  seats(w, P, rot, width / 4, 0.02, 0.485);
   const wood = CONFIG.colors.woodLight;
   const dark = 0x33333b;
   const b = (lx: number, y: number, lz: number, sx: number, sy: number, sz: number, c: number) => {

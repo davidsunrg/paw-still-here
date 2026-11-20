@@ -12,6 +12,8 @@ export interface UIHooks {
   onToggleSound(): boolean;
   /** 返回切换后的画质 */
   onToggleQuality(): 'high' | 'low';
+  /** 切换「独自参观」，返回切换后是否隐藏其他访客 */
+  onToggleSolo(): boolean;
   onDetailClosed(): void;
   /** 访客往格子里放了一件礼物或一封信（数据已保存） */
   onOffering(pet: Pet, kind: OfferKind): void;
@@ -76,6 +78,7 @@ export class UI {
       $('btn-sound').textContent = hooks.onToggleSound() ? STR.soundOff : STR.soundOn;
     });
     $('btn-quality').addEventListener('click', () => this.setQualityLabel(hooks.onToggleQuality()));
+    $('btn-solo').addEventListener('click', () => this.setSoloLabel(hooks.onToggleSolo()));
     $('btn-help').addEventListener('click', () => this.showHint());
 
     document.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) =>
@@ -197,6 +200,10 @@ export class UI {
     $('load-step').textContent = '';
     document.querySelector('#loader .bar')?.classList.add('hidden');
     $('btn-enter').classList.remove('hidden');
+  }
+
+  setSoloLabel(solo: boolean) {
+    $('btn-solo').textContent = solo ? STR.soloOn : STR.soloOff;
   }
 
   setQualityLabel(q: 'high' | 'low') {

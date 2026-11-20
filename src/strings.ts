@@ -22,6 +22,8 @@ export const STR = {
   qualityHigh: '画质：高',
   qualityLow: '画质：低',
   help: '帮助',
+  soloOff: '访客：显示',
+  soloOn: '访客：隐藏',
 
   tpGate: '入口',
   tpRiver: '河边',

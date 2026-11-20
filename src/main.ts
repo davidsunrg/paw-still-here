@@ -5,12 +5,14 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG, ZONES } from './config';
 import type { Pet } from './data/pets';
-import { store } from './data/store';
+import { prefs, store } from './data/store';
 import { STR } from './strings';
 import { AudioSystem } from './systems/AudioSystem';
 import { Guide } from './systems/Guide';
 import { Interaction } from './systems/Interaction';
 import { Player } from './systems/Player';
+import { SimulatedVisitors } from './systems/SimulatedVisitors';
+import { Crowd } from './systems/Visitors';
 import { UI } from './ui/UI';
 import './ui/style.css';
 import type { PhotoEntry } from './world/Batches';
@@ -51,6 +53,7 @@ const avatar = new AvatarBatch(scene, 1);
 const pose = defaultPose(CONFIG.player.color);
 let interaction: Interaction | null = null;
 let shrine: Shrine | null = null;
+let crowd: Crowd | null = null;
 let entered = false;
 let blocked = false;
 let quality: 'high' | 'low' = 'high';
@@ -82,6 +85,11 @@ const ui = new UI({
     quality = quality === 'high' ? 'low' : 'high';
     applyQuality();
     return quality;
+  },
+  onToggleSolo() {
+    prefs.solo = !prefs.solo;
+    if (crowd) crowd.hidden = prefs.solo;
+    return prefs.solo;
   },
   onDetailClosed() {
     player.release();
@@ -270,6 +278,7 @@ function applyQuality() {
   composer.setPixelRatio(pr);
   if (world.moonLight) world.moonLight.castShadow = quality === 'high';
   world.setLightBudget(quality === 'high' ? CONFIG.lights.pool : CONFIG.lights.poolLow);
+  if (crowd) crowd.limit = quality === 'high' ? CONFIG.visitors.count : CONFIG.visitors.countLow;
   resize();
 }
 
@@ -305,6 +314,7 @@ function frame() {
   avatar.set(0, pose, t);
   avatar.opacity = player.fade;
   avatar.commit();
+  crowd?.update(dt, t);
   world.update(dt, t, camera, player.pos, pixelRatio());
   guide.update(t, player.pos);
   interaction?.update(t);
@@ -338,6 +348,10 @@ async function boot() {
   }
   interaction = new Interaction(camera, world, player.pos);
   shrine = new Shrine(world);
+  // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
+  crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);
+  crowd.hidden = prefs.solo;
+  ui.setSoloLabel(prefs.solo);
   applyQuality();
   ui.setProgress(1, '');
   renderer.setAnimationLoop(frame);
@@ -346,7 +360,7 @@ async function boot() {
   ui.ready();
 
   if (import.meta.env.DEV) {
-    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, shrine, avatar } });
+    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, shrine, avatar, crowd } });
   }
 }
 
