@@ -3,6 +3,7 @@ import { CONFIG } from '../config';
 import { mulberry32 } from '../data/pets';
 import { STR } from '../i18n';
 import { LANTERN_X, pathX } from './Outdoor';
+import { signpost } from './Signpost';
 import type { World } from './World';
 
 const LT = CONFIG.lanternTerrace;
@@ -94,4 +95,6 @@ export function buildLanternTerrace(w: World) {
   w.pointLight(RACK.x - 0.5, 2.1, LZ, 24, 14, 0xffa860);
 
   w.proxy(tx, top + 0.25, tz, TABLE.w + 0.15, 0.7, TABLE.len + 0.1, STR.tipLantern, () => w.hooks.lantern());
+  // 步道边上的小路牌，朝着走过来的人
+  signpost(w, edge + 0.5, LZ + 1.0, -0.6, STR.signLantern, STR.tipLantern, () => w.hooks.lantern());
 }

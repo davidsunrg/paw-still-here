@@ -5,6 +5,7 @@ import { mulberry32 } from '../data/pets';
 import { STR } from '../i18n';
 import { BRIDGE_X, DOCK_X } from './Outdoor';
 import { canvasTexture, FONT, glowTexture, makeCanvas } from './textures';
+import { signpost } from './Signpost';
 import type { World } from './World';
 
 const RV = CONFIG.river;
@@ -366,6 +367,8 @@ export function buildRiver(w: World): River {
   }
   w.proxy(tx, deckY + 0.42, tz, 0.7, 0.5, 0.8, STR.tipDock, () => w.hooks.river());
   w.collide(tx, tz, 0.6, 0.7);
+  // 码头入口另一侧（灯杆对面）的小路牌，朝着从岸上走过来的人
+  signpost(w, DOCK_X + D.w / 2 + 0.2, Z_S + 0.45, -0.35, STR.signRiver, STR.tipDock, () => w.hooks.river());
 
   // ---------- 碰撞：两岸不能走进水里，只能上桥或上码头 ----------
   const dockL = DOCK_X - D.w / 2;

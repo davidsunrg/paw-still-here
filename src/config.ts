@@ -49,6 +49,9 @@ export const CONFIG = {
   /** 石头路：从 startZ 延伸到大厅正门 (z = 0) */
   path: { startZ: 47, width: 3.2 },
 
+  /** 河灯、孔明灯、篝火旁边的小木头路牌：木桩多高、木板的宽 / 高 / 厚、字多高 */
+  signpost: { h: 1.3, w: 1.0, boardH: 0.3, t: 0.04, text: 0.2 },
+
   wallT: 0.4,
   wallH: 5,
 

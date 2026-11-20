@@ -852,6 +852,15 @@ form button {
   border-radius: 12px;
   padding: 9px 22px;
 }
+/* 来历：这件事意味着什么，写在怎么做之前 */
+.card .lore {
+  font-family: var(--serif);
+  font-style: italic;
+  line-height: 1.6;
+  color: var(--warm-soft);
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
+}
 .card .note {
   font-size: 12px;
   line-height: 1.7;

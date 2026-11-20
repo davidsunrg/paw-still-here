@@ -97,9 +97,15 @@ export const en = {
   rideEnd: 'The river brought you to the dock.',
   rideLeave: 'Leave the boat',
 
+  /** 三处小木头路牌上的名字（两三个词） */
+  signRiver: 'River lanterns',
+  signLantern: 'Sky lanterns',
+  signFire: 'Letters to the fire',
   tipFire: 'Burn a letter for them',
   fireHint: 'By the campfire you can write a letter and burn it for them',
   fireTitle: 'Burn a letter for them',
+  /** 来历：这件事在很多地方意味着什么（放在怎么做之前） */
+  fireLore: 'Giving a letter to the fire is an old way of sending words you cannot deliver by hand.',
   fireDesc: 'Write down what you want to say and give it to the fire. Your words rise as sparks into the night sky.',
   fireNote: 'A burned letter is not saved. We only remember that you wrote to them. To keep a letter, leave it in their courtyard instead.',
   firePlaceholder: 'What you want to tell them…',
@@ -108,6 +114,7 @@ export const en = {
   fireToast: (name: string) => `Your letter to ${name} is in the fire. Look up at the rising sparks`,
   riverHint: 'At the dock by the river you can float a lantern for them',
   riverTitle: 'Float a river lantern',
+  riverLore: 'In many places, people set small lanterns on the water at night. Each one carries a thought for someone they love.',
   riverDesc: 'Set a lantern on the water and let it glow. If it is for one of them, their name is written on it.',
   riverPlaceholder: 'Type a name to find the one you remember…',
   /** 选宠物是可选的时候，搜索框里的提示（河灯、孔明灯） */
@@ -197,6 +204,7 @@ export const en = {
 
   lanternTitle: 'Release a sky lantern',
   lanternHint: 'At the lantern table you can write a line and send a sky lantern up',
+  lanternLore: 'A sky lantern is a paper lantern lifted by the warmth of its own flame. People release them to send a wish, or a few words, upward.',
   lanternDesc: 'Write a line and let the lantern lift it into the night sky. You can also send it for one of them.',
   lanternFor: (name: string) => `This lantern is for ${name}`,
   lanternPlaceholder: 'What you want to tell them…',

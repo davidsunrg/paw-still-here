@@ -4,6 +4,7 @@ import { CONFIG } from '../config';
 import { mulberry32 } from '../data/pets';
 import { STR } from '../i18n';
 import { FIRE_X, pathX } from './Outdoor';
+import { signpost } from './Signpost';
 import type { World } from './World';
 
 const BF = CONFIG.bonfire;
@@ -259,6 +260,8 @@ export function buildBonfire(w: World): Bonfire {
   }
 
   w.proxy(FX, 0.65, FZ, 1.7, 1.3, 1.7, STR.tipFire, () => w.hooks.fire());
+  // 步道边上的小路牌，朝着走过来的人
+  signpost(w, edge - 0.5, FZ + 1.0, 0.6, STR.signFire, STR.tipFire, () => w.hooks.fire());
 
   return {
     burn(start) {
