@@ -161,20 +161,107 @@ function luminance(hex: string) {
   return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 }
 
-/** 在 (x, y) 处画一张边长 s 的宠物卡通画像 */
-export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, pet: Pet) {
+/**
+ * 相册里另外几张占位画像的画法：换一个背景，宠物换个位置、大小和歪头的角度。
+ * 第 0 张是照片墙上那张正面像，不在这里。这里有几种，CONFIG.space.album.variants 就填几。
+ */
+interface Pose {
+  scale: number;
+  dx: number;
+  dy: number;
+  tilt: number;
+  asleep?: boolean;
+  scene(ctx: CanvasRenderingContext2D, s: number, pet: Pet): void;
+}
+
+function fillGradient(ctx: CanvasRenderingContext2D, s: number, top: string, bottom: string) {
+  const g = ctx.createLinearGradient(0, 0, 0, s);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bottom);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+}
+
+function blob(ctx: CanvasRenderingContext2D, s: number, cx: number, cy: number, rx: number, ry: number, fill: string) {
+  ctx.fillStyle = fill;
+  ctx.beginPath();
+  ctx.ellipse(cx * s, cy * s, rx * s, ry * s, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+const POSES: Pose[] = [
+  // 草地上，有太阳
+  {
+    scale: 0.78, dx: -0.1, dy: 0.12, tilt: -0.07,
+    scene(ctx, s) {
+      fillGradient(ctx, s, '#bfdcf2', '#eef6e2');
+      blob(ctx, s, 0.8, 0.2, 0.09, 0.09, '#fff3b0');
+      blob(ctx, s, 0.3, 1.05, 0.8, 0.36, '#a9d596');
+      blob(ctx, s, 0.85, 1.08, 0.6, 0.3, '#93c784');
+    },
+  },
+  // 屋里的地毯上，睡着了
+  {
+    scale: 1.2, dx: 0.06, dy: 0.1, tilt: 0.12, asleep: true,
+    scene(ctx, s) {
+      fillGradient(ctx, s, '#f6e7d2', '#ecd3b4');
+      ctx.fillStyle = '#fdf8ec';
+      ctx.fillRect(0.08 * s, 0.08 * s, 0.3 * s, 0.34 * s);
+      ctx.fillStyle = '#cfe3f2';
+      ctx.fillRect(0.1 * s, 0.1 * s, 0.26 * s, 0.3 * s);
+      ctx.fillStyle = '#c99a6b';
+      ctx.fillRect(0, 0.74 * s, s, 0.26 * s);
+      blob(ctx, s, 0.55, 0.95, 0.5, 0.14, '#b9685a');
+    },
+  },
+  // 傍晚的山坡
+  {
+    scale: 0.7, dx: 0.14, dy: 0.16, tilt: 0.05,
+    scene(ctx, s) {
+      fillGradient(ctx, s, '#5a5788', '#f2ac7c');
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      for (const [sx, sy] of [[0.12, 0.1], [0.3, 0.2], [0.52, 0.08], [0.2, 0.34], [0.72, 0.16], [0.9, 0.3]]) {
+        ctx.fillRect(sx * s, sy * s, Math.max(1, s * 0.008), Math.max(1, s * 0.008));
+      }
+      blob(ctx, s, 0.6, 1.1, 0.9, 0.36, '#4a4763');
+    },
+  },
+  // 凑得很近的一张
+  {
+    scale: 1.45, dx: 0, dy: 0.12, tilt: -0.1,
+    scene(ctx, s, pet) {
+      const [b0, b1] = BGS[(pet.bg + 3) % BGS.length];
+      fillGradient(ctx, s, b0, b1);
+    },
+  },
+];
+
+/**
+ * 在 (x, y) 处画一张边长 s 的宠物卡通画像。
+ * variant 为 0 是照片墙上的正面像；1 起是相册里的另外几张（见 POSES）。
+ */
+export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, pet: Pet, variant = 0) {
+  const pose = variant > 0 ? POSES[(variant - 1) % POSES.length] : undefined;
   ctx.save();
   ctx.translate(x, y);
   ctx.beginPath();
   ctx.rect(0, 0, s, s);
   ctx.clip();
 
-  const [b0, b1] = BGS[pet.bg % BGS.length];
-  const bg = ctx.createLinearGradient(0, 0, 0, s);
-  bg.addColorStop(0, b0);
-  bg.addColorStop(1, b1);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, s, s);
+  if (pose) pose.scene(ctx, s, pet);
+  else {
+    const [b0, b1] = BGS[pet.bg % BGS.length];
+    fillGradient(ctx, s, b0, b1);
+  }
+
+  // 宠物本身：相册里的几张绕着头部附近缩放、歪一点、挪个位置
+  ctx.save();
+  if (pose) {
+    ctx.translate((0.5 + pose.dx) * s, (0.6 + pose.dy) * s);
+    ctx.rotate(pose.tilt);
+    ctx.scale(pose.scale, pose.scale);
+    ctx.translate(-0.5 * s, -0.6 * s);
+  }
 
   const fur = pet.fur;
   const dark = shade(fur, 0.78);
@@ -246,6 +333,16 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
 
   // 眼睛
   for (const ex of [0.41, 0.59]) {
+    if (pose?.asleep) {
+      // 睡着了：两道向下弯的弧线
+      ctx.strokeStyle = isDark ? '#f3e6b8' : '#2a2320';
+      ctx.lineWidth = Math.max(1, s * 0.012);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(ex * s, (hy - 0.025) * s, 0.034 * s, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+      continue;
+    }
     if (isDark) circle(ex, hy - 0.01, 0.044, '#f3e6b8');
     circle(ex, hy - 0.01, 0.033, '#2a2320');
     circle(ex + 0.011, hy - 0.022, 0.011, '#ffffff');
@@ -284,6 +381,8 @@ export function drawPortrait(ctx: CanvasRenderingContext2D, x: number, y: number
       }
     }
   }
+
+  ctx.restore();
 
   // 轻微暗角
   const v = ctx.createRadialGradient(s / 2, s / 2, s * 0.35, s / 2, s / 2, s * 0.75);

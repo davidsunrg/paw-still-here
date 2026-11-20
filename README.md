@@ -126,6 +126,10 @@ export const CUSTOM_PETS = [
 
 把图片放进 `public/photos/`，然后在宠物数据里填 `photoUrl: '/photos/文件名.jpg'`。照片会被裁成正方形。没有 `photoUrl` 的宠物使用程序生成的卡通画像。使用其他域名的图片时，对方服务器需要允许跨域（CORS）。
 
+### 相册（多张照片）
+
+除了照片墙上那一张，每只宠物还可以有几张照片，挂在它小院的弧墙内侧。在宠物数据里填 `photos: ['/photos/文件名-2.jpg', '/photos/文件名-3.jpg']`，最多挂 6 张（`config.ts` 里 `space.album.angles` 有几个方向就挂几张），多出来的不显示。只填了 `photoUrl`、没填 `photos` 的宠物墙上不挂相册。示例宠物每只有两到四张程序画的占位画像。
+
 ### 替换音乐
 
 把音乐文件放到 `public/audio/bgm.mp3`，会自动循环播放。没有这个文件时，程序会用 WebAudio 现场合成一段舒缓的环境音乐，所以不放文件也不会报错。

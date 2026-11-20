@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { mulberry32, type Pet } from '../data/pets';
+import { albumOf, mulberry32, type Pet, type Shot } from '../data/pets';
 import { store, type OfferKind } from '../data/store';
 import { STR } from '../i18n';
 import type { Area } from '../systems/Player';
 import { candle, flowerStem, letter, snack, toy, vase } from './gifts';
 import { bench } from './parts';
-import { pawTexture, textMesh } from './textures';
+import { canvasTexture, drawPortrait, makeCanvas, pawTexture, textMesh } from './textures';
 import type { Lamp, World } from './World';
 
 const S = CONFIG.space;
@@ -43,6 +43,15 @@ const DROP_TIME = 0.6;
 /** 石柱上各行字的高度 */
 const TEXT = { name: 1.49, address: 1.347, meta: 1.245, dates: 1.135, message: 0.99, line: 0.125 };
 const PHOTO = { y: 2.05, size: 0.78 };
+
+/** 相册：弧墙内侧的几个相框，每个相框一张自己的小画布 */
+const ALBUM = S.album;
+const ALBUM_PX = 256;
+interface AlbumSlot {
+  group: THREE.Group;
+  ctx: CanvasRenderingContext2D;
+  texture: THREE.CanvasTexture;
+}
 
 /** 长椅：在入口内侧偏左，背对缺口，正对着石柱 */
 const BENCH = { x: -1.9, z: R - 1.9 };
@@ -99,6 +108,7 @@ export class Space {
   private items = new THREE.Group();
   private texts = new THREE.Group();
   private photo: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private album: AlbumSlot[] = [];
   private letterProxy: THREE.Mesh;
   private candleLamp: Lamp;
   private placed: Record<OfferKind, THREE.Object3D[]> = { flower: [], candle: [], snack: [], toy: [], letter: [] };
@@ -119,6 +129,7 @@ export class Space {
     );
     this.photo.position.set(0, PHOTO.y, FACE + 0.062);
     this.root.add(this.photo, this.texts, this.items);
+    this.buildAlbum();
 
     // 那摞信可以点开来读；没有信时把点击范围挪到地下
     this.letterProxy = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.36));
@@ -151,6 +162,7 @@ export class Space {
     uv.setXY(3, u1, v0);
     uv.needsUpdate = true;
     this.inscribe(pet);
+    this.hang(pet);
     this.rebuild();
   }
 
@@ -274,6 +286,56 @@ export class Space {
     const zMin = PILLAR.z - PILLAR.d / 2 - 0.1;
     const zMax = FACE + 3 * TIER_D;
     this.world.collide(x, z((zMin + zMax) / 2), TIER_W, zMax - zMin);
+  }
+
+  /** 弧墙内侧的相框：先都做好藏着，open 时按这只宠物有几张照片显示几个 */
+  private buildAlbum() {
+    const size = ALBUM.size;
+    const frameGeo = new THREE.BoxGeometry(size + 0.1, size + 0.1, 0.04);
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x3d2a1e, roughness: 0.8 });
+    const lampGeo = new THREE.BoxGeometry(size * 0.6, 0.016, 0.03);
+    const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(CONFIG.colors.warm).multiplyScalar(2.2) });
+    const photoGeo = new THREE.PlaneGeometry(size, size);
+    for (const deg of ALBUM.angles) {
+      const a = deg * DEG;
+      const [canvas, ctx] = makeCanvas(ALBUM_PX, ALBUM_PX);
+      const texture = canvasTexture(canvas);
+      const group = new THREE.Group();
+      // 贴着墙的内侧，正面朝向院子中心
+      group.position.set(Math.sin(a) * (R - 0.03), ALBUM.y, Math.cos(a) * (R - 0.03));
+      group.rotation.y = a + Math.PI;
+      const photo = new THREE.Mesh(photoGeo, new THREE.MeshBasicMaterial({ map: texture, color: 0xe6e0da }));
+      photo.position.z = 0.024;
+      const lamp = new THREE.Mesh(lampGeo, lampMat);
+      lamp.position.set(0, size / 2 + 0.09, 0.05);
+      group.add(new THREE.Mesh(frameGeo, frameMat), photo, lamp);
+      group.visible = false;
+      this.root.add(group);
+      this.album.push({ group, ctx, texture });
+    }
+  }
+
+  /** 把这只宠物相册里的照片挂到墙上；没有那么多张的相框收起来 */
+  private hang(pet: Pet) {
+    const shots = albumOf(pet);
+    this.album.forEach((slot, i) => {
+      const shot: Shot | undefined = shots[i];
+      slot.group.visible = !!shot;
+      if (!shot) return;
+      drawPortrait(slot.ctx, 0, 0, ALBUM_PX, pet, shot.variant);
+      slot.texture.needsUpdate = true;
+      if (!shot.url) return;
+      // 真实照片加载完成后裁成正方形盖上去；这期间换了别的宠物就不画了
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        if (this.pet !== pet) return;
+        const s = Math.min(img.width, img.height);
+        slot.ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, ALBUM_PX, ALBUM_PX);
+        slot.texture.needsUpdate = true;
+      };
+      img.src = shot.url;
+    });
   }
 
   /** 墙外的树、灌木、花草，和缺口外的一小段石头路 */

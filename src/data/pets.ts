@@ -17,6 +17,8 @@ export interface Pet {
   passedDate: string;
   /** 真实照片地址；为空时使用程序生成的占位画像 */
   photoUrl?: string;
+  /** 相册里另外的照片地址（不含上面那张）。小院的墙上会挂出来 */
+  photos?: string[];
   /** 主人寄语 */
   message: string;
   flowers: number;
@@ -36,7 +38,8 @@ export interface Pet {
  *
  * 例：
  * { name: 'Bean', species: 'dog', breed: 'Corgi', birthDate: '2012-03-01',
- *   passedDate: '2025-06-18', photoUrl: '/photos/bean.jpg', message: 'Be my dog again next time.' }
+ *   passedDate: '2025-06-18', photoUrl: '/photos/bean.jpg', photos: ['/photos/bean-2.jpg', '/photos/bean-3.jpg'],
+ *   message: 'Be my dog again next time.' }
  */
 export const CUSTOM_PETS: Array<Partial<Pet> & Pick<Pet, 'name' | 'species' | 'passedDate' | 'message'>> = [];
 
@@ -130,3 +133,25 @@ function buildPets(): Pet[] {
 export const PETS: Pet[] = buildPets();
 
 export const petById = new Map(PETS.map((p) => [p.id, p]));
+
+/** 相册里的一张：有地址的是真实照片；variant 是照片还没加载出来（或没有照片）时用哪一种占位画像 */
+export interface Shot {
+  url?: string;
+  variant: number;
+}
+
+/**
+ * 一只宠物相册里除了主照片之外的几张，最多 CONFIG.space.album.angles.length 张。
+ * 填了 photos 的用它的真实照片；只有一张真实照片的没有相册；
+ * 示例宠物用几张不同的占位画像，每只两到四张。
+ */
+export function albumOf(pet: Pet): Shot[] {
+  const A = CONFIG.space.album;
+  const max = A.angles.length;
+  if (pet.photos?.length) return pet.photos.slice(0, max).map((url, i) => ({ url, variant: 1 + (i % A.variants) }));
+  if (pet.photoUrl) return [];
+  const n = Number(pet.id.replace(/\D/g, '')) || 0;
+  const [lo, hi] = A.sample;
+  const count = Math.min(max, A.variants, lo + (n % (hi - lo + 1)));
+  return Array.from({ length: count }, (_, i) => ({ variant: 1 + ((n + i) % A.variants) }));
+}

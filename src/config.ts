@@ -100,6 +100,13 @@ export const CONFIG = {
     /** 石柱两侧壁灯和缺口灯柱的亮度 */
     light: 7,
     gateLight: 5,
+    /**
+     * 相册：这只宠物另外的几张照片，挂在弧墙内侧。
+     * angles 是每张挂在什么方向（度，从缺口方向量起，正数在进门的右手边），照片按这个顺序挂；
+     * size 是照片边长，y 是照片中心的高度；
+     * sample 是示例宠物各有几张，variants 是占位画像一共有几种画法（和 textures 里的 POSES 一致）。
+     */
+    album: { angles: [102, -102, 80, -80, 124, -124], size: 0.6, y: 1.62, sample: [2, 4] as [number, number], variants: 4 },
   },
 
   /**
