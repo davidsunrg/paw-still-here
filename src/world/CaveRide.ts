@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { STR } from '../i18n';
 import { mulberry32 } from '../data/pets';
 import { AvatarBatch, defaultPose, type AvatarPose } from './Avatar';
-import { textMesh } from './textures';
+import { glowTexture, nameSprite, textMesh } from './textures';
 import type { Lamp, World } from './World';
 
 const V = CONFIG.cave;
@@ -186,6 +186,23 @@ interface Rider {
   gone: boolean;
 }
 
+/** 访客从船上放下的一盏河灯 */
+interface Float {
+  group: THREE.Group;
+  pool: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  label: THREE.Sprite;
+  /** 还在往水面上放的时候跟着这条船走；放稳了就留在原地 */
+  boat: Boat | null;
+  /** 在船的哪一侧（往右偏多少米）、比船的位置靠后多少米 */
+  side: number;
+  back: number;
+  /** 放下去的进度 0–1；淡出的进度 1–0 */
+  drop: number;
+  fade: number;
+  leaving: boolean;
+  phase: number;
+}
+
 export interface RidePose {
   /** 小人坐在哪、面朝哪 */
   x: number;
@@ -252,6 +269,9 @@ export class CaveRide {
   private lamps: Lamp[] = [];
   /** 自己坐在哪条船的哪个座位上 */
   private mine: { boat: Boat; seat: number } | null = null;
+  /** 访客从船上放下的河灯 */
+  private floats: Float[] = [];
+  private floatGeo: { base: THREE.BufferGeometry; flame: THREE.BufferGeometry; pool: THREE.BufferGeometry } | null = null;
   /** 自己坐的船刚靠岸：该从哪里下船 */
   private arrival: { x: number; z: number } | null = null;
   /** 出洞的船开到哪里，画面就该暗下去了 */
@@ -404,6 +424,95 @@ export class CaveRide {
     this.mine = null;
   }
 
+  // ---------- 从船上放河灯 ----------
+
+  /**
+   * 从自己坐的船边放下一盏河灯；name 是浮在灯上的名字，可以是空的。
+   * 灯先跟着船慢慢落到水面上，然后留在原地，船继续往前。没坐在开着的船上时什么都不做，返回 false。
+   */
+  float(name: string) {
+    const me = this.mine;
+    if (!me || me.boat.state !== 'sailing') return false;
+    const { boat } = me;
+    const F = V.floats;
+    const live = this.floats.filter((f) => !f.leaving);
+    if (live.length >= F.max) live[0].leaving = true;
+
+    const C = CONFIG.colors;
+    this.floatGeo ??= {
+      base: new THREE.BoxGeometry(0.26, 0.04, 0.26),
+      flame: new THREE.BoxGeometry(0.16, 0.17, 0.16).translate(0, 0.1, 0),
+      pool: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    };
+    const group = new THREE.Group();
+    group.add(
+      new THREE.Mesh(this.floatGeo.base, new THREE.MeshStandardMaterial({ color: C.woodLight, roughness: 0.85 })),
+      new THREE.Mesh(this.floatGeo.flame, new THREE.MeshBasicMaterial({ color: new THREE.Color(C.warm).multiplyScalar(2.8) })),
+    );
+    const pool = new THREE.Mesh(
+      this.floatGeo.pool,
+      new THREE.MeshBasicMaterial({ map: glowTexture(), color: C.warm, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    pool.scale.setScalar(F.glow);
+    const label = nameSprite(name, 0.24);
+    this.world.scene.add(group, pool, label);
+
+    // 放在自己坐的那一侧；那一侧正好是码头的时候换到另一侧。
+    // 两处上船的码头都在航道往右偏的一侧，进洞的船下船的码头在另一侧
+    const { line } = boat;
+    const near = (s: number) => Math.abs(boat.s - s) < F.dockClear;
+    let side = Math.sign(SEATS[me.seat][0]) * line.dir;
+    if (side > 0 ? near(line.moor) : line.stop !== null && near(line.stop)) side = -side;
+    this.floats.push({
+      group, pool, label, boat,
+      side: side * (BOAT_HALF + F.reach),
+      // 放在船头前面一点的水面上：灯落稳时还在眼前，船再慢慢从它旁边经过
+      back: -F.ahead,
+      drop: 0, fade: 1, leaving: false,
+      phase: Math.random() * 6.28,
+    });
+    this.tickFloats(0, 0);
+    return true;
+  }
+
+  private tickFloats(dt: number, t: number) {
+    const F = V.floats;
+    for (let i = this.floats.length - 1; i >= 0; i--) {
+      const f = this.floats[i];
+      if (f.leaving) {
+        f.fade -= dt / 2.5;
+        if (f.fade <= 0) {
+          this.world.scene.remove(f.group, f.pool, f.label);
+          for (const m of f.group.children) ((m as THREE.Mesh).material as THREE.Material).dispose();
+          f.pool.material.dispose();
+          f.label.material.map?.dispose();
+          f.label.material.dispose();
+          this.floats.splice(i, 1);
+          continue;
+        }
+      }
+      if (f.boat) {
+        // 船已经不在河上了（靠岸、开走）就直接留在水面上
+        if (f.boat.state !== 'sailing') f.drop = 1;
+        else {
+          f.drop = Math.min(1, f.drop + dt / F.lower);
+          this.frame(f.boat.s - f.boat.line.dir * f.back, f.boat.line.lateral + f.side);
+          f.group.position.set(this.p.x, 0, this.p.z);
+        }
+        if (f.drop >= 1) f.boat = null;
+      }
+      const k = 1 - Math.pow(1 - f.drop, 3);
+      const g = f.group;
+      g.position.y = 0.03 + F.hand * (1 - k) + Math.sin(t * 1.3 + f.phase) * 0.008;
+      g.rotation.y = f.phase + t * 0.06;
+      g.scale.setScalar(f.fade);
+      f.pool.position.set(g.position.x, 0.03, g.position.z);
+      f.pool.material.opacity = 0.34 * k * f.fade * (0.88 + 0.12 * Math.sin(t * 2.3 + f.phase * 3));
+      f.label.position.set(g.position.x, g.position.y + 0.5, g.position.z);
+      f.label.material.opacity = f.fade;
+    }
+  }
+
   /** 自己坐的船刚靠上洞里的码头：返回该从码头上的哪里下船（只返回一次） */
   takeArrival() {
     const a = this.arrival;
@@ -420,6 +529,7 @@ export class CaveRide {
   update(dt: number, t: number, who: THREE.Vector3): RidePose | null {
     if (!this.active) return null;
     this.advance(dt, t);
+    this.tickFloats(dt, t);
 
     const d = (b: Boat) => Math.hypot(b.x - who.x, b.z - who.z);
     const near = this.lines.flatMap((l) => l.boats).filter((b) => b.state !== 'idle').sort((a, b) => d(a) - d(b));

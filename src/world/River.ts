@@ -4,7 +4,7 @@ import { CONFIG, RIVER_BANKS } from '../config';
 import { mulberry32 } from '../data/pets';
 import { STR } from '../i18n';
 import { BRIDGE_X, DOCK_X } from './Outdoor';
-import { canvasTexture, FONT, glowTexture, makeCanvas } from './textures';
+import { glowTexture, nameSprite } from './textures';
 import { signpost } from './Signpost';
 import type { World } from './World';
 
@@ -121,21 +121,7 @@ class RiverLanterns {
     const users = this.items.filter((l) => l.label);
     if (users.length >= RV.maxUserLanterns) this.remove(users[0]);
 
-    const font = `600 44px ${FONT}`;
-    const [, mctx] = makeCanvas(4, 4);
-    mctx.font = font;
-    const w = Math.ceil(mctx.measureText(name).width) + 40;
-    const [c, ctx] = makeCanvas(w, 72);
-    ctx.font = font;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff6e2';
-    ctx.shadowColor = 'rgba(120,50,10,0.95)';
-    ctx.shadowBlur = 10;
-    ctx.fillText(name, w / 2, 38);
-    ctx.fillText(name, w / 2, 38);
-    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTexture(c), color: new THREE.Color(1.7, 1.7, 1.7), transparent: true, depthWrite: false }));
-    label.scale.set((0.26 * w) / 72, 0.26, 1);
+    const label = nameSprite(name);
     this.scene.add(label);
 
     this.items.push({ x: LAUNCH.x, z: LAUNCH.z, phase: Math.random() * 6.28, speed: RV.flow, label, drop: 0, fade: 1, lift: 0.45 });

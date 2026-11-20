@@ -182,6 +182,11 @@ export const CONFIG = {
      * 每一班有几位别的访客同乘（最少、最多）；进洞的船靠岸后停多少秒让人下船
      */
     boat: { interval: 24, moor: 9.5, count: 9, riders: [1, 3] as [number, number], unload: 10 },
+    /**
+     * 从船上放的河灯：水面上最多留几盏（再放，最早的一盏慢慢淡出）；放在离船舷多远、船的中心往前多远（ahead，比船头再靠前一点）的水面上；从手里的高度（hand）
+     * 落到水面要几秒；水面上那圈光有多大；灯放在自己坐的那一侧，离码头不到 dockClear 米、那一侧又正好是码头时换到另一侧
+     */
+    floats: { max: 10, reach: 0.4, ahead: 4.6, hand: 0.7, lower: 1.6, glow: 1.9, dockClear: 26 },
     /** 洞里夜空的底光剩下多少（1 是室外） */
     ambience: 0.08,
     /** 在船上最多能仰视多少（弧度） */

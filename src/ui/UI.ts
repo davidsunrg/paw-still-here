@@ -35,6 +35,8 @@ export interface UIHooks {
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
   /** 中途下船 */
+  /** 坐在船上时点「放河灯」 */
+  onRideLantern(): void;
   onRideLeave(): void;
   /** 有面板打开时需要暂停走动 */
   onBlockingChange(blocked: boolean): void;
@@ -112,6 +114,7 @@ export class UI {
     );
     $('btn-search').addEventListener('click', () => this.openSearch());
     $('btn-letters').addEventListener('click', () => this.openLetters());
+    $('btn-ride-lantern').addEventListener('click', () => this.hooks.onRideLantern());
     $('btn-ride-leave').addEventListener('click', () => this.hooks.onRideLeave());
 
     // 弹窗：点遮罩或关闭按钮收起

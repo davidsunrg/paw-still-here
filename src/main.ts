@@ -120,7 +120,8 @@ const ui = new UI({
   },
   onRiverLantern(pet) {
     store.addRite('river', pet);
-    world.river.launch(pet?.name ?? '');
+    // 坐在船上放的：灯从船边落到水面上；其它时候从码头放
+    if (!(inRide && world.ride.float(pet?.name ?? ''))) world.river.launch(pet?.name ?? '');
     audio.chime(true);
   },
   onLetter(pet, here) {
@@ -147,6 +148,9 @@ const ui = new UI({
     guide.clear();
     const entry = frameOf(pet);
     if (entry) enterSpace(entry);
+  },
+  onRideLantern() {
+    if (inRide && player.riding) ui.openRite('river');
   },
   onRideLeave() {
     if (inRide) leaveRide();

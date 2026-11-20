@@ -19,6 +19,26 @@ export function canvasTexture(c: HTMLCanvasElement) {
   return t;
 }
 
+/** 河灯上方浮着的名字（name 可以是空的）；height 是字牌在场景里的高度 */
+export function nameSprite(name: string, height = 0.26) {
+  const font = `600 44px ${FONT}`;
+  const [, mctx] = makeCanvas(4, 4);
+  mctx.font = font;
+  const w = Math.ceil(mctx.measureText(name).width) + 40;
+  const [c, ctx] = makeCanvas(w, 72);
+  ctx.font = font;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff6e2';
+  ctx.shadowColor = 'rgba(120,50,10,0.95)';
+  ctx.shadowBlur = 10;
+  ctx.fillText(name, w / 2, 38);
+  ctx.fillText(name, w / 2, 38);
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTexture(c), color: new THREE.Color(1.7, 1.7, 1.7), transparent: true, depthWrite: false }));
+  label.scale.set((height * w) / 72, height, 1);
+  return label;
+}
+
 let _glow: THREE.Texture | undefined;
 /** 柔和的径向光斑，用于地面光晕、月亮光晕等 */
 export function glowTexture() {
