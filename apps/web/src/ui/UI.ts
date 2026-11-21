@@ -40,6 +40,9 @@ export interface UIHooks {
   onRideLeave(): void;
   /** 有面板打开时需要暂停走动 */
   onBlockingChange(blocked: boolean): void;
+  /** API 在线时可创建真实纪念宠物 */
+  memorialApiEnabled?: boolean;
+  onMemorialSaved?(): void | Promise<void>;
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -116,8 +119,19 @@ export class UI {
       }),
     );
     $('btn-search').addEventListener('click', () => this.openSearch());
+    const createBtn = document.getElementById('btn-create-memorial');
+    if (createBtn) {
+      createBtn.classList.toggle('hidden', !hooks.memorialApiEnabled);
+      createBtn.addEventListener('click', () => this.openMemorialForm());
+    }
+    const memorialSave = document.getElementById('memorial-save');
+    if (memorialSave) {
+      memorialSave.addEventListener('click', () => void this.submitMemorialForm());
+    }
     $('btn-letters').addEventListener('click', () => this.openLetters());
     $('btn-ride-lantern').addEventListener('click', () => this.hooks.onRideLantern());
+    const delBtn = document.getElementById('memorial-delete');
+    if (delBtn) delBtn.addEventListener('click', () => void this.deleteManagedPet());
     $('btn-ride-leave').addEventListener('click', () => this.hooks.onRideLeave());
 
     // 弹窗：点遮罩或关闭按钮收起
@@ -347,6 +361,8 @@ export class UI {
     $('detail-meta').textContent = [STR.species[pet.species], pet.breed, dates].filter(Boolean).join(' · ');
     $('detail-address').textContent = STR.address(pet.floor, pet.section, pet.cell);
     $('detail-message').textContent = pet.message;
+    const manage = document.getElementById('detail-manage');
+    manage?.classList.toggle('hidden', !(pet.canManage && this.hooks.memorialApiEnabled));
     this.renderCounts();
     this.renderAlbum(pet);
     $('detail').classList.add('open');
@@ -812,5 +828,42 @@ export class UI {
     };
     zone.addEventListener('pointerup', end);
     zone.addEventListener('pointercancel', end);
+  }
+
+  openMemorialForm() {
+    this.closeModals();
+    this.openModal('modal-memorial', 'memorial-name');
+  }
+
+  private async submitMemorialForm() {
+    try {
+      const { createMemorialPet } = await import('../api/memorial-actions');
+      await createMemorialPet({
+        name: $<HTMLInputElement>('memorial-name').value.trim(),
+        species: $<HTMLSelectElement>('memorial-species').value as Pet['species'],
+        breed: $<HTMLInputElement>('memorial-breed').value.trim() || undefined,
+        passedDate: $<HTMLInputElement>('memorial-passed').value,
+        message: $<HTMLTextAreaElement>('memorial-message').value.trim(),
+      });
+      this.closeModals();
+      this.toast(STR.memorialCreated);
+      await this.hooks.onMemorialSaved?.();
+    } catch {
+      this.toast(STR.memorialError);
+    }
+  }
+
+  private async deleteManagedPet() {
+    const pet = this.pet;
+    if (!pet?.canManage || !this.hooks.memorialApiEnabled) return;
+    try {
+      const { apiFetch } = await import('../api/client');
+      await apiFetch(`/api/pets/${pet.id}`, { method: 'DELETE' });
+      this.closeDetail();
+      this.toast(STR.memorialDeleted);
+      await this.hooks.onMemorialSaved?.();
+    } catch {
+      this.toast(STR.memorialError);
+    }
   }
 }

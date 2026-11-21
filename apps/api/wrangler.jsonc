@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "paw-still-here-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "paw-still-here",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "paw-still-here-assets"
+    }
+  ],
+  "vars": {
+    "BETTER_AUTH_URL": "http://localhost:8787",
+    "PUBLIC_ASSETS_URL": "https://assets.pawstillhere.com"
+  }
+}

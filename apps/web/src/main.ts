@@ -1,3 +1,4 @@
+import { prepareApp } from './api/bootstrap';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -25,6 +26,8 @@ import { CINEMA_BACK, CINEMA_ROOM, CINEMA_SPAWN, inCinemaDoor, inCinemaExit } fr
 import { LANTERN_LAUNCH, LANTERN_SPOT } from './world/LanternTerrace';
 import { DOCK_SPOT, routeToDock } from './world/River';
 import { World } from './world/World';
+
+const bootstrap = await prepareApp();
 
 const canvas = document.getElementById('scene') as HTMLCanvasElement;
 
@@ -63,6 +66,10 @@ let blocked = false;
 let quality: 'high' | 'low' = 'high';
 
 const ui = new UI({
+  memorialApiEnabled: bootstrap.apiOnline,
+  onMemorialSaved: async () => {
+    location.reload();
+  },
   onEnter() {
     entered = true;
     void audio.start().then(() => audio.setMuted(false));

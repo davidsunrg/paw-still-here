@@ -15,11 +15,19 @@ pnpm dev:web      # 只启动前端
 pnpm dev:api      # 只启动 API
 pnpm build        # 各 workspace 类型检查 + 前端打包到 apps/web/dist/
 pnpm typecheck    # 仅类型检查
+pnpm test         # API 单元测试
 ```
 
 本地开发时，前端的 `/api` 会代理到 `http://localhost:8787`。健康检查：`curl http://localhost:8787/api/health`。
 
-本项目是 pnpm monorepo：`apps/web` 为 Three.js 前端，`apps/api` 为 Hono 后端骨架，`packages/shared` 放前后端共用的类型。
+首次跑 API 前：
+
+```bash
+cp apps/api/.dev.vars.example apps/api/.dev.vars   # 填 BETTER_AUTH_SECRET；上传需 R2 密钥
+pnpm --filter @paw/api db:migrate:local
+```
+
+本项目是 pnpm monorepo：`apps/web` 为 Three.js 前端，`apps/api` 为部署在 **Cloudflare Worker** 上的 Hono API（D1 + Better Auth 匿名登录 + R2 预签名上传），`packages/shared` 为 Zod/DTO 契约。
 
 ## 操作
 

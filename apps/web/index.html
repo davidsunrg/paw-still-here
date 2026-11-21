@@ -72,6 +72,9 @@
       <p class="meta" id="detail-meta"></p>
       <p class="meta" id="detail-address"></p>
       <blockquote id="detail-message"></blockquote>
+      <p class="memorial-manage hidden" id="detail-manage">
+        <button type="button" class="danger" id="memorial-delete" data-t="memorialDelete"></button>
+      </p>
       <!-- 去放河灯、去烧信、读信：入口先收起来，不展示 -->
       <div class="rites" id="detail-rites" hidden>
         <button id="btn-rite-river" data-t="riteRiver"></button>
@@ -224,6 +227,31 @@
         <h2 data-t="searchTitle"></h2>
         <input id="search-input" autocomplete="off" />
         <ul class="results" id="search-results"></ul>
+        <button type="button" class="secondary hidden" id="btn-create-memorial" data-t="createMemorial"></button>
+      </div>
+    </div>
+
+    <div class="modal" id="modal-memorial">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 data-t="createMemorialTitle"></h2>
+        <label data-t="petName"></label>
+        <input id="memorial-name" autocomplete="off" />
+        <label data-t="speciesLabel"></label>
+        <select id="memorial-species">
+          <option value="cat">Cat</option>
+          <option value="dog">Dog</option>
+          <option value="rabbit">Rabbit</option>
+          <option value="hamster">Hamster</option>
+          <option value="bird">Bird</option>
+        </select>
+        <label data-t="breedLabel"></label>
+        <input id="memorial-breed" autocomplete="off" />
+        <label data-t="passedDateLabel"></label>
+        <input id="memorial-passed" type="date" />
+        <label data-t="messageLabel"></label>
+        <textarea id="memorial-message" rows="4"></textarea>
+        <button type="button" class="primary" id="memorial-save" data-t="memorialSave"></button>
       </div>
     </div>
 
