@@ -86,7 +86,7 @@ export class Shrine {
     this.scene.background = new THREE.Color(S.environment.background);
     this.scene.fog = new THREE.Fog(S.environment.background, S.environment.fogNear, S.environment.fogFar);
 
-    // 同步生成可永远使用的环境；开发 HDR 只在到达后替换这一间场景
+    // 用 RoomEnvironment 生成这间场景的环境贴图
     const pmrem = new THREE.PMREMGenerator(world.renderer);
     const environment = new RoomEnvironment();
     const fallback = pmrem.fromScene(environment, 0.04);
@@ -172,9 +172,6 @@ export class Shrine {
       if (o instanceof THREE.Mesh && o.userData.contactShadow) this.fakeShadows.push(o);
     });
     this.dusty = true;
-
-    // 正式构建不会执行这里；素材缺失、404 或解码失败都继续显示上面的代码版
-    if (import.meta.env.DEV) void this.loadDevAssets();
   }
 
   /** dusty 沿用原接口名，现在表示高画质阴影；低画质使用家具下的模糊圆斑 */
@@ -371,67 +368,5 @@ export class Shrine {
       this.letters.add(o);
       this.placed.letter.push(o);
     }
-  }
-
-  /** 开发环境的渐进增强；任何 Promise 失败都不会影响代码替代版 */
-  private async loadDevAssets() {
-    const [{ GLTFLoader }, { DRACOLoader }, { RGBELoader }] = await Promise.all([
-      import('three/addons/loaders/GLTFLoader.js'),
-      import('three/addons/loaders/DRACOLoader.js'),
-      import('three/addons/loaders/RGBELoader.js'),
-    ]);
-    const draco = new DRACOLoader();
-    draco.setDecoderPath('/node_modules/three/examples/jsm/libs/draco/gltf/');
-    draco.setWorkerLimit(2);
-    const loader = new GLTFLoader();
-    loader.setDRACOLoader(draco);
-    const load = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, (gltf) => resolve(gltf.scene), undefined, reject));
-    const jobs = [
-      load('/references/xiaowu/assets/tripo-room/sofa.glb').then((model) => this.swapDevModel(this.sofa, model, S.sofa.w)),
-      load('/references/xiaowu/assets/tripo-room/cushion.glb').then((model) => {
-        this.swapDevModel(this.cushionLeft, model.clone(true), 0.44, S.palette.accent);
-        this.swapDevModel(this.cushionRight, model, 0.44, S.palette.accent);
-      }),
-    ];
-    void Promise.allSettled(jobs).then(() => draco.dispose());
-
-    new RGBELoader().load('/references/xiaowu/assets/hero/studio-256.hdr', (hdr) => {
-      const generator = new THREE.PMREMGenerator(this.world.renderer);
-      const target = generator.fromEquirectangular(hdr);
-      this.scene.environment = target.texture;
-      this.scene.environmentRotation.set(0, 1.9, 0);
-      hdr.dispose();
-      generator.dispose();
-    });
-  }
-
-  /** 保留落地假阴影，只替换代码家具本体；GLB 统一成底面中心原点 */
-  private swapDevModel(anchor: THREE.Group, model: THREE.Group, width: number, tint?: number) {
-    const box = new THREE.Box3().setFromObject(model);
-    const size = box.getSize(new THREE.Vector3());
-    if (!Number.isFinite(size.x) || size.x <= 0) return;
-    model.scale.setScalar(width / size.x);
-    box.setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    model.position.add(new THREE.Vector3(-center.x, -box.min.y, -center.z));
-    model.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return;
-      o.castShadow = true;
-      o.receiveShadow = true;
-      if (tint !== undefined) {
-        const tintMaterial = (source: THREE.Material) => {
-          const material = source.clone();
-          if ('color' in material && material.color instanceof THREE.Color) material.color.setHex(tint);
-          // 参考靠垫的旧贴图会把橙色压成暗棕，染色版本只保留几何与布料粗糙度
-          if ('map' in material) material.map = null;
-          if ('roughness' in material) material.roughness = 0.9;
-          return material;
-        };
-        // 单材质网格不能包成数组，否则没有 geometry groups 时会被整个跳过
-        o.material = Array.isArray(o.material) ? o.material.map(tintMaterial) : tintMaterial(o.material);
-      }
-    });
-    for (const child of [...anchor.children]) if (!child.userData.contactShadow) anchor.remove(child);
-    anchor.add(model);
   }
 }

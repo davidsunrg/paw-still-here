@@ -8,6 +8,10 @@ import { en } from './src/i18n/en.ts';
 const { meta, brand } = en;
 
 export default defineConfig({
+  server: {
+  /** 本地开发时把 /api 转到 Hono 服务 */
+    proxy: { '/api': 'http://localhost:8787' },
+  },
   plugins: [
     {
       name: 'page-meta',

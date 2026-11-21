@@ -10,10 +10,16 @@
 
 ```bash
 pnpm install
-pnpm dev      # 本地开发
-pnpm build    # 类型检查 + 打包到 dist/
-pnpm preview  # 预览打包结果
+pnpm dev          # 同时启动前端（5173）与 API（8787）
+pnpm dev:web      # 只启动前端
+pnpm dev:api      # 只启动 API
+pnpm build        # 各 workspace 类型检查 + 前端打包到 apps/web/dist/
+pnpm typecheck    # 仅类型检查
 ```
+
+本地开发时，前端的 `/api` 会代理到 `http://localhost:8787`。健康检查：`curl http://localhost:8787/api/health`。
+
+本项目是 pnpm monorepo：`apps/web` 为 Three.js 前端，`apps/api` 为 Hono 后端骨架，`packages/shared` 放前后端共用的类型。
 
 ## 操作
 
@@ -71,9 +77,7 @@ pnpm preview  # 预览打包结果
 
 每个区两端有铭牌写着区名和格号范围（如 `Section A · 1–60`），电梯旁挂着本层的总览图。进门左手是 A 区，正对面是 B 区；右手那面墙不挂照片，是两个入口。以后展区开放，字母往后接着排。
 
-客厅拥有自己的 `THREE.Scene`、背景、雾、环境贴图和灯光，打开时只切换后期 `RenderPass.scene`，关闭立即切回主场景；不借主场景月光、天空光、灯位池或暗幕。高画质只有窗口平行光开 1024 阴影，低画质关闭它并使用家具下的模糊圆斑。全部家具在加载阶段搭好并留在内存里，静态零件按材质合并，Canvas 贴图不超过 512。每件家具由 `src/world/PetRoom.ts` 里的独立函数返回一个米制 Group，位置、朝向和缩放集中在 `CONFIG.shrine.layout`。
-
-开发环境会渐进加载 `references/xiaowu` 里的 ForYouRoom 沙发、靠垫和 HDR，仅用于本地比较效果，不复制到 `public/`。这些素材没有授权，上线前必须替换；模型或 HDR 未加载完成、缺失、改名或解码失败时，自动使用圆角盒沙发 / 靠垫和 `RoomEnvironment`，正式构建不读取 `references/`。
+客厅拥有自己的 `THREE.Scene`、背景、雾、环境贴图和灯光，打开时只切换后期 `RenderPass.scene`，关闭立即切回主场景；不借主场景月光、天空光、灯位池或暗幕。高画质只有窗口平行光开 1024 阴影，低画质关闭它并使用家具下的模糊圆斑。全部家具在加载阶段搭好并留在内存里，静态零件按材质合并，Canvas 贴图不超过 512。每件家具由 `apps/web/src/world/PetRoom.ts` 里的独立函数返回一个米制 Group，位置、朝向和缩放集中在 `CONFIG.shrine.layout`。沙发与靠垫全部为程序生成几何体，环境光用 `RoomEnvironment`，不加载外部模型。
 
 ### 影厅
 
@@ -103,57 +107,27 @@ pnpm preview  # 预览打包结果
 ## 目录结构
 
 ```
-src/
-  config.ts          尺寸、数量、颜色等可调参数
-  i18n/
-    en.ts            英语文案：界面、场景里的字、示例宠物的名字和寄语、页面信息
-    index.ts         选定语言，导出 STR
-  main.ts            入口：渲染器、后期、主循环、各系统的连接
-  data/
-    pets.ts          宠物数据（示例数据生成 + 自定义宠物）
-    store.ts         数据层：礼物、信，以及对信的爱心、回的话、举报（localStorage）
-  world/
-    World.ts         场景总管：灯光、碰撞体、可交互物体、搭建步骤
-    Kit.ts           积木工具箱（方块 / 圆柱 / 圆锥 / 球，全部实例化渲染）
-    Batches.ts       照片图集与名牌图集
-    Sky.ts           天穹、星星、月亮、流星、孔明灯
-    Outdoor.ts       石头路、树、路灯、花草、萤火虫
-    River.ts         河流：河床、水面、石拱桥、码头、河灯
-    Bonfire.ts       篝火空地：火焰、火星、树桩凳、烧信动画
-    LanternTerrace.ts 孔明灯平台：石台、矮木桌和纸灯、挂着亮灯的木架
-    Signpost.ts       小木头路牌：河灯、孔明灯、篝火旁边各一块，只写名字；来历写在弹窗里
-    Hall.ts          大厅：墙、串灯、沙发、接待台、电梯门、后墙的石门
-    Cinema.ts        影厅：大厅右墙的入口和招牌、放映厅（台阶、座椅、银幕、出口）
-    Cave.ts          思念之河：大厅右墙的洞口、迎面的箭头和右拐的窄道；大门旁边的小石屋
-    CaveRide.ts      思念之河：大洞厅（岩壁、彩灯、河灯、洞口外的夜色）、洞里洞外两座石台、石阶、码头，两个方向一班班的船和同乘的访客
-    Tree.ts          大厅正中的纪念树：树冠下的木牌（每块是一封信）
-    Gallery.ts       A / B 两个区的照片墙：相框、石台、名牌和格号、区两端的铭牌、石台上的痕迹
-    FloorMap.ts      电梯旁的本层总览图
-    Shrine.ts        独立客厅 Scene、宠物照片和名字、礼物状态、动画与拾取、开发素材渐进加载
-    PetRoom.ts       程序生成的客厅壳体和家具；每件家具独立返回 Group，静态零件合并
-    Avatar.ts        低多边形小人：模型、走路动画（实例化渲染）
-    gifts.ts         礼物的小模型：花、蜡烛、零食、玩具、信
-    parts.ts         通用部件：拱门墙、开着门洞的侧墙、沙发、长椅、盆栽、壁灯
-    textures.ts      用 Canvas 生成的纹理与宠物占位画像
-  systems/
-    Visitors.ts      其他访客：数据来源接口（VisitorSource）与绘制（Crowd）
-    SimulatedVisitors.ts  本地模拟的访客：路点图、停留点、进出场
-    Marker.ts        点击地面后标出目的地的光圈
-    Player.ts        第三人称：小人移动与碰撞、跟随镜头与避障、单宠物特写、影厅的矩形边界、坐下
-    Interaction.ts   悬停与点击拾取
-    Guide.ts         地面光点指引（找宠物、去码头、去篝火、去孔明灯平台）
-    AudioSystem.ts   环境音
-  ui/
-    UI.ts            界面逻辑
-    style.css        界面样式
-vite.config.ts       打包时把页面信息（title、description、分享卡片、canonical）从语言文件写进 index.html
+apps/web/            Three.js 前端（Vite）
+  src/
+    config.ts          尺寸、数量、颜色等可调参数
+    i18n/
+    main.ts            入口：渲染器、后期、主循环、各系统的连接
+    data/
+      pets.ts          宠物数据（示例数据生成 + 自定义宠物）
+      store.ts         数据层：礼物、信，以及对信的爱心、回的话、举报（localStorage）
+    world/             场景与 3D 内容（PetRoom.ts、Shrine.ts、CaveRide.ts 等）
+    systems/           小人、访客、交互、音效
+    ui/                界面逻辑与样式
+  vite.config.ts       打包时把页面 meta 从语言文件写进 index.html
+apps/api/            Hono API 骨架（/api/health）
+packages/shared/     前后端共用类型（现阶段仅 Health）
 ```
 
 ## 常见修改
 
 ### 添加自己的宠物
 
-编辑 `src/data/pets.ts` 顶部的 `CUSTOM_PETS`。宠物按顺序住进照片墙：先填 A 区，满了到 B 区，排在前面的格号也靠前：
+编辑 `apps/web/src/data/pets.ts` 顶部的 `CUSTOM_PETS`。宠物按顺序住进照片墙：先填 A 区，满了到 B 区，排在前面的格号也靠前：
 
 ```ts
 export const CUSTOM_PETS = [
@@ -171,7 +145,7 @@ export const CUSTOM_PETS = [
 
 ### 替换照片
 
-把图片放进 `public/photos/`，然后在宠物数据里填 `photoUrl: '/photos/文件名.jpg'`。照片会被裁成正方形。没有 `photoUrl` 的宠物使用程序生成的卡通画像。使用其他域名的图片时，对方服务器需要允许跨域（CORS）。
+把图片放进 `apps/web/public/photos/`，然后在宠物数据里填 `photoUrl: '/photos/文件名.jpg'`。照片会被裁成正方形。没有 `photoUrl` 的宠物使用程序生成的卡通画像。使用其他域名的图片时，对方服务器需要允许跨域（CORS）。
 
 ### 相册（多张照片）
 
@@ -179,15 +153,15 @@ export const CUSTOM_PETS = [
 
 ### 替换音乐
 
-把音乐文件放到 `public/audio/bgm.mp3`，会自动循环播放。没有这个文件时，程序会用 WebAudio 现场合成一段舒缓的环境音乐，所以不放文件也不会报错。
+把音乐文件放到 `apps/web/public/audio/bgm.mp3`，会自动循环播放。没有这个文件时，程序会用 WebAudio 现场合成一段舒缓的环境音乐，所以不放文件也不会报错。
 
 ### 调整场景
 
-`src/config.ts` 里可以改大厅的尺寸、照片墙的行列数和相框大小、宠物小屋的尺寸配色家具布置和每类礼物最多摆出的件数、河流的位置宽度流速和河灯数量、篝火的位置和烧信时长、孔明灯平台的位置和大小、影厅的大小银幕座位排数和门洞、河的洞口、小人的身高速度颜色、镜头的距离和俯仰范围、模拟访客的人数速度停留时长和衣服颜色、宠物数量、星星和孔明灯数量、流星间隔、主要颜色等。界面与场景里的文字都在 `src/i18n/en.ts`。
+`apps/web/src/config.ts` 里可以改大厅的尺寸、照片墙的行列数和相框大小、宠物小屋的尺寸配色家具布置和每类礼物最多摆出的件数、河流的位置宽度流速和河灯数量、篝火的位置和烧信时长、孔明灯平台的位置和大小、影厅的大小银幕座位排数和门洞、河的洞口、小人的身高速度颜色、镜头的距离和俯仰范围、模拟访客的人数速度停留时长和衣服颜色、宠物数量、星星和孔明灯数量、流星间隔、主要颜色等。界面与场景里的文字都在 `apps/web/src/i18n/en.ts`。
 
 ### 文字与多语言
 
-访客能看到的字都在 `src/i18n/` 里，其余代码只用 `STR`，不直接写文字：
+访客能看到的字都在 `apps/web/src/i18n/` 里，其余代码只用 `STR`，不直接写文字：
 
 - `en.ts` 是完整的一份：品牌名和标语、界面、场景里的字、物种的显示名、地址的写法、示例宠物的名字品种寄语、页面信息（`meta`），以及这门语言的字体和字间距（`style`）。
 - 加一种语言：照着 `en.ts` 写一个文件（比如 `zh.ts`，类型标成 `Strings`），在 `index.ts` 的 `LOCALES` 里登记。缺一条就编译不过。现在没有切换语言的入口，用哪种语言由 `index.ts` 里的 `LOCALE` 决定。
@@ -195,11 +169,11 @@ export const CUSTOM_PETS = [
 - 数据里不存文字：物种是 `cat / dog / rabbit / hamster / bird`，区是 `A / B`，显示名从 `STR` 取。
 - 品牌的说法：说「记得」「还在这里」，不说「去了星星上」「离开」「逝去」；日期只写起止年月日。
 
-宠物总数上限是 100（照片图集是 10 × 10 格）。需要更多时，调大 `src/world/Batches.ts` 里 `PhotoBatch` 的图集尺寸。
+宠物总数上限是 100（照片图集是 10 × 10 格）。需要更多时，调大 `apps/web/src/world/Batches.ts` 里 `PhotoBatch` 的图集尺寸。
 
 ### 接入后端
 
-礼物、信（以及对信的爱心、回的话、举报），以及放河灯、烧信的记录，读写都封装在 `src/data/store.ts`，目前存在浏览器的 localStorage 里（键名 `jinian:v2`，改品牌名时没有动，改了会丢掉已有数据），所以每位访客只能看到自己放的东西。接后端时只需要替换这个文件里的实现。
+礼物、信（以及对信的爱心、回的话、举报），以及放河灯、烧信的记录，读写都封装在 `apps/web/src/data/store.ts`，目前存在浏览器的 localStorage 里（键名 `jinian:v2`，改品牌名时没有动，改了会丢掉已有数据），所以每位访客只能看到自己放的东西。接后端时只需要替换这个文件里的实现。
 
 对信的爱心、回的话、举报记在同一份数据里新增的 `social` 字段下，用信的编号对应，信本身的存法没有变；没有这个字段的旧数据照常能读。
 

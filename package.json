@@ -1,21 +1,12 @@
 {
-  "name": "pet-memorial",
-  "version": "0.1.0",
-  "description": "用 Three.js 做的在线宠物纪念馆",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
-  },
-  "type": "module",
-  "packageManager": "pnpm@10.33.0",
-  "dependencies": {
-    "three": "^0.187.0"
-  },
+  "name": "paw-still-here",
   "private": true,
-  "devDependencies": {
-    "@types/three": "^0.187.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.8"
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @paw/web --filter @paw/api dev",
+    "dev:web": "pnpm --filter @paw/web dev",
+    "dev:api": "pnpm --filter @paw/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
   }
 }
