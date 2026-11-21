@@ -8,19 +8,25 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "paw-still-here",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_name": "paw",
+      "database_id": "5c4e6ed9-d9de-45b0-a55a-fa2d4c23116a",
       "migrations_dir": "migrations"
     }
   ],
   "r2_buckets": [
     {
       "binding": "BUCKET",
-      "bucket_name": "paw-still-here-assets"
+      "bucket_name": "paw-public"
+    }
+  ],
+   "kv_namespaces": [
+    {
+      "binding": "CACHE_PAW",
+      "id": "d319daa0823643a7948b4da6b7cfb599"
     }
   ],
   "vars": {
     "BETTER_AUTH_URL": "http://localhost:8787",
-    "PUBLIC_ASSETS_URL": "https://assets.pawstillhere.com"
+    "PUBLIC_ASSETS_URL": "https://cdn.pawstillhere.com"
   }
 }
