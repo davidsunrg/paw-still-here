@@ -1043,7 +1043,7 @@ export class UI {
   private findPets(query: string) {
     const norm = (t: string) => t.toLowerCase().replace(/\s/g, '');
     const q = norm(query);
-    if (!q) return PETS.slice(0, 30);
+    if (!q) return PETS.filter((p): p is Pet => !!p).slice(0, 30);
     const section = SECTIONS.find((s) => q === norm(s) || q === norm(STR.sectionName(s)));
     const inSection = PETS.filter((p) => p.section === section);
     const byText = PETS.filter(

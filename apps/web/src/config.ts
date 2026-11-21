@@ -363,8 +363,11 @@ export const CONFIG = {
     colors: [0x8fa7bf, 0xb99aa6, 0x9bb59a, 0xc2ad8a, 0xa69bc0, 0x8fb3b0, 0xc09a86, 0x9aa0a8],
   },
 
-  /** 示例宠物数量：六层都铺满示例；在线时用真实宠物顶掉对应格 */
-  petCount: 2052,
+  /** 示例宠物数量：只铺满第一层；第二层及往上默认是空相框 */
+  petCount: 342,
+
+  /** 默认开放几层；即使还没有真实宠物，也可以上去看看空楼层 */
+  openFloors: 2,
 
   sky: {
     stars: 2600,

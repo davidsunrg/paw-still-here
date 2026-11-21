@@ -17,7 +17,14 @@ describe('replaceSlotPet', () => {
   });
 
   it('returns undefined for a slot that does not exist', () => {
-    expect(replaceSlotPet(PETS.length + 5, PETS[0]!)).toBeUndefined();
+    expect(replaceSlotPet(GALLERY_CAPACITY + 5, PETS[0]!)).toBeUndefined();
+  });
+
+  it('fills a slot that was empty', () => {
+    const pet = { ...PETS[0]!, id: 'floor-two-pet', name: 'Floor two' };
+    expect(replaceSlotPet(342, pet)).toBeUndefined();
+    expect(PETS[342]).toBe(pet);
+    expect(petById.get(pet.id)).toBe(pet);
   });
 });
 

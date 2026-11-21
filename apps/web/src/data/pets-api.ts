@@ -1,4 +1,4 @@
-import { GALLERY_CAPACITY, slotToPlacement, type PetDto } from '@paw/shared';
+import { FLOOR_CAPACITY, GALLERY_CAPACITY, slotToPlacement, type PetDto } from '@paw/shared';
 import type { Pet, Species } from './pets';
 import { buildSamplePetAtSlot, replacePets, buildOfflineGallery } from './pets';
 import { tributes } from './tributes';
@@ -45,9 +45,12 @@ export function petFromDto(dto: PetDto): Pet {
 
 export function applyGalleryFromApi(dtos: PetDto[]): void {
   const realBySlot = new Map(dtos.map((d) => [d.slot, petFromDto(d)]));
-  const merged: Pet[] = [];
+  // 第一层铺示例；第二层起默认是空相框，只有真实宠物才占格
+  const merged: Array<Pet | undefined> = [];
   for (let slot = 0; slot < GALLERY_CAPACITY; slot++) {
-    merged.push(realBySlot.get(slot) ?? buildSamplePetAtSlot(slot));
+    const real = realBySlot.get(slot);
+    if (real) merged[slot] = real;
+    else if (slot < FLOOR_CAPACITY) merged[slot] = buildSamplePetAtSlot(slot);
   }
   replacePets(merged);
   tributes.seed(dtos);

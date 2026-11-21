@@ -5,7 +5,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG } from './config';
-import { buildSamplePetAtSlot, petById, PETS, replaceSlotPet } from './data/pets';
+import { petById, PETS, replaceSlotPet } from './data/pets';
 import { petFromDto } from './data/pets-api';
 import { prefs, store } from './data/store';
 import { tributes } from './data/tributes';
@@ -76,7 +76,12 @@ const ui = new UI({
     const pet = petFromDto(dto);
     tributes.seed([dto]);
     if (pet.floor === world.activeFloor) {
-      const entry = world.replacePetAtSlot(dto.slot, pet);
+      let entry = world.replacePetAtSlot(dto.slot, pet);
+      if (!entry) {
+        // 第二层以上的空格子：这一层的内容整个换一遍，再把新相框接上
+        entry = world.fillPetAtSlot(dto.slot, pet);
+        if (entry) interaction?.refreshTargets();
+      }
       if (entry) {
         syncFloorUi();
         if (mode === 'edit') {
@@ -99,7 +104,7 @@ const ui = new UI({
     visitSlot(dto.slot, () => ui.openShare(pet, true));
   },
   onMemorialDeleted: (slot) => {
-    world.replacePetAtSlot(slot, buildSamplePetAtSlot(slot));
+    if (world.removePetAtSlot(slot)) interaction?.refreshTargets();
     syncFloorUi();
   },
   onFloor(floor) {
@@ -369,11 +374,11 @@ function transition(mid: () => void) {
 }
 
 // ---------- 楼层：共享 3D 空间，只换内容层 ----------
-/** 已经有真实宠物的最高楼层；至少包含当前层 */
+/** 已经有真实宠物的最高楼层；至少包含默认开放的层和当前层 */
 function maxFloor() {
-  let max = world.activeFloor;
-  for (const pet of PETS) if (pet.isReal && pet.floor > max) max = pet.floor;
-  return Math.max(1, max);
+  let max = Math.max(CONFIG.openFloors, world.activeFloor);
+  for (const pet of PETS) if (pet?.isReal && pet.floor > max) max = pet.floor;
+  return max;
 }
 
 function syncFloorUi() {

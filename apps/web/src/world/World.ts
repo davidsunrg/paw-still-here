@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FLOOR_CAPACITY, slotToPlacement } from '@paw/shared';
 import { CONFIG } from '../config';
-import { PETS, replaceSlotPet, type Pet } from '../data/pets';
+import { PETS, petById, replaceSlotPet, type Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
@@ -196,6 +196,27 @@ export class World {
     replaceSlotPet(slot, pet);
     this.gallery.refreshSlot(local, pet);
     return info.entry;
+  }
+
+  /** 删掉当前层的宠物：那一格回到空相框；删了东西才返回 true */
+  removePetAtSlot(slot: number): boolean {
+    const pet = PETS[slot];
+    if (!pet) return false;
+    const local = slot - (this.activeFloor - 1) * FLOOR_CAPACITY;
+    if (local < 0 || local >= FLOOR_CAPACITY) return false;
+    delete PETS[slot];
+    petById.delete(pet.id);
+    this.showFloor(this.activeFloor);
+    return true;
+  }
+
+  /** 往当前层的空格子里放一只新宠物：这一层的内容整个换一遍 */
+  fillPetAtSlot(slot: number, pet: Pet): PhotoEntry | null {
+    const local = slot - (this.activeFloor - 1) * FLOOR_CAPACITY;
+    if (local < 0 || local >= FLOOR_CAPACITY) return null;
+    replaceSlotPet(slot, pet);
+    this.showFloor(this.activeFloor);
+    return this.slots.get(pet.id)?.entry ?? null;
   }
 
   // ---------- 搭建时用到的小工具 ----------

@@ -224,6 +224,8 @@ export function buildGallery(w: World): Gallery {
     box(p(T + 0.02), F + 0.06, F + 0.06, 0.04, frame);
     const lamp = p(T + 0.07, F / 2 + 0.045);
     kit.glowBox(lamp.x, lamp.y, lamp.z, F * 0.6, 0.016, 0.03, C.warm, 2.3, rotY);
+    // 没有照片的格子露出的深色内衬
+    box(p(T + 0.0405), F - 0.012, F - 0.012, 0.004, 0x17151a);
 
     shellCells.push({
       section: cell.section,
@@ -277,7 +279,11 @@ export function buildGallery(w: World): Gallery {
       const slots = new Map<string, SlotInfo>();
       shellCells.forEach((shell, i) => {
         const pet = pets[i];
-        if (!pet) return;
+        if (!pet) {
+          // 空楼层：深色内衬 + 只有格号的空名牌
+          labels.add('', shell.labelAt, shell.rotY, shell.labelW, shell.labelH, String(shell.cell), true);
+          return;
+        }
         const entry = photos.add(pet, shell.photoAt, shell.rotY, F, F);
         const years = pet.passedDate ? ` · ${pet.passedDate.slice(0, 4)}` : '';
         labels.add(`${pet.name}${years}`, shell.labelAt, shell.rotY, shell.labelW, shell.labelH, String(shell.cell));
@@ -308,8 +314,8 @@ interface Traces {
  * 石台上的痕迹：有人放过花，就横着一枝花；点过蜡烛，就立着一点烛光。
  * 每只宠物在四个实例化网格里各占一个位置，没有的时候缩成零。
  */
-function buildTraces(w: World, pets: Pet[], slots: Map<string, SlotInfo>): Traces {
-  const ids = pets.map((pet) => pet.id);
+function buildTraces(w: World, pets: Array<Pet | undefined>, slots: Map<string, SlotInfo>): Traces {
+  const ids = pets.map((pet) => pet?.id ?? '');
   const meshes: THREE.InstancedMesh[] = [];
   const make = (part: { geo: THREE.BufferGeometry; mat: THREE.Material }) => {
     const mesh = new THREE.InstancedMesh(part.geo, part.mat, Math.max(1, ids.length));
@@ -365,7 +371,7 @@ function buildTraces(w: World, pets: Pet[], slots: Map<string, SlotInfo>): Trace
     ids[localSlot] = pet.id;
     refresh(pet);
   };
-  for (const pet of pets) refresh(pet);
+  for (const pet of pets) if (pet) refresh(pet);
   return {
     refresh,
     refreshSlot,

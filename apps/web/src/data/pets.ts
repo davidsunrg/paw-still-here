@@ -127,21 +127,27 @@ export function buildOfflineGallery(): Pet[] {
 
 export const PETS: Pet[] = buildOfflineGallery();
 
-export const petById = new Map(PETS.map((p) => [p.id, p]));
+export const petById = new Map<string, Pet>();
+for (const pet of PETS) petById.set(pet.id, pet);
 
-export function replacePets(next: Pet[]): void {
+/** 换掉整套餐宠；空格子（空楼层）保持为空，不把空洞填成 undefined */
+export function replacePets(next: Array<Pet | undefined>): void {
   PETS.length = 0;
-  PETS.push(...next);
   petById.clear();
-  for (const p of next) petById.set(p.id, p);
+  for (let slot = 0; slot < next.length; slot++) {
+    const pet = next[slot];
+    if (!pet) continue;
+    PETS[slot] = pet;
+    petById.set(pet.id, pet);
+  }
 }
 
-/** 把某一格换成刚创建/编辑好的宠物；返回原来那一格的宠物 */
+/** 把某一格换成刚创建/编辑好的宠物；空格也可以填；返回原来那一格的宠物 */
 export function replaceSlotPet(slot: number, pet: Pet): Pet | undefined {
+  if (slot < 0 || slot >= GALLERY_CAPACITY) return undefined;
   const old = PETS[slot];
-  if (!old) return undefined;
   PETS[slot] = pet;
-  petById.delete(old.id);
+  if (old) petById.delete(old.id);
   petById.set(pet.id, pet);
   return old;
 }
