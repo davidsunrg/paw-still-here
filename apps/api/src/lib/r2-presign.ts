@@ -3,7 +3,7 @@ import type { Env } from '../env';
 import { err } from './errors';
 
 export function createR2Presigner(env: Env) {
-  const accountId = env.R2_ACCOUNT_ID;
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   const accessKeyId = env.R2_ACCESS_KEY_ID;
   const secretAccessKey = env.R2_SECRET_ACCESS_KEY;
   const bucket = env.R2_BUCKET_NAME;
