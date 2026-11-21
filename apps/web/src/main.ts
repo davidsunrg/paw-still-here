@@ -26,6 +26,7 @@ import { pathX } from './world/Outdoor';
 import { FIRE_SPOT } from './world/Bonfire';
 import { CAVE_BACK, GATE_BACK, inCaveDoor, inGateDoor } from './world/Cave';
 import { CINEMA_BACK, CINEMA_ROOM, CINEMA_SPAWN, inCinemaDoor, inCinemaExit } from './world/Cinema';
+import { UPPER, UPPER_ROOM, UPPER_SPAWN } from './world/Upper';
 import { LANTERN_LAUNCH, LANTERN_SPOT } from './world/LanternTerrace';
 import { DOCK_SPOT, routeToDock } from './world/River';
 import { World } from './world/World';
@@ -121,6 +122,7 @@ const ui = new UI({
   onTeleport(target) {
     guide.clear();
     travel(() => {
+      leaveUpper();
       if (target === 'gate') player.teleport(pathX(CONFIG.player.spawnZ), CONFIG.player.spawnZ, 0);
       else if (target === 'river') toDock();
       else if (target === 'fire') toFire();
@@ -154,8 +156,8 @@ const ui = new UI({
     transition(() => {});
   },
   onTributesChanged(pet) {
-    world.gallery.refresh(pet);
-    world.tree.setOwn(store.ownLetters());
+    world.refreshPet(pet);
+    world.setOwnLetters(store.ownLetters());
     if (world.shrine.entry?.pet === pet) world.shrine.refresh();
   },
   onCapture() {
@@ -166,7 +168,7 @@ const ui = new UI({
   },
   onOffering(pet, kind) {
     world.shrine.drop(kind);
-    world.gallery.refresh(pet);
+    world.refreshPet(pet);
     audio.chime(kind === 'candle');
   },
   onRite(kind, pet) {
@@ -190,8 +192,8 @@ const ui = new UI({
   },
   onLetter(pet, here) {
     // 写了一封信：树上多一块自己的木牌；写给某一只的，它相框下面的数字跟着变，正开着它的纪念角时信落在台面上
-    world.tree.setOwn(store.ownLetters());
-    if (pet) world.gallery.refresh(pet);
+    world.setOwnLetters(store.ownLetters());
+    if (pet) world.refreshPet(pet);
     if (here) world.shrine.drop('letter');
     audio.chime(false);
   },
@@ -385,13 +387,41 @@ function syncFloorUi() {
   ui.setFloors(maxFloor(), world.activeFloor);
 }
 
-/** 在淡入淡出里换一层内容；不重建墙体，也不移动楼层 */
+/** 回到一层（底部导航去室外的入口、坐船回来时用）：楼上那处空间先收起来 */
+function leaveUpper() {
+  if (world.activeFloor === 1) return;
+  world.showFloor(1);
+  player.room = null;
+  player.resetNavigation();
+  interaction?.refreshTargets();
+  syncFloorUi();
+}
+
+/** 一层和楼上建在两个地方：换空间时把人挪过去；同一处空间里换楼层只换内容 */
+function moveToSpace(floor: number, from: number) {
+  const upstairs = (f: number) => f > 1;
+  if (upstairs(floor) === upstairs(from)) return;
+  if (upstairs(floor)) {
+    player.room = UPPER_ROOM;
+    player.teleport(UPPER_SPAWN.x, UPPER_SPAWN.z, UPPER_SPAWN.yaw);
+  } else {
+    // 回一层：站到大厅里同样的位置，大门那面墙前留一点余地
+    player.room = null;
+    const z = Math.min(-1.4, player.pos.z - UPPER.z);
+    player.teleport(player.pos.x - UPPER.x, z, player.yaw);
+  }
+  player.resetNavigation();
+}
+
+/** 在淡入淡出里换一层内容；一层和楼上各是一处空间，换空间时也把人挪过去 */
 function switchFloor(floor: number) {
   if (floor === world.activeFloor || pending || ui.detailOpen) return;
   transition(() => {
     if (inCinema) exitCinema();
     if (inRide) exitRide();
+    const from = world.activeFloor;
     world.showFloor(floor);
+    moveToSpace(floor, from);
     interaction?.refreshTargets();
     syncFloorUi();
     marker.hide();
@@ -409,7 +439,9 @@ function visitSlot(slot: number, then?: () => void) {
     if (inCinema) exitCinema();
     if (inRide) exitRide();
     if (floor !== world.activeFloor) {
+      const from = world.activeFloor;
       world.showFloor(floor);
+      moveToSpace(floor, from);
       interaction?.refreshTargets();
       syncFloorUi();
     }
@@ -778,7 +810,7 @@ async function boot() {
     run();
   }
   interaction = new Interaction(camera, world, player.pos);
-  world.tree.setOwn(store.ownLetters());
+  world.setOwnLetters(store.ownLetters());
   // 其他访客：现在是本地模拟的；以后接后端时把这里换成从网络收状态的 VisitorSource
   crowd = new Crowd(scene, new SimulatedVisitors(world), CONFIG.visitors.count);
   crowd.hidden = prefs.solo;

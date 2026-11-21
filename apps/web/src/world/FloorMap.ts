@@ -10,11 +10,15 @@ const BOARD = { w: 1.9, h: 1.52, y: 1.85 };
 const INK = '#e9d3a2';
 const DIM = 'rgba(233,211,162,0.55)';
 
+/** 两种空间的图：一层大厅有大门、影厅和河；楼上是同一个大厅，但没有这三处 */
+export type FloorVariant = 'lobby' | 'upper';
+
 /**
  * 本层总览图的贴图：按进门时的方向画（大门在下，石门在上，左手是 A 区）。
  * 位置都从 CONFIG 里取，大厅改了尺寸图也跟着变。
  */
-function mapTexture(floor: number) {
+function mapTexture(floor: number, variant: FloorVariant) {
+  const upper = variant === 'upper';
   const W = 1000;
   const H = 800;
   const [c, ctx] = makeCanvas(W, H);
@@ -49,28 +53,33 @@ function mapTexture(floor: number) {
     ctx.stroke();
   };
 
-  text(STR.map.floorTitle(floor), W / 2, 62, 60);
+  text(upper ? STR.map.upperTitle(floor) : STR.map.floorTitle(floor), W / 2, 62, 60);
 
   // 外墙：下面留出大门，上面是合着的石门
   const hw = L.w / 2;
   const zc = -L.d / 2;
   line(-hw, 0, -hw, -L.d, 4, DIM);
-  // 右墙上是影厅和河的入口：墙线在门洞处断开，外面画出门洞后面的那一小段
-  const doors = [
-    { ...CONFIG.cinema.door, name: STR.map.cinema },
-    { ...CONFIG.cave.door, name: STR.map.cave },
-  ];
-  let from = 0;
-  ctx.lineWidth = 3;
-  for (const door of doors) {
-    line(hw, from, hw, door.z + door.half, 4, DIM);
-    from = door.z - door.half;
-    ctx.strokeStyle = DIM;
+  if (upper) {
+    // 楼上没有影厅和河的入口，右墙是一整面
+    line(hw, 0, hw, -L.d, 4, DIM);
+  } else {
+    // 右墙上是影厅和河的入口：墙线在门洞处断开，外面画出门洞后面的那一小段
+    const doors = [
+      { ...CONFIG.cinema.door, name: STR.map.cinema },
+      { ...CONFIG.cave.door, name: STR.map.cave },
+    ];
+    let from = 0;
     ctx.lineWidth = 3;
-    ctx.strokeRect(X(hw), Y(door.z - door.half), door.depth * s, door.half * 2 * s);
-    text(door.name, X(hw) - 22, Y(door.z), 30, INK, 'right');
+    for (const door of doors) {
+      line(hw, from, hw, door.z + door.half, 4, DIM);
+      from = door.z - door.half;
+      ctx.strokeStyle = DIM;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(X(hw), Y(door.z - door.half), door.depth * s, door.half * 2 * s);
+      text(door.name, X(hw) - 22, Y(door.z), 30, INK, 'right');
+    }
+    line(hw, from, hw, -L.d, 4, DIM);
   }
-  line(hw, from, hw, -L.d, 4, DIM);
   // 后墙：门洞两侧，中间通向后展区
   line(-hw, -L.d, -L.backDoorHalf, -L.d, 4, DIM);
   line(L.backDoorHalf, -L.d, hw, -L.d, 4, DIM);
@@ -80,9 +89,14 @@ function mapTexture(floor: number) {
   line(-hw, -L.d, -hw, Wing.backZ, 4, DIM);
   line(hw, -L.d, hw, Wing.backZ, 4, DIM);
   line(-hw, Wing.backZ, hw, Wing.backZ, 4, DIM);
-  line(-hw, 0, -L.doorHalf, 0, 4, DIM);
-  line(L.doorHalf, 0, hw, 0, 4, DIM);
-  text(STR.map.entrance, W / 2, Y(0) + 34, 34);
+  if (upper) {
+    // 楼上的大门那面是整墙，没有出口
+    line(-hw, 0, hw, 0, 4, DIM);
+  } else {
+    line(-hw, 0, -L.doorHalf, 0, 4, DIM);
+    line(L.doorHalf, 0, hw, 0, 4, DIM);
+    text(STR.map.entrance, W / 2, Y(0) + 34, 34);
+  }
 
   // 两个区，和每个区两头的格号
   const sideHalf = (G.sideCols * G.pitch) / 2;
@@ -150,12 +164,12 @@ export interface FloorMapHandle {
 }
 
 /** 电梯旁的本层总览图，挂在门墙里侧；换楼层时只换贴图 */
-export function buildFloorMap(w: World): FloorMapHandle {
+export function buildFloorMap(w: World, origin: { x: number; z: number } = { x: 0, z: 0 }, variant: FloorVariant = 'lobby'): FloorMapHandle {
   const { kit } = w;
-  const x = CONFIG.hall.mapX;
-  const face = -CONFIG.wallT / 2;
+  const x = origin.x + CONFIG.hall.mapX;
+  const face = origin.z - CONFIG.wallT / 2;
   kit.box(x, BOARD.y, face - 0.025, BOARD.w + 0.12, BOARD.h + 0.12, 0.05, CONFIG.colors.woodDark);
-  const material = new THREE.MeshBasicMaterial({ map: mapTexture(1) });
+  const material = new THREE.MeshBasicMaterial({ map: mapTexture(1, variant) });
   const board = new THREE.Mesh(new THREE.PlaneGeometry(BOARD.w, BOARD.h), material);
   board.position.set(x, BOARD.y, face - 0.052);
   board.rotation.y = Math.PI;
@@ -164,7 +178,7 @@ export function buildFloorMap(w: World): FloorMapHandle {
   return {
     setFloor(floor: number) {
       const old = material.map;
-      material.map = mapTexture(floor);
+      material.map = mapTexture(floor, variant);
       material.needsUpdate = true;
       old?.dispose();
     },

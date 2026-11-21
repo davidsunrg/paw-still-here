@@ -19,7 +19,7 @@ export interface Tree {
  * 纪念树：石砌的圆形底座、白色的树干、发光的树冠和树冠下面挂着的木牌。
  * 每块木牌是一封信，点树可以读。
  */
-export function buildTree(w: World): Tree {
+export function buildTree(w: World, origin: { x: number; z: number } = { x: 0, z: 0 }): Tree {
   const { kit, scene } = w;
   const C = CONFIG.colors;
   const rnd = mulberry32(23);
@@ -27,7 +27,8 @@ export function buildTree(w: World): Tree {
   // 这棵树原本在纪念区，搭它之前每只宠物用掉过一次随机数；保留这些取值，树的样子才和原来一样
   for (let i = 0; i < PETS.length; i++) R(0, 1);
 
-  const { x: tx, z: tz } = TREE_POS;
+  const tx = origin.x + TREE_POS.x;
+  const tz = origin.z + TREE_POS.z;
   kit.cyl(tx, 0, tz, 2.5, 0.42, 0xa9a39a);
   kit.cyl(tx, 0.42, tz, 2.62, 0.07, 0xc4beb4);
   kit.cyl(tx, 0.42, tz, 2.2, 0.1, 0x4a3a2e);

@@ -251,6 +251,12 @@ export class Player {
     this.goal = { x, z, radius, done, stuck: 0, route: route ?? undefined, index: 0 };
   }
 
+  /** 换了地方（另一处空间、门开了/关了）以后，碰撞变了：下一次寻路重新建栅格 */
+  resetNavigation() {
+    this.nav = null;
+    this.navKey = '';
+  }
+
   /** 当前场景/房间的寻路；主场景和影厅、山洞码头各自用不同的边界 */
   private findRoute(x: number, z: number): NavPoint[] | null {
     const room = this.room;

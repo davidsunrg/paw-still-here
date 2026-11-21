@@ -36,6 +36,7 @@ export const en = {
     lantern: 'Folding the paper lanterns…',
     hall: 'Setting up the lobby…',
     gallery: 'Hanging the frames…',
+    upper: 'Opening the upper floor…',
     shrine: 'Dusting the little shelves…',
     cinema: 'Dimming the theater lights…',
     cave: 'Filling the river in the cave…',
@@ -194,6 +195,7 @@ export const en = {
   map: {
     title: 'Floor 1 · Lobby',
     floorTitle: (floor: number) => `Floor ${floor} · Lobby`,
+    upperTitle: (floor: number) => `Floor ${floor} · Gallery`,
     tree: 'Tree',
     reception: 'Front desk',
     elevator: 'Elevator',

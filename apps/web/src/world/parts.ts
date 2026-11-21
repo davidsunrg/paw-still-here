@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Kit } from './Kit';
-import type { World } from './World';
+import type { Seat, World } from './World';
 
 /** 把局部坐标 (lx, lz) 按 rotY 旋转后放到 (cx, cz) */
 export function placer(cx: number, cz: number, rot: number) {
@@ -106,18 +106,21 @@ export function wallStrip(kit: Kit, x: number, z: number, lenX: number, lenZ: nu
 }
 
 /** 在沙发 / 长椅上登记左右两个座位（局部 +Z 是正面） */
-function seats(w: World, P: ReturnType<typeof placer>, rot: number, lx: number, lz: number, top: number) {
+function seats(w: World, P: ReturnType<typeof placer>, rot: number, lx: number, lz: number, top: number, zone: Seat['zone']) {
   for (const side of [-1, 1]) {
     const [x, z] = P(side * lx, lz);
-    w.seat('hall', x, z, top, Math.sin(rot), Math.cos(rot));
+    w.seat(zone, x, z, top, Math.sin(rot), Math.cos(rot));
   }
 }
 
 /** 沙发：局部 +Z 方向是正面 */
-export function sofa(w: World, cx: number, cz: number, rot: number, width: number, color: number, cushion: number) {
+export function sofa(
+  w: World, cx: number, cz: number, rot: number, width: number, color: number, cushion: number,
+  zone: Seat['zone'] = 'hall',
+) {
   const { kit } = w;
   const P = placer(cx, cz, rot);
-  seats(w, P, rot, width / 4, 0.12, 0.5);
+  seats(w, P, rot, width / 4, 0.12, 0.5, zone);
   const b = (lx: number, y: number, lz: number, sx: number, sy: number, sz: number, c: number) => {
     const [x, z] = P(lx, lz);
     kit.box(x, y, z, sx, sy, sz, c, rot);
@@ -136,10 +139,10 @@ export function sofa(w: World, cx: number, cz: number, rot: number, width: numbe
 }
 
 /** 长椅 */
-export function bench(w: World, cx: number, cz: number, rot: number, width = 1.8) {
+export function bench(w: World, cx: number, cz: number, rot: number, width = 1.8, zone: Seat['zone'] = 'hall') {
   const { kit } = w;
   const P = placer(cx, cz, rot);
-  seats(w, P, rot, width / 4, 0.02, 0.485);
+  seats(w, P, rot, width / 4, 0.02, 0.485, zone);
   const wood = CONFIG.colors.woodLight;
   const dark = 0x33333b;
   const b = (lx: number, y: number, lz: number, sx: number, sy: number, sz: number, c: number) => {

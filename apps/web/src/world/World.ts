@@ -12,6 +12,7 @@ import { buildLanternTerrace } from './LanternTerrace';
 import { buildGallery, type Gallery } from './Gallery';
 import { tickFlames } from './gifts';
 import { buildHall } from './Hall';
+import { buildUpper } from './Upper';
 import type { FloorMapHandle } from './FloorMap';
 import { Kit } from './Kit';
 import { buildOutdoor } from './Outdoor';
@@ -57,7 +58,8 @@ export interface Seat {
   approach: { x: number; z: number };
   /** 座位排得很密时（影厅）：这一排前面的窄道通到哪几条过道（过道的 x）。要先沿过道走到这一排，再拐进来 */
   aisles?: number[];
-  zone: 'fire' | 'hall' | 'cinema';
+  /** 模拟访客只坐 fire / hall 的座位；cinema 和 upper 留给自己 */
+  zone: 'fire' | 'hall' | 'cinema' | 'upper';
 }
 
 /** 一盏登记过的灯。位置和亮度可以随时改 */
@@ -83,7 +85,10 @@ export class World {
   readonly updaters: Updater[] = [];
   slots = new Map<string, SlotInfo>();
   activeFloor = 1;
+  /** 一层大厅的总览图 */
   floorMap?: FloorMapHandle;
+  /** 楼上那份总览图 */
+  upperMap?: FloorMapHandle;
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击纪念树 / 接待台 / 影厅入口 / 河的洞口 / 沙发时触发；sit 收到的是这张沙发上的座位 */
@@ -93,9 +98,12 @@ export class World {
   river!: River;
   bonfire!: Bonfire;
   shrine!: Shrine;
+  /** 一层的照片墙 */
   gallery!: Gallery;
+  /** 二层及以上另建的一处空间；还没搭好之前是空的 */
+  upperGallery?: Gallery;
   cinema!: Cinema;
-  tree!: Tree;
+  trees: Tree[] = [];
   ride!: CaveRide;
 
   private lamps: Lamp[] = [];
@@ -116,8 +124,9 @@ export class World {
       ['fire', () => (this.bonfire = buildBonfire(this))],
       ['lantern', () => buildLanternTerrace(this)],
       ['hall', () => buildHall(this)],
-      ['gallery', () => {
-        this.gallery = buildGallery(this);
+      ['gallery', () => (this.gallery = buildGallery(this))],
+      ['upper', () => {
+        this.upperGallery = buildUpper(this);
         this.showFloor(1);
       }],
       ['shrine', () => (this.shrine = new Shrine(this))],
@@ -162,16 +171,22 @@ export class World {
     this.kit.build(this.scene);
   }
 
-  /** 换楼层：只换照片、铭牌、痕迹和 slots，共享的墙和相框不动 */
+  /** 换楼层：一层用大厅那一套，二层及以上用另建的楼上空间；只换照片、铭牌、痕迹和 slots */
   showFloor(floor: number) {
     const offset = (floor - 1) * FLOOR_CAPACITY;
     const pets = PETS.slice(offset, offset + FLOOR_CAPACITY);
     this.activeFloor = floor;
-    const content = this.gallery.showFloor(floor, pets);
+    const next = floor === 1 ? this.gallery : this.upperGallery;
+    const other = floor === 1 ? this.upperGallery : this.gallery;
+    if (!next) return;
+    // 两个空间不会同时看到，把不用的那一套照片图集收起来，省内存
+    other?.unload();
+    const content = next.showFloor(floor, pets);
     this.photos = content.photos;
     this.labels = content.labels;
     this.slots = content.slots;
     this.floorMap?.setFloor(floor);
+    this.upperMap?.setFloor(floor);
   }
 
   /** 当前楼层某个 slot 的照片墙格子（用于跨层搜索/分享） */
@@ -194,8 +209,28 @@ export class World {
     this.slots.delete(old.id);
     this.slots.set(pet.id, info);
     replaceSlotPet(slot, pet);
-    this.gallery.refreshSlot(local, pet);
+    this.space.refreshSlot(local, pet);
     return info.entry;
+  }
+
+  /** 当前楼层那一套照片墙 */
+  private get space(): Gallery {
+    return this.activeFloor === 1 ? this.gallery : (this.upperGallery ?? this.gallery);
+  }
+
+  /** 再种一棵纪念树（一层一棵，楼上那处空间也有自己的一棵） */
+  addTree(tree: Tree) {
+    this.trees.push(tree);
+  }
+
+  /** 自己写的信在树上挂了几块木牌；两棵树上都挂 */
+  setOwnLetters(n: number) {
+    for (const tree of this.trees) tree.setOwn(n);
+  }
+
+  /** 这一层某只宠物的石台上有了新礼物：更新它脚下的痕迹 */
+  refreshPet(pet: Pet) {
+    this.space.refresh(pet);
   }
 
   /** 删掉当前层的宠物：那一格回到空相框；删了东西才返回 true */

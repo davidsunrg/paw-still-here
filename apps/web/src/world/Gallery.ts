@@ -20,18 +20,24 @@ export interface Cell {
 }
 
 /** 一面墙上连续的一段石板：中心、沿墙的长度、朝向 */
-interface Slab {
+export interface Slab {
   x: number;
   z: number;
   len: number;
   rotY: number;
 }
 
+/** 一套照片墙落在哪个原点（大厅中心在 (ox, oz)）：一层是 (0, 0)，楼上另建在一处 */
+export interface Origin {
+  x: number;
+  z: number;
+}
+
 /**
- * 两个区每一格的位置，按地址顺序排列。
+ * 大厅两面墙的每一格位置，按地址顺序排列。
  * 格号按列编：面向墙从左到右，每列从上到下；所以绕着大厅顺时针走，格号是连着的。
  */
-function layout(): { cells: Cell[]; slabs: Slab[] } {
+export function hallCells(o: Origin): Cell[] {
   const hw = CONFIG.hall.w / 2;
   const T = CONFIG.wallT;
   const zc = -CONFIG.hall.d / 2;
@@ -41,51 +47,65 @@ function layout(): { cells: Cell[]; slabs: Slab[] } {
     G.rowY.forEach((y, r) => cells.push({ section, cell: c * G.rows + r + 1, at: new THREE.Vector3(x, y, z), rotY }));
   };
   // A 区：进门左手，从大门一端排向后墙
-  for (let c = 0; c < G.sideCols; c++) column('A', c, -hw + T / 2, zc + (side - c) * G.pitch, Math.PI / 2);
+  for (let c = 0; c < G.sideCols; c++) column('A', c, o.x - hw + T / 2, o.z + zc + (side - c) * G.pitch, Math.PI / 2);
   // B 区：正对大门，石门左右各一段，格号跨过石门连着编
-  const backZ = ZONES.hallBack + T / 2;
+  const backZ = o.z + ZONES.hallBack + T / 2;
   const outer = G.backInner + (G.backCols - 1) * G.pitch;
-  for (let c = 0; c < G.backCols; c++) column('B', c, -outer + c * G.pitch, backZ, 0);
-  for (let c = 0; c < G.backCols; c++) column('B', G.backCols + c, G.backInner + c * G.pitch, backZ, 0);
+  for (let c = 0; c < G.backCols; c++) column('B', c, o.x - outer + c * G.pitch, backZ, 0);
+  for (let c = 0; c < G.backCols; c++) column('B', G.backCols + c, o.x + G.backInner + c * G.pitch, backZ, 0);
+  return cells;
+}
 
-  // C–H：后门展区的三排双面墙，每面 12 列 × 3 行
+/** 大厅两面墙上的石板 */
+export function hallSlabs(o: Origin): Slab[] {
+  const hw = CONFIG.hall.w / 2;
+  const T = CONFIG.wallT;
+  const zc = -CONFIG.hall.d / 2;
+  const backZ = o.z + ZONES.hallBack + T / 2;
+  const outer = G.backInner + (G.backCols - 1) * G.pitch;
+  const sideLen = G.sideCols * G.pitch + 0.5;
+  const backLen = G.backCols * G.pitch + 0.5;
+  const backMid = (G.backInner + outer) / 2;
+  return [
+    { x: o.x - hw + T / 2, z: o.z + zc, len: sideLen, rotY: Math.PI / 2 },
+    { x: o.x - backMid, z: backZ, len: backLen, rotY: 0 },
+    { x: o.x + backMid, z: backZ, len: backLen, rotY: 0 },
+  ];
+}
+
+/** 后展区（C–H）的每一格：三排双面墙，每面 12 列 × 3 行 */
+export function wingCells(o: Origin): Cell[] {
   const W = G.wing;
+  const cells: Cell[] = [];
   W.wallZ.forEach((wallZ, wall) => {
     for (const side of [1, -1] as const) {
       const section = SECTIONS[2 + wall * 2 + (side > 0 ? 0 : 1)] as Section;
       for (let c = 0; c < W.cols; c++) {
-        const x = side * (c - (W.cols - 1) / 2) * G.pitch;
-        const z = wallZ + side * (W.thickness / 2 + G.slabT);
+        const x = o.x + side * (c - (W.cols - 1) / 2) * G.pitch;
+        const z = o.z + wallZ + side * (W.thickness / 2 + G.slabT);
         G.rowY.forEach((y, r) => cells.push({ section, cell: c * G.rows + r + 1, at: new THREE.Vector3(x, y, z), rotY: side > 0 ? 0 : Math.PI }));
       }
     }
   });
-
-  const sideLen = G.sideCols * G.pitch + 0.5;
-  const backLen = G.backCols * G.pitch + 0.5;
-  const backMid = (G.backInner + outer) / 2;
-  const slabs: Slab[] = [
-    { x: -hw + T / 2, z: zc, len: sideLen, rotY: Math.PI / 2 },
-    { x: -backMid, z: backZ, len: backLen, rotY: 0 },
-    { x: backMid, z: backZ, len: backLen, rotY: 0 },
-  ];
-  return { cells, slabs };
+  return cells;
 }
 
 /**
  * 后门展区：一段走廊、地板、外围墙和三排双面展墙。
- * 展墙上的相框由 buildGallery 统一按 Cell 摆放。
+ * 展墙上的相框由 buildFrameShell 统一按 Cell 摆放。
  */
-function buildWing(w: World) {
+export function buildWing(w: World, o: Origin) {
   const { kit, scene } = w;
   const C = CONFIG.colors;
   const H = CONFIG.wallH;
   const T = CONFIG.wallT;
   const hw = CONFIG.hall.w / 2;
   const W = G.wing;
-  const hallBack = ZONES.hallBack;
-  const depth = hallBack - W.backZ;
-  const midZ = (hallBack + W.backZ) / 2;
+  const hallBack = o.z + ZONES.hallBack;
+  const backZ = o.z + W.backZ;
+  const corridorEnd = o.z + W.corridorEnd;
+  const depth = hallBack - backZ;
+  const midZ = (hallBack + backZ) / 2;
 
   // 地板：和大厅同一种木板，后门直接接上
   const planks = plankTexture();
@@ -94,38 +114,39 @@ function buildWing(w: World) {
     new THREE.PlaneGeometry(CONFIG.hall.w, depth).rotateX(-Math.PI / 2),
     new THREE.MeshStandardMaterial({ map: planks, roughness: 0.55, color: 0xb08a6c }),
   );
-  floor.position.set(0, 0.04, midZ);
+  floor.position.set(o.x, 0.04, midZ);
   floor.receiveShadow = true;
   scene.add(floor);
 
   // 外围墙：两侧和尽头
   for (const s of [-1, 1]) {
-    kit.box(s * hw, H / 2, midZ, T, H, depth, C.stone);
-    w.collide(s * hw, midZ, T, depth, true);
+    kit.box(o.x + s * hw, H / 2, midZ, T, H, depth, C.stone);
+    w.collide(o.x + s * hw, midZ, T, depth, true);
   }
-  kit.box(0, H / 2, W.backZ, CONFIG.hall.w + T, H, T, C.stone);
-  w.collide(0, W.backZ, CONFIG.hall.w, T, true);
+  kit.box(o.x, H / 2, backZ, CONFIG.hall.w + T, H, T, C.stone);
+  w.collide(o.x, backZ, CONFIG.hall.w, T, true);
 
   // 后门到展区之间的走廊
-  const corridorDepth = hallBack - W.corridorEnd;
+  const corridorDepth = hallBack - corridorEnd;
   for (const s of [-1, 1]) {
-    kit.box(s * W.corridorHalf, H / 2, hallBack - corridorDepth / 2, 0.3, H, corridorDepth, C.stone);
-    w.collide(s * W.corridorHalf, hallBack - corridorDepth / 2, 0.3, corridorDepth, true);
+    kit.box(o.x + s * W.corridorHalf, H / 2, hallBack - corridorDepth / 2, 0.3, H, corridorDepth, C.stone);
+    w.collide(o.x + s * W.corridorHalf, hallBack - corridorDepth / 2, 0.3, corridorDepth, true);
   }
   const sign = textMesh(STR.wingTitle, { height: 0.34, color: '#ffd9a0', glow: 1.6, maxWidth: 5.4 });
-  sign.position.set(0, 3.55, W.corridorEnd + 0.1);
+  sign.position.set(o.x, 3.55, corridorEnd + 0.1);
   scene.add(sign);
-  w.pointLight(0, 3.6, W.corridorEnd + 1, 8, 12);
+  w.pointLight(o.x, 3.6, corridorEnd + 1, 8, 12);
 
   // 三排双面展墙
   for (const z of W.wallZ) {
-    kit.box(0, W.height / 2, z, W.length, W.height, W.thickness, 0x6f6b65);
-    kit.box(0, W.height + 0.04, z, W.length + 0.24, 0.08, W.thickness + 0.14, 0x5a4636);
-    kit.box(0, 0.07, z, W.length, 0.14, W.thickness + 0.1, 0x5a4636);
-    w.collide(0, z, W.length + 0.2, W.thickness + 0.2, true);
+    const wz = o.z + z;
+    kit.box(o.x, W.height / 2, wz, W.length, W.height, W.thickness, 0x6f6b65);
+    kit.box(o.x, W.height + 0.04, wz, W.length + 0.24, 0.08, W.thickness + 0.14, 0x5a4636);
+    kit.box(o.x, 0.07, wz, W.length, 0.14, W.thickness + 0.1, 0x5a4636);
+    w.collide(o.x, wz, W.length + 0.2, W.thickness + 0.2, true);
     for (const side of [-1, 1]) {
-      kit.box(0, (G.slabY[0] + G.slabY[1]) / 2, z + side * (W.thickness / 2 + G.slabT / 2), W.length, G.slabY[1] - G.slabY[0], G.slabT, 0x7f7a73);
-      kit.glowBox(0, W.height - 0.06, z + side * (W.thickness / 2 + G.slabT + 0.035), W.length - 0.5, 0.025, 0.025, C.warm, 1);
+      kit.box(o.x, (G.slabY[0] + G.slabY[1]) / 2, wz + side * (W.thickness / 2 + G.slabT / 2), W.length, G.slabY[1] - G.slabY[0], G.slabT, 0x7f7a73);
+      kit.glowBox(o.x, W.height - 0.06, wz + side * (W.thickness / 2 + G.slabT + 0.035), W.length - 0.5, 0.025, 0.025, C.warm, 1);
     }
   }
   // 灯放在走道上方，别放进墙里
@@ -135,16 +156,11 @@ function buildWing(w: World) {
     (W.wallZ[1]! + W.wallZ[2]!) / 2,
     (W.wallZ[2]! + W.backZ) / 2,
   ];
-  aisles.forEach((z, i) => w.pointLight(0, 4.4, z, i === 0 ? 9 : 7, 11));
+  aisles.forEach((z, i) => w.pointLight(o.x, 4.4, o.z + z, i === 0 ? 9 : 7, 11));
 }
 
-/**
- * 大厅两面墙上的照片墙：石板上一格一格的相框，每格下面一条小石台和一块带格号的名牌。
- * 住了宠物的格子有照片、有灯；空格子是一块素面石板，只有格号。
- * 返回的 refresh 在有人为某只宠物放下礼物之后调用，更新它石台上的痕迹。
- */
 /** 共享墙面上的一格：相框、石台、灯和铭牌底板只建一次 */
-interface ShellCell {
+export interface ShellCell {
   section: Section;
   cell: number;
   rotY: number;
@@ -168,27 +184,30 @@ export interface FloorContent {
 export interface Gallery {
   /** 换一层内容：只换照片、铭牌、痕迹和 slots，墙上的框架不动 */
   showFloor(floor: number, pets: Pet[]): FloorContent;
+  /** 把这一套内容整个收起来（换到另一个空间时用，别让两套照片图集同时占着内存） */
+  unload(): void;
   /** 这只宠物收到了新的礼物：更新它石台上的痕迹 */
   refresh(pet: Pet): void;
   /** 某一格换成了另一只宠物：把痕迹移到同一格 */
   refreshSlot(localSlot: number, pet: Pet): void;
 }
 
+/** 搭建时核对每个区的格数和地址表一致（只在开发时提示） */
+export function checkCellCounts(cells: Cell[]) {
+  if (!import.meta.env.DEV) return;
+  SECTIONS.forEach((id, i) => {
+    const built = cells.filter((c) => c.section === id).length;
+    if (built !== SECTION_CELLS[i]) console.warn(`[gallery] section ${id} should have ${SECTION_CELLS[i]} cells, built ${built}`);
+  });
+}
+
 /**
- * 大厅两面墙和后展区共用的照片墙框架：石板、相框、石台、灯、区名牌只建一次。
- * 每一层的照片、铭牌、痕迹由 showFloor 换上。
+ * 照片墙的框架：石板、相框、石台、灯、区名牌只建一次。
+ * 每一层的照片、铭牌、痕迹由 createGalleryContent 换上。
  */
-export function buildGallery(w: World): Gallery {
+export function buildFrameShell(w: World, cells: Cell[], slabs: Slab[]): ShellCell[] {
   const { kit } = w;
   const C = CONFIG.colors;
-  const { cells, slabs } = layout();
-  buildWing(w);
-  if (import.meta.env.DEV) {
-    SECTIONS.forEach((id, i) => {
-      const built = cells.filter((c) => c.section === id).length;
-      if (built !== SECTION_CELLS[i]) console.warn(`[gallery] section ${id} should have ${SECTION_CELLS[i]} cells, built ${built}`);
-    });
-  }
 
   // 墙面上的石板、墙脚和顶上的一线暖光
   const [y0, y1] = G.slabY;
@@ -261,6 +280,12 @@ export function buildGallery(w: World): Gallery {
     });
   });
 
+  return shellCells;
+}
+
+/** 一套照片墙的内容层：照片、铭牌、石台上的痕迹，按楼层换上 */
+export function createGalleryContent(w: World, shellCells: ShellCell[]): Gallery {
+  const F = G.frame;
   let active: { photos: PhotoBatch; labels: LabelBatch; slots: Map<string, SlotInfo>; traces: Traces } | null = null;
 
   const disposeActive = () => {
@@ -294,6 +319,9 @@ export function buildGallery(w: World): Gallery {
       const traces = buildTraces(w, pets, slots);
       active = { photos, labels, slots, traces };
       return { photos, labels, slots };
+    },
+    unload() {
+      disposeActive();
     },
     refresh(pet: Pet) {
       active?.traces.refresh(pet);
@@ -383,4 +411,13 @@ function buildTraces(w: World, pets: Array<Pet | undefined>, slots: Map<string, 
       meshes.length = 0;
     },
   };
+}
+
+/** 一层大厅的照片墙：大厅两面墙 + 后门展区 */
+export function buildGallery(w: World): Gallery {
+  const origin = { x: 0, z: 0 };
+  buildWing(w, origin);
+  const cells = [...hallCells(origin), ...wingCells(origin)];
+  checkCellCounts(cells);
+  return createGalleryContent(w, buildFrameShell(w, cells, hallSlabs(origin)));
 }
