@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
 import type { Collider } from '../world/World';
+import { NavGrid, type NavPoint } from './Nav';
 
 const TAU = Math.PI * 2;
 const CAM = CONFIG.camera;
@@ -53,6 +54,9 @@ interface Goal {
   done?: () => void;
   /** 被挡住、几乎没有前进的时间 */
   stuck: number;
+  /** 自动寻路折线；没有寻路结果时直接朝目标走 */
+  route?: NavPoint[];
+  index: number;
 }
 
 /** 单宠物特写 */
@@ -121,6 +125,9 @@ export class Player {
   private lastFocus: Focus | null = null;
   private blend = 0;
   private goal: Goal | null = null;
+  /** 当前场景/房间的寻路格，第一次点击时构建 */
+  private nav: NavGrid | null = null;
+  private navKey = '';
   /** 坐着的时候，记着站起来要回到哪里 */
   private seat: { x: number; z: number } | null = null;
   private pointers = new Map<number, { x: number; y: number }>();
@@ -235,25 +242,52 @@ export class Player {
   }
 
   /**
-   * 让小人自己走到 (x, z)，到了以后调用 done。不做寻路：朝目标直走，碰到东西沿着它的边滑过去，
-   * 实在过不去就停下（如果已经离得不远，仍然算到了）。键盘、摇杆、打开面板都会取消。
+   * 让小人自己走到 (x, z)，到了以后调用 done。
+   * 先用当前场景的碰撞体做一次栅格寻路；找不到路时才退回直走。
    */
   walkTo(x: number, z: number, radius = 0.15, done?: () => void) {
     if (this.focus) return;
-    this.goal = { x, z, radius, done, stuck: 0 };
+    const route = this.findRoute(x, z);
+    this.goal = { x, z, radius, done, stuck: 0, route: route ?? undefined, index: 0 };
+  }
+
+  /** 当前场景/房间的寻路；主场景和影厅、山洞码头各自用不同的边界 */
+  private findRoute(x: number, z: number): NavPoint[] | null {
+    const room = this.room;
+    const key = room ? `${room.minX},${room.maxX},${room.minZ},${room.maxZ}` : 'main';
+    if (!this.nav || this.navKey !== key) {
+      const bounds = room ?? { minX: -90, maxX: 90, minZ: -130, maxZ: 78 };
+      this.nav = new NavGrid(this.colliders, bounds, CONFIG.player.radius, room ? 0.35 : 0.5);
+      this.navKey = key;
+    }
+    const route = this.nav.findPath({ x: this.pos.x, z: this.pos.z }, { x, z });
+    return route && route.length > 1 ? route : null;
   }
 
   private walk(dt: number) {
     const g = this.goal!;
-    const dx = g.x - this.pos.x;
-    const dz = g.z - this.pos.z;
+    if (g.route) {
+      while (g.index < g.route.length) {
+        const wp = g.route[g.index]!;
+        if (Math.hypot(wp.x - this.pos.x, wp.z - this.pos.z) > 0.22) break;
+        g.index++;
+      }
+      if (g.index >= g.route.length) {
+        this.goal = null;
+        g.done?.();
+        return 0;
+      }
+    }
+    const target = g.route ? g.route[g.index]! : g;
+    const dx = target.x - this.pos.x;
+    const dz = target.z - this.pos.z;
     const d = Math.hypot(dx, dz);
     const arrive = () => {
       this.goal = null;
       g.done?.();
       return 0;
     };
-    if (d <= g.radius) return arrive();
+    if (!g.route && d <= g.radius) return arrive();
     const fromX = this.pos.x;
     const fromZ = this.pos.z;
     const speed = Math.min(CONFIG.player.walk, d / dt);
@@ -261,7 +295,7 @@ export class Player {
     const moved = Math.hypot(this.pos.x - fromX, this.pos.z - fromZ);
     g.stuck = moved < speed * dt * 0.3 ? g.stuck + dt : Math.max(0, g.stuck - dt);
     if (g.stuck > 0.7) {
-      if (d <= g.radius + 2.5) return arrive();
+      if (!g.route && d <= g.radius + 2.5) return arrive();
       this.goal = null;
       return 0;
     }
