@@ -34,10 +34,15 @@ function pet(): Pet {
 }
 
 describe('memorial form state', () => {
-  it('creates with only name and species, with no photo or dates required', () => {
-    const state = { ...emptyMemorialForm(), name: 'Minimal' };
-    expect(validateMemorialForm(state)).toBeNull();
-    expect(memorialFormToInput(state)).toEqual({ name: 'Minimal', species: 'dog', breed: undefined, birthDate: undefined, passedDate: undefined, message: undefined, mainUploadId: undefined, galleryUploadIds: [] });
+  it('requires a name and a main photo, and needs nothing else', () => {
+    const named = { ...emptyMemorialForm(), name: 'Minimal' };
+    expect(validateMemorialForm(named)).toBe('image_required');
+    const ready = {
+      ...named,
+      main: { key: 'main', uploadId: 'main-upload', url: 'https://cdn.test/main', status: 'existing' as const },
+    };
+    expect(validateMemorialForm(ready)).toBeNull();
+    expect(memorialFormToInput(ready)).toEqual({ name: 'Minimal', species: 'dog', breed: undefined, birthDate: undefined, passedDate: undefined, message: undefined, mainUploadId: 'main-upload', galleryUploadIds: [] });
   });
 
   it('keeps existing upload IDs and reorders the album without losing photos', () => {

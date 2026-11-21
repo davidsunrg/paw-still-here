@@ -37,15 +37,16 @@ export class MemorialEditor {
       <form id="memorial-form" class="memorial-form">
         <div class="memorial-primary">
           <div class="memorial-main-photo">
-            <button type="button" class="memorial-photo-pick" id="memorial-main-pick">
+            <span class="memorial-photo-label">${t.photoLabel}</span>
+            <button type="button" class="memorial-photo-pick" id="memorial-main-pick" aria-required="true">
               <img id="memorial-main-preview" alt="" />
+              <span class="memorial-photo-icon" id="memorial-main-icon" aria-hidden="true">📷</span>
               <span id="memorial-main-placeholder">${t.choosePhoto}</span>
             </button>
             <input id="memorial-main-input" type="file" accept="image/*" hidden />
-            <button type="button" class="memorial-text-button hidden" id="memorial-main-remove">${t.removePhoto}</button>
-            <small>${t.emptyMain}</small>
+            <small id="memorial-main-hint">${t.mainRequiredHint}</small>
           </div>
-          <div class="memorial-required">
+          <div class="memorial-fields">
             <label for="memorial-name">${t.name}</label>
             <input id="memorial-name" autocomplete="off" maxlength="80" required />
             <label for="memorial-species">${t.species}</label>
@@ -117,11 +118,6 @@ export class MemorialEditor {
   private bind() {
     const q = <T extends HTMLElement>(selector: string) => this.root.querySelector<T>(selector)!;
     q('#memorial-main-pick').addEventListener('click', () => this.mainInput.click());
-    q('#memorial-main-remove').addEventListener('click', () => {
-      if (this.state.main?.objectUrl) URL.revokeObjectURL(this.state.main.objectUrl);
-      this.state.main = null;
-      this.renderMain();
-    });
     this.mainInput.addEventListener('change', () => {
       const file = this.mainInput.files?.[0];
       if (!file) return;
@@ -211,8 +207,8 @@ export class MemorialEditor {
     image.hidden = !main;
     if (main) image.src = main.url;
     else image.removeAttribute('src');
+    this.root.querySelector('#memorial-main-icon')!.classList.toggle('hidden', !!main);
     this.root.querySelector('#memorial-main-placeholder')!.textContent = main ? STR.memorialEditor.changePhoto : STR.memorialEditor.choosePhoto;
-    this.root.querySelector('#memorial-main-remove')!.classList.toggle('hidden', !main);
   }
 
   private renderGallery() {
@@ -263,6 +259,7 @@ export class MemorialEditor {
     if (invalid) {
       this.showError(invalid);
       if (invalid === 'name_required') this.root.querySelector<HTMLInputElement>('#memorial-name')!.focus();
+      if (invalid === 'image_required') this.root.querySelector<HTMLButtonElement>('#memorial-main-pick')!.focus();
       return;
     }
     this.setBusy(true);
@@ -335,6 +332,7 @@ export class MemorialEditor {
     const text = {
       name_required: t.errorRequired,
       species_required: t.errorRequired,
+      image_required: t.errorImageRequired,
       image_type: t.errorImageType,
       image_size: t.errorImageSize,
       gallery_full: t.errorGalleryFull,

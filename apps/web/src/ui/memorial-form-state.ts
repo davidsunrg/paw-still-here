@@ -58,6 +58,7 @@ export function moveGalleryPhoto(state: MemorialFormState, index: number, delta:
 export function validateMemorialForm(state: MemorialFormState): string | null {
   if (!state.name.trim()) return 'name_required';
   if (!state.species) return 'species_required';
+  if (!state.main) return 'image_required';
   for (const photo of [state.main, ...state.gallery]) {
     if (!photo) continue;
     if (photo.file && !photo.file.type.startsWith('image/')) return 'image_type';
