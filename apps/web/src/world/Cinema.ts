@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config';
 import { STR } from '../i18n';
 import { canvasTexture, drawPaw, FONT, makeCanvas, textMesh } from './textures';
-import type { Seat, World } from './World';
+import type { World } from './World';
 
 const K = CONFIG.cinema;
 const D = K.door;
@@ -16,6 +16,10 @@ const COL = {
   step: 0x33191f,
   seat: 0x7a2a30,
   seatDark: 0x201b1e,
+  cushion: 0xd8c3a6,
+  cushionB: 0xc2a98c,
+  accent: 0xd57a3d,
+  rug: 0x3a2126,
   curtainA: 0x8a2a33,
   curtainB: 0x6a1f27,
   frame: 0x2a1c1e,
@@ -103,22 +107,15 @@ export function buildCinemaEntrance(w: World) {
 
 // ---------- 放映厅 ----------
 
-/** 第 k 排（0 起）的地面比第一排高多少 */
-const tierTop = (k: number) => k * K.rise;
-/** 第 k 排的台阶从 z 的哪里开始（k ≥ 1） */
-const tierStart = (k: number) => K.firstRow + (k - 0.5) * K.rowPitch;
-
-/** 放映厅里的地面高度：一排一排往后升高，最后一排后面的平台和最后一排一样高 */
+/** 放映室里的地面高度：后排平台比前区高一点，只有一级矮台阶 */
 function floorAt(lz: number) {
-  let k = 0;
-  while (k < K.rows - 1 && lz >= tierStart(k + 1)) k++;
-  return tierTop(k);
+  return lz >= K.stepZ ? K.rise : 0;
 }
 
 /** 出入口后面那段门厅有多深；走进去多深就算离开 */
 const EXIT = { depth: 1.6, leave: 0.7 };
 
-/** 小人在放映厅里能走动的范围（墙本身有碰撞，这里只是代替主场景的边界） */
+/** 小人在放映室里能走动的范围（墙本身有碰撞，这里只是代替主场景的边界） */
 export const CINEMA_ROOM = {
   minX: K.x - K.w / 2 - 1,
   maxX: K.x + K.w / 2 + 1,
@@ -159,18 +156,15 @@ export function buildCinema(w: World): Cinema {
     return outside(x, z);
   };
 
-  // ---------- 地面、台阶 ----------
+  // ---------- 地面、后排的一级矮平台 ----------
   kit.box(X(0), -0.02, Z(zc), K.w + T, 0.04, len + T, COL.floor);
-  for (let k = 1; k < K.rows; k++) {
-    const z0 = tierStart(k);
-    kit.box(X(0), tierTop(k) - K.rise / 2, Z((z0 + K.back) / 2), K.w, K.rise, K.back - z0, k % 2 ? COL.step : COL.floor);
-    // 台阶边上的一线地脚灯：只在过道里
-    const nose = Z(z0 - 0.02);
-    kit.glowBox(X(0), tierTop(k) - 0.03, nose, K.aisle - 0.2, 0.02, 0.02, C.warm, 1.3);
-    for (const s of [-1, 1]) kit.glowBox(X(s * (hw - 0.65)), tierTop(k) - 0.03, nose, 0.9, 0.02, 0.02, C.warm, 1.3);
+  if (K.rise > 0) {
+    kit.box(X(0), K.rise / 2, Z((K.stepZ + K.back) / 2), K.w, K.rise, K.back - K.stepZ, COL.step);
+    kit.glowBox(X(0), K.rise - 0.015, Z(K.stepZ - 0.02), K.w - 0.9, 0.02, 0.02, C.warm, 1.2);
   }
 
   // ---------- 墙、天花板 ----------
+  const top = K.rise;
   const wallBox = (lx: number, lz: number, sx: number, sz: number, h = K.h, y0 = 0) => {
     kit.box(X(lx), y0 + h / 2, Z(lz), sx, h, sz, COL.wall);
     if (y0 === 0) w.collide(X(lx), Z(lz), sx, sz, true);
@@ -180,7 +174,6 @@ export function buildCinema(w: World): Cinema {
   // 后墙：正中是门洞
   const sideLen = hw - D.half;
   for (const s of [-1, 1]) wallBox(s * (D.half + sideLen / 2), K.back + T / 2, sideLen, T);
-  const top = tierTop(K.rows - 1);
   wallBox(0, K.back + T / 2, D.half * 2, T, K.h - D.h - top, top + D.h);
   // 门洞后面的门厅，尽头挂着帘子
   const ez0 = K.back + T;
@@ -241,43 +234,57 @@ export function buildCinema(w: World): Cinema {
   };
   idle();
 
-  // ---------- 座位 ----------
-  for (let k = 0; k < K.rows; k++) {
-    const lz = K.firstRow + k * K.rowPitch;
-    const y = tierTop(k);
+  // ---------- 两排三人沙发 ----------
+  const sofaWidth = K.sofa.width;
+  const sofaDepth = K.sofa.depth;
+  const seatCount = K.sofa.seats;
+  // 地毯铺在前排和银幕之间
+  kit.box(X(0), 0.006, Z(-2.1), 4.8, 0.012, 4.2, COL.rug);
+  for (let row = 0; row < K.rows; row++) {
+    const z = K.rowZ[row]!;
+    const y = row === 0 ? 0 : K.rise;
+    const before = w.seats.length;
+    // 沙发主体：底座、坐面、靠背、两侧扶手、四只脚
+    kit.box(X(0), y + 0.17, Z(z + 0.02), sofaWidth, 0.34, sofaDepth, COL.seatDark);
+    kit.box(X(0), y + 0.36, Z(z - 0.02), sofaWidth - 0.1, 0.14, sofaDepth - 0.16, COL.seat);
+    kit.box(X(0), y + 0.62, Z(z + 0.36), sofaWidth, 0.6, 0.18, COL.seat);
     for (const s of [-1, 1]) {
-      const first = K.aisle / 2 + K.seatPitch / 2;
-      for (let i = 0; i < K.seatsPerSide; i++) {
-        const lx = s * (first + i * K.seatPitch);
-        kit.box(X(lx), y + 0.16, Z(lz + 0.05), 0.6, 0.32, 0.5, COL.seatDark);
-        kit.box(X(lx), y + 0.37, Z(lz), 0.64, 0.12, 0.56, COL.seat);
-        kit.box(X(lx), y + 0.74, Z(lz + 0.33), 0.64, 0.78, 0.12, COL.seat);
-        // 坐面朝银幕（-Z），从前面的过道走过来坐下
-        const before = w.seats.length;
-        w.seat('cinema', X(lx), Z(lz), 0.43, 0, -1, 0.65, [X(0), X(s * (hw - 0.7))]);
-        const seat: Seat[] = w.seats.slice(before);
-        w.proxy(X(lx), y + 0.62, Z(lz + 0.1), 0.7, 1.1, 0.72, STR.tipSeat, () => w.hooks.sit(seat));
-      }
-      // 扶手：每个座位两侧
-      for (let i = 0; i <= K.seatsPerSide; i++) {
-        kit.box(X(s * (K.aisle / 2 + i * K.seatPitch)), y + 0.5, Z(lz + 0.06), 0.08, 0.1, 0.5, COL.seatDark);
-      }
-      const width = K.seatsPerSide * K.seatPitch + 0.1;
-      w.collide(X(s * (K.aisle / 2 + (K.seatsPerSide * K.seatPitch) / 2)), Z(lz + 0.1), width, 0.7);
+      kit.box(X(s * (sofaWidth / 2 + 0.09)), y + 0.4, Z(z + 0.02), 0.18, 0.62, sofaDepth, COL.seatDark);
+      for (const t of [-1, 1]) kit.box(X(s * (sofaWidth / 2 - 0.1)), y + 0.05, Z(z + t * (sofaDepth / 2 - 0.1)), 0.09, 0.1, 0.09, COL.seatDark);
     }
-    // 中间过道两边的地脚灯
-    for (const s of [-1, 1]) kit.glowBall(X(s * (K.aisle / 2 - 0.08)), y + 0.05, Z(lz + 0.3), 0.028, C.warm, 1.6);
+    const cw = (sofaWidth - 0.08) / seatCount;
+    for (let i = 0; i < seatCount; i++) {
+      const sx = (i - (seatCount - 1) / 2) * cw;
+      kit.box(X(sx), y + 0.44, Z(z - 0.07), cw - 0.04, 0.16, sofaDepth - 0.3, COL.seat);
+      kit.box(X(sx), y + 0.6, Z(z + 0.24), cw - 0.1, 0.38, 0.14, i % 2 ? COL.cushionB : COL.cushion);
+      // 坐面朝银幕（-Z），从沙发前面走过来坐下
+      w.seat('cinema', X(sx), Z(z - 0.05), y + 0.48, 0, -1, 0.8);
+    }
+    // 两边的抱枕
+    kit.box(X(-0.72), y + 0.56, Z(z + 0.08), 0.38, 0.34, 0.14, COL.accent);
+    kit.box(X(0.72), y + 0.56, Z(z + 0.08), 0.38, 0.34, 0.14, COL.cushion);
+    const seats = w.seats.slice(before);
+    w.collide(X(0), Z(z), sofaWidth + 0.45, sofaDepth + 0.12);
+    w.proxy(X(0), y + 0.65, Z(z + 0.02), sofaWidth + 0.2, 1.15, sofaDepth + 0.2, STR.tipSeat, () => w.hooks.sit(seats));
+    // 两侧小边桌和桌上的小灯
+    for (const s of [-1, 1]) {
+      const lx = s * (sofaWidth / 2 + 0.52);
+      kit.cyl(X(lx), y, Z(z), 0.03, 0.48, COL.frame);
+      kit.cyl(X(lx), y + 0.48, Z(z), 0.3, 0.04, C.wood);
+      kit.glowBall(X(lx), y + 0.62, Z(z), 0.055, C.warm, 1.4);
+      w.collide(X(lx), Z(z), 0.48, 0.48);
+    }
   }
 
   // ---------- 灯 ----------
   // 银幕映到厅里的一点冷光
-  w.pointLight(X(0), S.y, Z(K.front + 3), 16, 18, 0xbfc8e0);
+  w.pointLight(X(0), S.y, Z(K.front + 3), 12, 16, 0xbfc8e0);
   // 两侧墙上的壁灯和后门口的灯，都很暗
   for (const s of [-1, 1]) {
-    const lz = K.firstRow + ((K.rows - 1) * K.rowPitch) / 2;
-    kit.box(X(s * (hw - 0.05)), 2.75, Z(lz), 0.1, 0.06, 0.16, 0x2b2b33);
-    kit.glowBall(X(s * (hw - 0.14)), 2.88, Z(lz), 0.08, C.warm, 1.5);
-    w.pointLight(X(s * (hw - 1.2)), 2.9, Z(lz), 9, 11);
+    const lz = 0;
+    kit.box(X(s * (hw - 0.05)), 2.55, Z(lz), 0.1, 0.06, 0.16, 0x2b2b33);
+    kit.glowBall(X(s * (hw - 0.14)), 2.68, Z(lz), 0.08, C.warm, 1.5);
+    w.pointLight(X(s * (hw - 1.1)), 2.7, Z(lz), 7, 10);
   }
   w.pointLight(X(0), top + 2.4, Z(K.back - 1.2), 8, 9);
 
