@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { slotToPlacement } from '@paw/shared';
 import { CONFIG } from '../config';
-import { PETS } from '../data/pets';
+import { PETS, replaceSlotPet, type Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
@@ -155,6 +156,23 @@ export class World {
     this.kit.build(this.scene);
     this.photos.build(this.scene);
     this.labels.build(this.scene);
+  }
+
+  /** 刚创建/编辑完：把某一格换成新宠物，照片、铭牌和石台痕迹原地更新 */
+  replacePetAtSlot(slot: number, pet: Pet): PhotoEntry | null {
+    const old = PETS[slot];
+    const info = old ? this.slots.get(old.id) : undefined;
+    if (!old || !info) return null;
+    this.photos.replace(slot, old.id, pet);
+    const { cell } = slotToPlacement(slot);
+    const years = pet.passedDate ? ` · ${pet.passedDate.slice(0, 4)}` : '';
+    this.labels.update(slot, `${pet.name}${years}`, String(cell), false);
+    info.entry.pet = pet;
+    this.slots.delete(old.id);
+    this.slots.set(pet.id, info);
+    replaceSlotPet(slot, pet);
+    this.gallery.refreshSlot(slot, pet);
+    return info.entry;
   }
 
   // ---------- 搭建时用到的小工具 ----------

@@ -14,7 +14,7 @@ import {
 } from './memorial-form-state';
 
 type EditorHooks = {
-  onSaved(petId: string, mode: 'create' | 'edit'): void | Promise<void>;
+  onSaved(pet: PetDto, mode: 'create' | 'edit'): void | Promise<void>;
   onDeleted(): void | Promise<void>;
 };
 
@@ -311,7 +311,7 @@ export class MemorialEditor {
       this.root.querySelector('#memorial-progress')!.textContent = STR.memorialEditor.saving;
       const input = memorialFormToInput(this.state, this.mode === 'edit');
       const dto = this.mode === 'create' ? await createMemorialPet(input) : await updateMemorialPet(this.petId!, input);
-      await this.hooks.onSaved(dto.id, this.mode);
+      await this.hooks.onSaved(dto, this.mode);
     } catch (error) {
       this.showError(error instanceof ApiError ? error.code : 'save_failed');
     } finally {

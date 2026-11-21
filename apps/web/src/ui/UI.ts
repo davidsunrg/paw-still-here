@@ -1,4 +1,5 @@
 import { albumOf, petById, PETS, SECTIONS, type Pet } from '../data/pets';
+import type { PetDto } from '@paw/shared';
 import { ApiError } from '../api/client';
 import { prefs, store, type Letter, type OfferKind, type RiteKind } from '../data/store';
 import { tributes } from '../data/tributes';
@@ -52,7 +53,7 @@ export interface UIHooks {
   onBlockingChange(blocked: boolean): void;
   /** API 在线时可创建真实纪念宠物 */
   memorialApiEnabled?: boolean;
-  onMemorialSaved?(petId?: string, mode?: 'create' | 'edit' | 'delete'): void | Promise<void>;
+  onMemorialSaved?(pet?: PetDto, mode?: 'create' | 'edit' | 'delete'): void | Promise<void>;
 }
 
 /** 进来多久之后，才问还没有宠物的访客要不要给自己的宠物留个位置 */
@@ -99,10 +100,10 @@ export class UI {
   constructor(private hooks: UIHooks) {
     document.body.classList.toggle('touch', this.isTouch);
     this.memorialEditor = new MemorialEditor($('memorial-card'), {
-      onSaved: async (petId, mode) => {
+      onSaved: async (pet, mode) => {
         this.closeModals();
         this.toast(mode === 'create' ? STR.memorialCreated : STR.memorialUpdated);
-        await hooks.onMemorialSaved?.(petId, mode);
+        await hooks.onMemorialSaved?.(pet, mode);
       },
       onDeleted: async () => {
         this.closeDetail();

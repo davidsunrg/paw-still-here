@@ -147,12 +147,14 @@ export function buildGallery(w: World): Gallery {
     });
   });
 
-  return { refresh: buildTraces(w) };
+  return buildTraces(w);
 }
 
 export interface Gallery {
   /** 这只宠物收到了新的礼物：更新它石台上的痕迹 */
   refresh(pet: Pet): void;
+  /** 某一格换成了另一只宠物：把痕迹移到同一格 */
+  refreshSlot(slot: number, pet: Pet): void;
 }
 
 /**
@@ -160,7 +162,7 @@ export interface Gallery {
  * 每只宠物在四个实例化网格里各占一个位置，没有的时候缩成零。
  */
 function buildTraces(w: World) {
-  const ids = [...w.slots.keys()];
+  const ids = PETS.map((pet) => pet.id);
   const make = (part: { geo: THREE.BufferGeometry; mat: THREE.Material }) => {
     const mesh = new THREE.InstancedMesh(part.geo, part.mat, Math.max(1, ids.length));
     mesh.frustumCulled = false;
@@ -212,6 +214,10 @@ function buildTraces(w: World) {
     pos.y += 0.072;
     set(flames, i, hasCandle, upright, 0.009, 0.019, 0.009);
   };
+  const refreshSlot = (slot: number, pet: Pet) => {
+    ids[slot] = pet.id;
+    refresh(pet);
+  };
   for (const pet of PETS) refresh(pet);
-  return refresh;
+  return { refresh, refreshSlot };
 }

@@ -6,7 +6,9 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG } from './config';
 import { petById, PETS, type Pet } from './data/pets';
+import { petFromDto } from './data/pets-api';
 import { prefs, store } from './data/store';
+import { tributes } from './data/tributes';
 import { STR } from './i18n';
 import { AudioSystem } from './systems/AudioSystem';
 import { Guide } from './systems/Guide';
@@ -72,11 +74,32 @@ let arrivalThen: (() => void) | null = null;
 
 const ui = new UI({
   memorialApiEnabled: bootstrap.apiOnline && bootstrap.currentUserId !== null,
-  onMemorialSaved: async (petId, mode) => {
-    if (petId) sessionStorage.setItem('paw:visit-next', petId);
-    else sessionStorage.removeItem('paw:visit-next');
-    if (mode) sessionStorage.setItem('paw:memorial-mode', mode);
-    location.reload();
+  onMemorialSaved: async (dto, mode) => {
+    if (!dto) {
+      // 删除暂时还走整页重载：要把真实宠物换回示例宠物
+      location.reload();
+      return;
+    }
+    const pet = petFromDto(dto);
+    tributes.seed([dto]);
+    const entry = world.replacePetAtSlot(dto.slot, pet);
+    if (!entry) {
+      location.reload();
+      return;
+    }
+    if (mode === 'edit') {
+      // 编辑通常是在它的小窝里打开的：原地换掉照片和名字，不离开
+      if (world.shrine.isOpen) {
+        world.shrine.refreshPet();
+        ui.openDetail(pet);
+      } else {
+        visit(entry, () => ui.toast(STR.memorialUpdated));
+      }
+      return;
+    }
+    // 刚创建：先到照片墙上的新相框，再打开分享
+    if (world.shrine.isOpen) ui.closeDetail();
+    visit(entry, () => ui.openShare(pet, true));
   },
   onEnter() {
     entered = true;

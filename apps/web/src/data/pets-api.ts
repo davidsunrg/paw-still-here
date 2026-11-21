@@ -11,7 +11,7 @@ const FUR: Record<Species, string[]> = {
   bird: ['#ffd84d', '#8fd0f0', '#9be08f', '#f5f5f5'],
 };
 
-function dtoToPet(dto: PetDto): Pet {
+export function petFromDto(dto: PetDto): Pet {
   const { section, cell, floor } = slotToPlacement(dto.slot);
   const sorted = [...dto.photos].sort((a, b) => a.position - b.position);
   const main = sorted.find((p) => p.role === 'main');
@@ -43,7 +43,7 @@ function dtoToPet(dto: PetDto): Pet {
 }
 
 export function applyGalleryFromApi(dtos: PetDto[]): void {
-  const realBySlot = new Map(dtos.map((d) => [d.slot, dtoToPet(d)]));
+  const realBySlot = new Map(dtos.map((d) => [d.slot, petFromDto(d)]));
   const merged: Pet[] = [];
   for (let slot = 0; slot < GALLERY_CAPACITY; slot++) {
     merged.push(realBySlot.get(slot) ?? buildSamplePetAtSlot(slot));

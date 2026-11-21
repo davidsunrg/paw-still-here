@@ -294,6 +294,11 @@ export class Shrine {
     this.setAlbumPhotos(pet);
   }
 
+  /** 编辑保存后：名字、主照片、框色和相册都重新读一次 */
+  refreshPet() {
+    if (this.entry) this.setPet(this.entry.pet);
+  }
+
   /** 搁板小相框使用相册其他照片；真实图片未到时先画同一张占位画像 */
   private setAlbumPhotos(pet: Pet) {
     const shots = albumOf(pet);

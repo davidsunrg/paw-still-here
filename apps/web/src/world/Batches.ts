@@ -63,6 +63,8 @@ export class PhotoBatch {
   private ctx: CanvasRenderingContext2D;
   private texture: THREE.CanvasTexture;
   private cellOf = new Map<string, number>();
+  /** 每一格现在属于哪只宠物：照片异步加载回来时，避免旧照片盖住新宠物 */
+  private owner: string[] = [];
 
   constructor(pets: Pet[]) {
     [this.canvas, this.ctx] = makeCanvas(PhotoBatch.SIZE, PhotoBatch.SIZE);
@@ -70,24 +72,42 @@ export class PhotoBatch {
     const { CELL, COLS } = PhotoBatch;
     pets.forEach((pet, i) => {
       this.cellOf.set(pet.id, i);
+      this.owner[i] = pet.id;
       const x = (i % COLS) * CELL;
       const y = Math.floor(i / COLS) * CELL;
       drawPortrait(this.ctx, x, y, CELL, pet);
-      if (pet.photoUrl) this.loadPhoto(pet.photoUrl, x, y);
+      if (pet.photoUrl) this.loadPhoto(pet.photoUrl, x, y, i, pet.id);
     });
   }
 
   /** 真实照片加载完成后，以「裁剪填满」的方式覆盖占位画像 */
-  private loadPhoto(url: string, x: number, y: number) {
+  private loadPhoto(url: string, x: number, y: number, index: number, ownerId: string) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      if (this.owner[index] !== ownerId) return;
       const { CELL } = PhotoBatch;
       const s = Math.min(img.width, img.height);
       this.ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, x, y, CELL, CELL);
       this.texture.needsUpdate = true;
     };
     img.src = url;
+  }
+
+  /** 换掉某一格：先画占位画像，再把新照片异步盖上去 */
+  replace(slot: number, oldId: string, pet: Pet) {
+    const index = this.cellOf.get(oldId) ?? slot;
+    const { CELL, COLS } = PhotoBatch;
+    const x = (index % COLS) * CELL;
+    const y = Math.floor(index / COLS) * CELL;
+    this.cellOf.delete(oldId);
+    this.cellOf.set(pet.id, index);
+    this.owner[index] = pet.id;
+    drawPortrait(this.ctx, x, y, CELL, pet);
+    this.texture.needsUpdate = true;
+    const entry = this.entries.find((e) => e.pet.id === oldId);
+    if (entry) entry.pet = pet;
+    if (pet.photoUrl) this.loadPhoto(pet.photoUrl, x, y, index, pet.id);
   }
 
   /** 图集纹理，纪念角里的照片也用它 */
@@ -146,6 +166,7 @@ export class LabelBatch {
   private quads = new QuadBatch();
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
+  private texture?: THREE.CanvasTexture;
   private count = 0;
 
   constructor() {
@@ -156,11 +177,27 @@ export class LabelBatch {
   add(text: string, center: THREE.Vector3, rotY: number, w: number, h: number, tag = '', blank = false) {
     const { CW, CH, W, H } = LabelBatch;
     const cols = W / CW;
-    if (this.count >= cols * (H / CH)) return;
-    const x = (this.count % cols) * CW;
-    const y = Math.floor(this.count / cols) * CH;
-    this.count++;
+    if (this.count >= cols * (H / CH)) return -1;
+    const index = this.count++;
+    this.paint(index, text, tag, blank);
+    const x = (index % cols) * CW;
+    const y = Math.floor(index / cols) * CH;
+    this.quads.quad(center, rotY, w, h, [x / W, 1 - (y + CH) / H, (x + CW) / W, 1 - y / H]);
+    return index;
+  }
 
+  /** 换掉某一格的文字：图集里的位置和墙面上的牌子都不动 */
+  update(index: number, text: string, tag = '', blank = false) {
+    if (index < 0 || index >= this.count) return;
+    this.paint(index, text, tag, blank);
+    if (this.texture) this.texture.needsUpdate = true;
+  }
+
+  private paint(index: number, text: string, tag: string, blank: boolean) {
+    const { CW, CH, W } = LabelBatch;
+    const cols = W / CW;
+    const x = (index % cols) * CW;
+    const y = Math.floor(index / cols) * CH;
     const ctx = this.ctx;
     const g = ctx.createLinearGradient(0, y, 0, y + CH);
     g.addColorStop(0, blank ? '#8d8880' : '#e9d3a2');
@@ -189,12 +226,11 @@ export class LabelBatch {
       ctx.textAlign = 'center';
       ctx.fillText(text, x + (CW + left) / 2, y + CH / 2 + 2, CW - 20 - left);
     }
-
-    this.quads.quad(center, rotY, w, h, [x / W, 1 - (y + CH) / H, (x + CW) / W, 1 - y / H]);
   }
 
   build(parent: THREE.Object3D) {
-    const mat = new THREE.MeshBasicMaterial({ map: canvasTexture(this.canvas), color: 0xc8c0b4 });
+    this.texture = canvasTexture(this.canvas);
+    const mat = new THREE.MeshBasicMaterial({ map: this.texture, color: 0xc8c0b4 });
     const mesh = new THREE.Mesh(this.quads.geometry(), mat);
     mesh.frustumCulled = false;
     parent.add(mesh);

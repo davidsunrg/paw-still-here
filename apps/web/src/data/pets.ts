@@ -134,6 +134,16 @@ export function replacePets(next: Pet[]): void {
   for (const p of next) petById.set(p.id, p);
 }
 
+/** 把某一格换成刚创建/编辑好的宠物；返回原来那一格的宠物 */
+export function replaceSlotPet(slot: number, pet: Pet): Pet | undefined {
+  const old = PETS[slot];
+  if (!old) return undefined;
+  PETS[slot] = pet;
+  petById.delete(old.id);
+  petById.set(pet.id, pet);
+  return old;
+}
+
 export function albumOf(pet: Pet): Shot[] {
   const A = CONFIG.shrine.album;
   if (pet.photos?.length) return pet.photos.map((url, i) => ({ url, variant: 1 + (i % A.variants) }));
