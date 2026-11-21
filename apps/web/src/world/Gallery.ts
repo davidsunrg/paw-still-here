@@ -4,7 +4,7 @@ import { PETS, SECTION_CELLS, SECTIONS, type Pet, type Section } from '../data/p
 import { store } from '../data/store';
 import { STR } from '../i18n';
 import { TRACE } from './gifts';
-import { textMesh } from './textures';
+import { plankTexture, textMesh } from './textures';
 import type { World } from './World';
 
 const G = CONFIG.gallery;
@@ -47,6 +47,19 @@ function layout(): { cells: Cell[]; slabs: Slab[] } {
   for (let c = 0; c < G.backCols; c++) column('B', c, -outer + c * G.pitch, backZ, 0);
   for (let c = 0; c < G.backCols; c++) column('B', G.backCols + c, G.backInner + c * G.pitch, backZ, 0);
 
+  // C–H：后门展区的三排双面墙，每面 12 列 × 3 行
+  const W = G.wing;
+  W.wallZ.forEach((wallZ, wall) => {
+    for (const side of [1, -1] as const) {
+      const section = SECTIONS[2 + wall * 2 + (side > 0 ? 0 : 1)] as Section;
+      for (let c = 0; c < W.cols; c++) {
+        const x = side * (c - (W.cols - 1) / 2) * G.pitch;
+        const z = wallZ + side * (W.thickness / 2 + G.slabT);
+        G.rowY.forEach((y, r) => cells.push({ section, cell: c * G.rows + r + 1, at: new THREE.Vector3(x, y, z), rotY: side > 0 ? 0 : Math.PI }));
+      }
+    }
+  });
+
   const sideLen = G.sideCols * G.pitch + 0.5;
   const backLen = G.backCols * G.pitch + 0.5;
   const backMid = (G.backInner + outer) / 2;
@@ -59,6 +72,72 @@ function layout(): { cells: Cell[]; slabs: Slab[] } {
 }
 
 /**
+ * 后门展区：一段走廊、地板、外围墙和三排双面展墙。
+ * 展墙上的相框由 buildGallery 统一按 Cell 摆放。
+ */
+function buildWing(w: World) {
+  const { kit, scene } = w;
+  const C = CONFIG.colors;
+  const H = CONFIG.wallH;
+  const T = CONFIG.wallT;
+  const hw = CONFIG.hall.w / 2;
+  const W = G.wing;
+  const hallBack = ZONES.hallBack;
+  const depth = hallBack - W.backZ;
+  const midZ = (hallBack + W.backZ) / 2;
+
+  // 地板：和大厅同一种木板，后门直接接上
+  const planks = plankTexture();
+  planks.repeat.set(CONFIG.hall.w / 2.4, depth / 2.4);
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(CONFIG.hall.w, depth).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardMaterial({ map: planks, roughness: 0.55, color: 0xb08a6c }),
+  );
+  floor.position.set(0, 0.04, midZ);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // 外围墙：两侧和尽头
+  for (const s of [-1, 1]) {
+    kit.box(s * hw, H / 2, midZ, T, H, depth, C.stone);
+    w.collide(s * hw, midZ, T, depth, true);
+  }
+  kit.box(0, H / 2, W.backZ, CONFIG.hall.w + T, H, T, C.stone);
+  w.collide(0, W.backZ, CONFIG.hall.w, T, true);
+
+  // 后门到展区之间的走廊
+  const corridorDepth = hallBack - W.corridorEnd;
+  for (const s of [-1, 1]) {
+    kit.box(s * W.corridorHalf, H / 2, hallBack - corridorDepth / 2, 0.3, H, corridorDepth, C.stone);
+    w.collide(s * W.corridorHalf, hallBack - corridorDepth / 2, 0.3, corridorDepth, true);
+  }
+  const sign = textMesh(STR.wingTitle, { height: 0.34, color: '#ffd9a0', glow: 1.6, maxWidth: 5.4 });
+  sign.position.set(0, 3.55, W.corridorEnd + 0.1);
+  scene.add(sign);
+  w.pointLight(0, 3.6, W.corridorEnd + 1, 8, 12);
+
+  // 三排双面展墙
+  for (const z of W.wallZ) {
+    kit.box(0, W.height / 2, z, W.length, W.height, W.thickness, 0x6f6b65);
+    kit.box(0, W.height + 0.04, z, W.length + 0.24, 0.08, W.thickness + 0.14, 0x5a4636);
+    kit.box(0, 0.07, z, W.length, 0.14, W.thickness + 0.1, 0x5a4636);
+    w.collide(0, z, W.length + 0.2, W.thickness + 0.2, true);
+    for (const side of [-1, 1]) {
+      kit.box(0, (G.slabY[0] + G.slabY[1]) / 2, z + side * (W.thickness / 2 + G.slabT / 2), W.length, G.slabY[1] - G.slabY[0], G.slabT, 0x7f7a73);
+      kit.glowBox(0, W.height - 0.06, z + side * (W.thickness / 2 + G.slabT + 0.035), W.length - 0.5, 0.025, 0.025, C.warm, 1);
+    }
+  }
+  // 灯放在走道上方，别放进墙里
+  const aisles = [
+    (W.corridorEnd + W.wallZ[0]!) / 2,
+    (W.wallZ[0]! + W.wallZ[1]!) / 2,
+    (W.wallZ[1]! + W.wallZ[2]!) / 2,
+    (W.wallZ[2]! + W.backZ) / 2,
+  ];
+  aisles.forEach((z, i) => w.pointLight(0, 4.4, z, i === 0 ? 9 : 7, 11));
+}
+
+/**
  * 大厅两面墙上的照片墙：石板上一格一格的相框，每格下面一条小石台和一块带格号的名牌。
  * 住了宠物的格子有照片、有灯；空格子是一块素面石板，只有格号。
  * 返回的 refresh 在有人为某只宠物放下礼物之后调用，更新它石台上的痕迹。
@@ -67,6 +146,7 @@ export function buildGallery(w: World): Gallery {
   const { kit } = w;
   const C = CONFIG.colors;
   const { cells, slabs } = layout();
+  buildWing(w);
   if (import.meta.env.DEV) {
     SECTIONS.forEach((id, i) => {
       const built = cells.filter((c) => c.section === id).length;

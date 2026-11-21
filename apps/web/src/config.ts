@@ -78,6 +78,17 @@ export const CONFIG = {
     /** 贴在墙上的石板：从多高到多高、多厚 */
     slabY: [0.5, 3.0] as [number, number],
     slabT: 0.1, lane: 8, plaqueY: 3.42,
+    /** 后门展区：三排双面展墙，每面 12 列 × 3 行 = 36 格；中间是走道 */
+    wing: {
+      cols: 12,
+      length: 12,
+      thickness: 0.4,
+      height: 3.6,
+      wallZ: [-24.5, -28.5, -32.5],
+      backZ: -36,
+      corridorHalf: 1.6,
+      corridorEnd: -21.5,
+    },
   },
 
   /**
@@ -333,8 +344,8 @@ export const CONFIG = {
     colors: [0x8fa7bf, 0xb99aa6, 0x9bb59a, 0xc2ad8a, 0xa69bc0, 0x8fb3b0, 0xc09a86, 0x9aa0a8],
   },
 
-  /** 示例宠物数量：离线时铺满整面墙；在线时用它填满 126 个空格 */
-  petCount: 126,
+  /** 示例宠物数量：离线时铺满整面墙；在线时用它填满一层的 342 个位置 */
+  petCount: 342,
 
   sky: {
     stars: 2600,

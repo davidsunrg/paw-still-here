@@ -203,49 +203,63 @@ export class PhotoBatch {
   }
 }
 
-/** 相框下方的小名牌，同样合并成一张图集 + 一个网格 */
+/** 相框下方的小名牌，按页合并成图集；超过一页自动开下一页 */
+interface LabelPage {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  quads: QuadBatch;
+  texture?: THREE.CanvasTexture;
+}
+
 export class LabelBatch {
   private static readonly CW = 256;
   private static readonly CH = 64;
   private static readonly W = 2048;
   private static readonly H = 2048;
+  private static readonly PER_PAGE = (LabelBatch.W / LabelBatch.CW) * (LabelBatch.H / LabelBatch.CH);
 
-  private quads = new QuadBatch();
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private texture?: THREE.CanvasTexture;
+  private pages: LabelPage[] = [];
   private count = 0;
-
-  constructor() {
-    [this.canvas, this.ctx] = makeCanvas(LabelBatch.W, LabelBatch.H);
-  }
 
   /** tag 是写在名牌左角的小字（格号）；blank 为 true 时是空格子的名牌：石色、只有格号 */
   add(text: string, center: THREE.Vector3, rotY: number, w: number, h: number, tag = '', blank = false) {
-    const { CW, CH, W, H } = LabelBatch;
-    const cols = W / CW;
-    if (this.count >= cols * (H / CH)) return -1;
+    const { CW, CH, W, H, PER_PAGE } = LabelBatch;
     const index = this.count++;
-    this.paint(index, text, tag, blank);
-    const x = (index % cols) * CW;
-    const y = Math.floor(index / cols) * CH;
-    this.quads.quad(center, rotY, w, h, [x / W, 1 - (y + CH) / H, (x + CW) / W, 1 - y / H]);
+    const pageIndex = Math.floor(index / PER_PAGE);
+    const local = index % PER_PAGE;
+    const page = this.ensurePage(pageIndex);
+    this.paint(page, local, text, tag, blank);
+    const cols = W / CW;
+    const x = (local % cols) * CW;
+    const y = Math.floor(local / cols) * CH;
+    page.quads.quad(center, rotY, w, h, [x / W, 1 - (y + CH) / H, (x + CW) / W, 1 - y / H]);
     return index;
   }
 
   /** 换掉某一格的文字：图集里的位置和墙面上的牌子都不动 */
   update(index: number, text: string, tag = '', blank = false) {
     if (index < 0 || index >= this.count) return;
-    this.paint(index, text, tag, blank);
-    if (this.texture) this.texture.needsUpdate = true;
+    const pageIndex = Math.floor(index / LabelBatch.PER_PAGE);
+    const page = this.pages[pageIndex];
+    if (!page) return;
+    this.paint(page, index % LabelBatch.PER_PAGE, text, tag, blank);
+    if (page.texture) page.texture.needsUpdate = true;
   }
 
-  private paint(index: number, text: string, tag: string, blank: boolean) {
+  private ensurePage(pageIndex: number) {
+    while (this.pages.length <= pageIndex) {
+      const [canvas, ctx] = makeCanvas(LabelBatch.W, LabelBatch.H);
+      this.pages.push({ canvas, ctx, quads: new QuadBatch() });
+    }
+    return this.pages[pageIndex]!;
+  }
+
+  private paint(page: LabelPage, local: number, text: string, tag: string, blank: boolean) {
     const { CW, CH, W } = LabelBatch;
     const cols = W / CW;
-    const x = (index % cols) * CW;
-    const y = Math.floor(index / cols) * CH;
-    const ctx = this.ctx;
+    const x = (local % cols) * CW;
+    const y = Math.floor(local / cols) * CH;
+    const ctx = page.ctx;
     const g = ctx.createLinearGradient(0, y, 0, y + CH);
     g.addColorStop(0, blank ? '#8d8880' : '#e9d3a2');
     g.addColorStop(1, blank ? '#7a756e' : '#c9a868');
@@ -276,10 +290,12 @@ export class LabelBatch {
   }
 
   build(parent: THREE.Object3D) {
-    this.texture = canvasTexture(this.canvas);
-    const mat = new THREE.MeshBasicMaterial({ map: this.texture, color: 0xc8c0b4 });
-    const mesh = new THREE.Mesh(this.quads.geometry(), mat);
-    mesh.frustumCulled = false;
-    parent.add(mesh);
+    for (const page of this.pages) {
+      page.texture = canvasTexture(page.canvas);
+      const mat = new THREE.MeshBasicMaterial({ map: page.texture, color: 0xc8c0b4 });
+      const mesh = new THREE.Mesh(page.quads.geometry(), mat);
+      mesh.frustumCulled = false;
+      parent.add(mesh);
+    }
   }
 }

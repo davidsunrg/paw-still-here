@@ -203,6 +203,8 @@ export const en = {
     here: 'You are here',
     cells: (cells: number) => `1–${cells}`,
   },
+  /** 后门展区走廊上的字 */
+  wingTitle: 'More memories',
   close: 'Close',
 
   lanternTitle: 'Release a sky lantern',

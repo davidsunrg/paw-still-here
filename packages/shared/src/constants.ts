@@ -1,4 +1,4 @@
-export const GALLERY_CAPACITY = 126 as const;
+export const GALLERY_CAPACITY = 342 as const;
 
 export const SPECIES = ['cat', 'dog', 'rabbit', 'hamster', 'bird'] as const;
 export type Species = (typeof SPECIES)[number];
@@ -17,9 +17,9 @@ export const TRIBUTE_VARIANTS: Record<TributeKind, number> = { flower: 5, candle
 export const LETTER_MAX = 300;
 export const LETTERS_PER_DAY = 5;
 
-/** 大厅 A/B 区每区格数，与前端 CONFIG 一致 */
-export const SECTION_CELLS = [60, 66] as const;
-export const SECTIONS = ['A', 'B'] as const;
+/** 大厅每层每区格数：A/B 是原有围墙，C–H 是后门展区的三排双面墙 */
+export const SECTION_CELLS = [60, 66, 36, 36, 36, 36, 36, 36] as const;
+export const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 export type GallerySection = (typeof SECTIONS)[number];
 
 export function slotToPlacement(slot: number): {

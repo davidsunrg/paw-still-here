@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { SECTION_CELLS } from '../data/pets';
+import { SECTION_CELLS, SECTIONS } from '../data/pets';
 import { STR } from '../i18n';
 import { canvasTexture, FONT, makeCanvas } from './textures';
 import type { World } from './World';
@@ -20,11 +20,12 @@ function mapTexture() {
   const [c, ctx] = makeCanvas(W, H);
   const L = CONFIG.hall;
   const G = CONFIG.gallery;
-  const s = 30;
+  const Wing = G.wing;
+  const s = 19;
   const ox = (W - L.w * s) / 2;
-  const oy = 150;
+  const oy = 70;
   const X = (x: number) => ox + (x + L.w / 2) * s;
-  const Y = (z: number) => oy + (z + L.d) * s;
+  const Y = (z: number) => oy + (z - Wing.backZ) * s;
 
   ctx.fillStyle = '#2b2622';
   ctx.fillRect(0, 0, W, H);
@@ -70,11 +71,17 @@ function mapTexture() {
     text(door.name, X(hw) - 22, Y(door.z), 30, INK, 'right');
   }
   line(hw, from, hw, -L.d, 4, DIM);
-  line(-hw, -L.d, hw, -L.d, 4, DIM);
+  // 后墙：门洞两侧，中间通向后展区
+  line(-hw, -L.d, -L.backDoorHalf, -L.d, 4, DIM);
+  line(L.backDoorHalf, -L.d, hw, -L.d, 4, DIM);
+  line(-Wing.corridorHalf, -L.d, -Wing.corridorHalf, Wing.corridorEnd, 3, DIM);
+  line(Wing.corridorHalf, -L.d, Wing.corridorHalf, Wing.corridorEnd, 3, DIM);
+  // 新展区的两侧和尽头
+  line(-hw, -L.d, -hw, Wing.backZ, 4, DIM);
+  line(hw, -L.d, hw, Wing.backZ, 4, DIM);
+  line(-hw, Wing.backZ, hw, Wing.backZ, 4, DIM);
   line(-hw, 0, -L.doorHalf, 0, 4, DIM);
   line(L.doorHalf, 0, hw, 0, 4, DIM);
-  line(-L.backDoorHalf, -L.d, L.backDoorHalf, -L.d, 12, '#8f8a82');
-  text(STR.map.closed, W / 2, Y(-L.d) - 30, 31, DIM);
   text(STR.map.entrance, W / 2, Y(0) + 34, 34);
 
   // 两个区，和每个区两头的格号
@@ -95,6 +102,16 @@ function mapTexture() {
   // 正面墙两头的格号往里收一点，不和侧墙的格号叠在一起
   text('1', X(-outer) + 70, Y(-L.d) + 52, 26, DIM, 'left');
   text(String(n2), X(outer) - 70, Y(-L.d) + 52, 26, DIM, 'right');
+
+  // 后展区：三排双面墙，C–H
+  text(STR.wingTitle, X(0), Y(Wing.corridorEnd) - 12, 26, DIM);
+  Wing.wallZ.forEach((z, i) => {
+    line(-Wing.length / 2, z, Wing.length / 2, z, 8);
+    const front = SECTIONS[2 + i * 2]!;
+    const back = SECTIONS[3 + i * 2]!;
+    text(`${STR.sectionName(front)} · ${STR.map.cells(SECTION_CELLS[2 + i * 2]!)}`, X(0), Y(z + 0.7), 22, DIM);
+    text(`${STR.sectionName(back)} · ${STR.map.cells(SECTION_CELLS[3 + i * 2]!)}`, X(0), Y(z - 0.7), 22, DIM);
+  });
 
   // 纪念树和两侧的沙发
   ctx.strokeStyle = INK;

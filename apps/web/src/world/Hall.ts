@@ -101,37 +101,15 @@ export function buildHall(w: World) {
     w.proxy(s * L.sofaX, 0.5, zc, 1.0, 1.0, 2.9, STR.tipBench, () => w.hooks.sit(seats));
   }
 
-  // ---------- 后墙正中合上的石门（后面的展区还没有开放） ----------
+  // ---------- 后墙正中打开的石门：通向 C–H 展区 ----------
   const bz = ZONES.hallBack;
   const dh = L.backDoorHalf;
   const ds = L.backDoorSpring;
-  const shape = new THREE.Shape();
-  shape.moveTo(-dh, 0);
-  shape.lineTo(-dh, ds);
-  shape.absarc(0, ds, dh, Math.PI, 0, true);
-  shape.lineTo(dh, 0);
-  shape.closePath();
-  const leafGeo = new THREE.ExtrudeGeometry(shape, { depth: T - 0.16, bevelEnabled: false, curveSegments: 20 });
-  leafGeo.translate(0, 0, -(T - 0.16) / 2);
-  const leaves = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: 0x8f8a82, roughness: 0.9 }));
-  leaves.position.z = bz;
-  leaves.castShadow = leaves.receiveShadow = true;
-  scene.add(leaves);
-  w.collide(0, bz, dh * 2, T, true);
-  for (const face of [-1, 1]) {
-    const fz = bz + face * (T / 2 - 0.08);
-    // 两扇门之间的门缝，和每扇门上的一圈凹线、一个石把手
-    kit.box(0, (ds + dh) / 2, fz, 0.035, ds + dh, 0.02, 0x4a4641);
-    for (const s of [-1, 1]) {
-      const px = s * dh * 0.5;
-      kit.box(px, 0.34, fz, dh * 0.62, 0.025, 0.02, 0x7a756e);
-      kit.box(px, ds, fz, dh * 0.62, 0.025, 0.02, 0x7a756e);
-      for (const e of [-1, 1]) kit.box(px + e * dh * 0.31, (0.34 + ds) / 2, fz, 0.025, ds - 0.34, 0.02, 0x7a756e);
-      kit.box(s * 0.2, 1.15, fz + face * 0.03, 0.06, 0.34, 0.06, 0x6b665f);
-    }
-  }
-  // 门框
+  // 门槛和门框；门扇已经打开，走廊和展区在后墙后面
+  kit.box(0, 0.03, bz, dh * 2, 0.06, T + 0.12, C.stone);
   for (const s of [-1, 1]) kit.box(s * (dh + 0.11), ds / 2, bz + T / 2 + 0.05, 0.2, ds, 0.12, C.stone);
+  kit.glowBox(0, 3.72, bz + T / 2 + 0.03, dh * 2 + 0.2, 0.025, 0.025, C.warm, 1.8);
+  w.pointLight(0, 3.4, bz - 1.5, 30, 16);
 
   // ---------- 接待台（大门东侧，背靠门墙，弧形） ----------
   const cx = L.receptionX;

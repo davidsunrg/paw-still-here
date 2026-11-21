@@ -1,11 +1,11 @@
 import { CONFIG } from '../config';
-import { GALLERY_CAPACITY, slotToPlacement } from '@paw/shared';
+import { GALLERY_CAPACITY, SECTION_CELLS as SHARED_SECTION_CELLS, SECTIONS as SHARED_SECTIONS, slotToPlacement } from '@paw/shared';
 import { STR } from '../i18n';
 
 /** 物种的代号；显示名在语言文件里 */
 export type Species = 'cat' | 'dog' | 'rabbit' | 'hamster' | 'bird';
 
-export const SECTIONS = ['A', 'B'] as const;
+export const SECTIONS = SHARED_SECTIONS;
 export type Section = (typeof SECTIONS)[number];
 
 export interface Pet {
@@ -35,8 +35,7 @@ export interface Pet {
   canManage?: boolean;
 }
 
-const G = CONFIG.gallery;
-export const SECTION_CELLS = [G.sideCols * G.rows, G.backCols * 2 * G.rows];
+export const SECTION_CELLS = SHARED_SECTION_CELLS;
 
 export function mulberry32(seed: number) {
   let a = seed >>> 0;
