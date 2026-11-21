@@ -24,6 +24,8 @@ export class MemorialEditor {
   private mode: 'create' | 'edit' = 'create';
   private petId: string | null = null;
   private busy = false;
+  /** 选图后立刻开始的上传；提交时先等它们结束 */
+  private inflight = new Set<Promise<void>>();
   private form: HTMLFormElement;
   private mainInput: HTMLInputElement;
   private galleryInput: HTMLInputElement;
@@ -44,6 +46,7 @@ export class MemorialEditor {
               <span id="memorial-main-placeholder">${t.choosePhoto}</span>
             </button>
             <input id="memorial-main-input" type="file" accept="image/*" hidden />
+            <small id="memorial-main-status" class="memorial-photo-status" aria-live="polite"></small>
             <small id="memorial-main-hint">${t.mainRequiredHint}</small>
           </div>
           <div class="memorial-fields">
@@ -123,9 +126,12 @@ export class MemorialEditor {
       if (!file) return;
       if (this.state.main?.objectUrl) URL.revokeObjectURL(this.state.main.objectUrl);
       const objectUrl = URL.createObjectURL(file);
-      this.state.main = { key: 'main', url: objectUrl, objectUrl, file, status: 'pending' };
+      const photo: EditorPhoto = { key: 'main', url: objectUrl, objectUrl, file, status: 'pending' };
+      this.state.main = photo;
       this.mainInput.value = '';
       this.renderMain();
+      // 选完就传，别等到提交才有反应
+      void this.startUpload(photo);
     });
 
     const text = (selector: string, key: 'name' | 'breed' | 'birthDate' | 'passedDate' | 'message') => {
@@ -148,14 +154,17 @@ export class MemorialEditor {
     });
     q('#memorial-gallery-add').addEventListener('click', () => this.galleryInput.click());
     this.galleryInput.addEventListener('change', () => {
+      const added: EditorPhoto[] = [];
       for (const file of [...(this.galleryInput.files ?? [])]) {
         const objectUrl = URL.createObjectURL(file);
-        this.state.gallery.push({ key: crypto.randomUUID(), url: objectUrl, objectUrl, file, status: 'pending' });
+        added.push({ key: crypto.randomUUID(), url: objectUrl, objectUrl, file, status: 'pending' });
       }
+      this.state.gallery.push(...added);
       this.galleryInput.value = '';
       this.root.querySelector<HTMLElement>('#memorial-details')!.hidden = false;
       this.renderMore();
       this.renderGallery();
+      for (const photo of added) void this.startUpload(photo);
     });
 
     this.form.addEventListener('submit', (event) => {
@@ -202,13 +211,46 @@ export class MemorialEditor {
   }
 
   private renderMain() {
+    const t = STR.memorialEditor;
     const main = this.state.main;
     const image = this.root.querySelector<HTMLImageElement>('#memorial-main-preview')!;
     image.hidden = !main;
     if (main) image.src = main.url;
     else image.removeAttribute('src');
     this.root.querySelector('#memorial-main-icon')!.classList.toggle('hidden', !!main);
-    this.root.querySelector('#memorial-main-placeholder')!.textContent = main ? STR.memorialEditor.changePhoto : STR.memorialEditor.choosePhoto;
+    this.root.querySelector('#memorial-main-placeholder')!.textContent = main ? t.changePhoto : t.choosePhoto;
+    const status = this.root.querySelector<HTMLElement>('#memorial-main-status')!;
+    status.textContent = main ? t.status[main.status] : '';
+    status.classList.toggle('error', main?.status === 'error');
+  }
+
+  /** 选好照片就上传；失败时保留文件，提交时会再试一次 */
+  private startUpload(photo: EditorPhoto) {
+    const task = this.runUpload(photo);
+    this.inflight.add(task);
+    void task.finally(() => {
+      this.inflight.delete(task);
+      this.renderMain();
+      this.renderGallery();
+    });
+  }
+
+  private async runUpload(photo: EditorPhoto) {
+    if (!photo.file) return;
+    photo.status = 'uploading';
+    this.renderMain();
+    this.renderGallery();
+    try {
+      const result = await uploadMemorialImage(photo.file);
+      if (photo.objectUrl) URL.revokeObjectURL(photo.objectUrl);
+      delete photo.objectUrl;
+      delete photo.file;
+      photo.uploadId = result.uploadId;
+      photo.url = result.publicUrl;
+      photo.status = 'completed';
+    } catch {
+      photo.status = 'error';
+    }
   }
 
   private renderGallery() {
@@ -278,6 +320,8 @@ export class MemorialEditor {
   }
 
   private async uploadPendingPhotos() {
+    // 选图后立刻开始的上传可能还在进行：先等它们结束，失败的文件再补传一次
+    if (this.inflight.size) await Promise.all([...this.inflight]);
     const pending = [this.state.main, ...this.state.gallery].filter((photo): photo is EditorPhoto => !!photo?.file);
     let completed = 0;
     for (const photo of pending) {

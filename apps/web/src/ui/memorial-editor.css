@@ -42,6 +42,16 @@ body:not(.in-shrine) .memorial-manage {
   max-width: 320px;
   line-height: 1.5;
 }
+.memorial-photo-status {
+  color: var(--warm-soft);
+  font-size: 12px;
+}
+.memorial-photo-status:empty {
+  display: none;
+}
+.memorial-photo-status.error {
+  color: #ffb4a5;
+}
 .memorial-photo-label {
   color: var(--ink-dim);
   font-size: 12px;
