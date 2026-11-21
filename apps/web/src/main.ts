@@ -5,7 +5,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG } from './config';
-import { petById, PETS, type Pet } from './data/pets';
+import { buildSamplePetAtSlot, petById, PETS, type Pet } from './data/pets';
 import { petFromDto } from './data/pets-api';
 import { prefs, store } from './data/store';
 import { tributes } from './data/tributes';
@@ -69,17 +69,10 @@ let blocked = false;
 let quality: 'high' | 'low' = 'high';
 /** 地址里带着某只宠物（?pet=编号）：按下入口按钮后直接去它的相框 */
 let arrival: PhotoEntry | null = null;
-/** 到了它的纪念角之后接着做的事（打开纪念角会先收起所有弹窗，所以要等到那之后） */
-let arrivalThen: (() => void) | null = null;
 
 const ui = new UI({
   memorialApiEnabled: bootstrap.apiOnline && bootstrap.currentUserId !== null,
   onMemorialSaved: async (dto, mode) => {
-    if (!dto) {
-      // 删除暂时还走整页重载：要把真实宠物换回示例宠物
-      location.reload();
-      return;
-    }
     const pet = petFromDto(dto);
     tributes.seed([dto]);
     const entry = world.replacePetAtSlot(dto.slot, pet);
@@ -101,14 +94,16 @@ const ui = new UI({
     if (world.shrine.isOpen) ui.closeDetail();
     visit(entry, () => ui.openShare(pet, true));
   },
+  onMemorialDeleted: (slot) => {
+    world.replacePetAtSlot(slot, buildSamplePetAtSlot(slot));
+  },
   onEnter() {
     entered = true;
     void audio.start().then(() => audio.setMuted(false));
     // 从某只宠物的链接进来的：直接去它那里
     const entry = arrival;
-    const then = arrivalThen;
-    arrival = arrivalThen = null;
-    if (entry) visit(entry, then ?? undefined);
+    arrival = null;
+    if (entry) visit(entry);
   },
   onTeleport(target) {
     guide.clear();
@@ -734,22 +729,6 @@ async function boot() {
   // 等第一帧（着色器编译）结束后再显示入口按钮
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
   ui.ready();
-
-  // 创建或编辑后带着真实 UUID 重载：图集已重建，直接进去、来到它的纪念角
-  const nextPetId = sessionStorage.getItem('paw:visit-next');
-  const memorialMode = sessionStorage.getItem('paw:memorial-mode');
-  sessionStorage.removeItem('paw:visit-next');
-  sessionStorage.removeItem('paw:memorial-mode');
-  const nextPet = nextPetId ? petById.get(nextPetId) : undefined;
-  const nextEntry = nextPet ? frameOf(nextPet) : undefined;
-  if (nextPet && nextEntry) {
-    arrival = nextEntry;
-    // 刚创建完：到了它的纪念角，请主人把链接发给也爱它的人
-    if (memorialMode === 'create') arrivalThen = () => ui.openShare(nextPet, true);
-    else if (memorialMode === 'edit') arrivalThen = () => ui.toast(STR.memorialUpdated);
-    ui.enter();
-    return exposeDev();
-  }
 
   // 专属链接 /?pet=<编号>：入口按钮写它的名字，按下后直接到它那里
   const linkId = new URLSearchParams(location.search).get('pet');

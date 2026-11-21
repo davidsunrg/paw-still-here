@@ -1,4 +1,4 @@
-import type { PetDto } from '@paw/shared';
+import { placementToSlot, type PetDto } from '@paw/shared';
 import type { Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { ApiError } from '../api/client';
@@ -15,7 +15,7 @@ import {
 
 type EditorHooks = {
   onSaved(pet: PetDto, mode: 'create' | 'edit'): void | Promise<void>;
-  onDeleted(): void | Promise<void>;
+  onDeleted(slot: number): void | Promise<void>;
 };
 
 /** 独立的宠物创建 / 编辑器；大 UI 类只负责弹窗入口和保存后的场景动作 */
@@ -23,6 +23,7 @@ export class MemorialEditor {
   private state: MemorialFormState = emptyMemorialForm();
   private mode: 'create' | 'edit' = 'create';
   private petId: string | null = null;
+  private petSlot = 0;
   private busy = false;
   /** 选图后立刻开始的上传；提交时先等它们结束 */
   private inflight = new Set<Promise<void>>();
@@ -111,6 +112,7 @@ export class MemorialEditor {
     this.resetObjectUrls();
     this.mode = 'edit';
     this.petId = pet.id;
+    this.petSlot = placementToSlot(pet.section, pet.cell) ?? 0;
     this.state = memorialFormFromPet(pet);
     this.root.querySelector<HTMLElement>('#memorial-details')!.hidden = false;
     this.root.querySelector<HTMLElement>('#memorial-delete-zone')!.hidden = false;
@@ -354,7 +356,7 @@ export class MemorialEditor {
     this.root.querySelector('#memorial-progress')!.textContent = STR.memorialEditor.deleting;
     try {
       await deleteMemorialPet(this.petId);
-      await this.hooks.onDeleted();
+      await this.hooks.onDeleted(this.petSlot);
     } catch (error) {
       this.showError(error instanceof ApiError ? error.code : 'delete_failed');
     } finally {

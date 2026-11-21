@@ -53,7 +53,9 @@ export interface UIHooks {
   onBlockingChange(blocked: boolean): void;
   /** API 在线时可创建真实纪念宠物 */
   memorialApiEnabled?: boolean;
-  onMemorialSaved?(pet?: PetDto, mode?: 'create' | 'edit' | 'delete'): void | Promise<void>;
+  onMemorialSaved?(pet: PetDto, mode: 'create' | 'edit'): void | Promise<void>;
+  /** 删掉了一只真实宠物：把它的 slot 还给示例宠物 */
+  onMemorialDeleted?(slot: number): void | Promise<void>;
 }
 
 /** 进来多久之后，才问还没有宠物的访客要不要给自己的宠物留个位置 */
@@ -105,10 +107,10 @@ export class UI {
         this.toast(mode === 'create' ? STR.memorialCreated : STR.memorialUpdated);
         await hooks.onMemorialSaved?.(pet, mode);
       },
-      onDeleted: async () => {
+      onDeleted: async (slot) => {
         this.closeDetail();
         this.toast(STR.memorialDeleted);
-        await hooks.onMemorialSaved?.(undefined, 'delete');
+        await hooks.onMemorialDeleted?.(slot);
       },
     });
 
