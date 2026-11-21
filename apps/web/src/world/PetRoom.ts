@@ -426,7 +426,7 @@ export function roomFrameColor(frame: number | undefined) {
   return l < 0.34 ? P.wood : frame;
 }
 
-/** 茶几或搁板上的立式相框：相框后仰，背面两根斜撑腿落在台面上 */
+/** 茶几或搁板上的立式相框：相框后仰，背面正中一根斜撑杆落在台面上 */
 export function buildPhotoFrame(ctx: RoomContext, size: number, main = false) {
   const m = materials(ctx);
   const p = new Parts();
@@ -435,7 +435,7 @@ export function buildPhotoFrame(ctx: RoomContext, size: number, main = false) {
 
   const boardW = size + 0.055;
   const boardH = size + 0.055;
-  const tilt = 0.2;
+  const tilt = 0.22;
   const lift = 0.008;
 
   // 相框板单独成组，绕底边后仰，底边仍贴着台面
@@ -452,18 +452,14 @@ export function buildPhotoFrame(ctx: RoomContext, size: number, main = false) {
   board.position.set(0, lift, 0);
   board.rotation.x = -tilt;
 
-  // 背面两条斜撑腿：从板背中上部落到台面外侧，正面也能看出相框是靠它立着的
-  const hingeY = boardH * 0.64;
-  const hingeX = size * 0.5 + 0.005;
+  // 背面正中一根斜撑杆，从板背偏上位置落到台面上
+  const hingeY = boardH * 0.72;
   const hingeZ = -0.017;
   const hy = lift + hingeY * Math.cos(tilt) - hingeZ * Math.sin(tilt);
   const hz = -hingeY * Math.sin(tilt) + hingeZ * Math.cos(tilt);
-  const footX = size * 0.5 + 0.12;
-  const footZ = -(0.06 + size * 0.3);
-  for (const side of [-1, 1]) {
-    p.beam(m.woodDark, [side * hingeX, hy, hz], [side * footX, 0.004, footZ], 0.008, 10);
-    p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.026, 10), m.brass, [side * hingeX, hy, hz], [1, 1, 1], [0, 0, Math.PI / 2]);
-  }
+  const footZ = -(0.09 + size * 0.25);
+  p.beam(m.woodDark, [0, 0.004, footZ], [0, hy, hz], 0.009, 12);
+  p.add(new THREE.CylinderGeometry(0.012, 0.012, 0.028, 12), m.brass, [0, hy, hz], [1, 1, 1], [0, 0, Math.PI / 2]);
 
   const group = p.finish();
   group.add(board);
