@@ -120,7 +120,8 @@ export function buildGallery(w: World): Gallery {
     const entry = w.photos.add(pet, p(T + 0.045), rotY, F, F);
     const lamp = p(T + 0.07, F / 2 + 0.045);
     kit.glowBox(lamp.x, lamp.y, lamp.z, F * 0.6, 0.016, 0.03, C.warm, 2.3, rotY);
-    w.labels.add(`${pet.name} · ${pet.passedDate.slice(0, 4)}`, label, rotY, F - 0.08, 0.105, String(cell.cell));
+    const years = pet.passedDate ? ` · ${pet.passedDate.slice(0, 4)}` : '';
+    w.labels.add(`${pet.name}${years}`, label, rotY, F - 0.08, 0.105, String(cell.cell));
     w.slots.set(pet.id, { entry, ledge: ledge.clone().setY(ledge.y + 0.015), frame });
   });
 

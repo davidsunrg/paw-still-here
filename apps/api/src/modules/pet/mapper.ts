@@ -15,6 +15,7 @@ export type PetRow = {
 
 export type PetPhotoJoined = {
   id: string;
+  uploadId: string;
   publicUrl: string;
   role: string;
   position: number;
@@ -33,10 +34,11 @@ export function toPetDto(
     species: row.species as PetDto['species'],
     breed: row.breed,
     birthDate: row.birthDate,
-    passedDate: row.passedDate,
-    message: row.message,
+    passedDate: row.passedDate || null,
+    message: row.message || null,
     photos: sorted.map((p) => ({
       id: p.id,
+      uploadId: p.uploadId,
       publicUrl: p.publicUrl,
       role: p.role as 'main' | 'gallery',
       position: p.position,

@@ -5,7 +5,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG } from './config';
-import { PETS, type Pet } from './data/pets';
+import { petById, PETS, type Pet } from './data/pets';
 import { prefs, store } from './data/store';
 import { STR } from './i18n';
 import { AudioSystem } from './systems/AudioSystem';
@@ -17,6 +17,7 @@ import { SimulatedVisitors } from './systems/SimulatedVisitors';
 import { Crowd } from './systems/Visitors';
 import { UI } from './ui/UI';
 import './ui/style.css';
+import './ui/memorial-editor.css';
 import type { PhotoEntry } from './world/Batches';
 import { AvatarBatch, defaultPose } from './world/Avatar';
 import { pathX } from './world/Outdoor';
@@ -66,8 +67,11 @@ let blocked = false;
 let quality: 'high' | 'low' = 'high';
 
 const ui = new UI({
-  memorialApiEnabled: bootstrap.apiOnline,
-  onMemorialSaved: async () => {
+  memorialApiEnabled: bootstrap.apiOnline && bootstrap.currentUserId !== null,
+  onMemorialSaved: async (petId, mode) => {
+    if (petId) sessionStorage.setItem('paw:visit-next', petId);
+    else sessionStorage.removeItem('paw:visit-next');
+    if (mode) sessionStorage.setItem('paw:memorial-mode', mode);
     location.reload();
   },
   onEnter() {
@@ -696,6 +700,22 @@ async function boot() {
   // 等第一帧（着色器编译）结束后再显示入口按钮
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
   ui.ready();
+
+  // 创建或编辑后带着真实 UUID 重载：图集已重建，再复用原来的探访路径
+  const nextPetId = sessionStorage.getItem('paw:visit-next');
+  const memorialMode = sessionStorage.getItem('paw:memorial-mode');
+  sessionStorage.removeItem('paw:visit-next');
+  sessionStorage.removeItem('paw:memorial-mode');
+  if (nextPetId) {
+    const pet = petById.get(nextPetId);
+    const entry = pet ? frameOf(pet) : undefined;
+    if (entry) {
+      document.getElementById('btn-enter')?.click();
+      visit(entry);
+      if (memorialMode === 'create') ui.toast(STR.memorialEditor.editHint);
+      else if (memorialMode === 'edit') ui.toast(STR.memorialUpdated);
+    }
+  }
 
   if (import.meta.env.DEV) {
     Object.assign(window, { __memorial: { player, world, ui, camera, renderer, renderPass, avatar, crowd } });

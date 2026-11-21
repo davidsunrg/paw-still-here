@@ -1,0 +1,51 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import type { PetDto } from '@paw/shared';
+import { applyGalleryFromApi } from './pets-api';
+import { PETS, replacePets } from './pets';
+
+const original = [...PETS];
+afterEach(() => replacePets(original));
+
+function dto(slot: number): PetDto {
+  const mainUploadId = crypto.randomUUID();
+  const galleryUploadId = crypto.randomUUID();
+  return {
+    id: crypto.randomUUID(),
+    slot,
+    name: 'Real pet',
+    species: 'cat',
+    breed: null,
+    birthDate: null,
+    passedDate: null,
+    message: null,
+    photos: [
+      { id: crypto.randomUUID(), uploadId: mainUploadId, publicUrl: 'https://cdn.test/main', role: 'main', position: 0 },
+      { id: crypto.randomUUID(), uploadId: galleryUploadId, publicUrl: 'https://cdn.test/gallery', role: 'gallery', position: 1 },
+    ],
+    isOwner: true,
+    isReal: true,
+  };
+}
+
+describe('gallery merge', () => {
+  it('replaces only the real slot and keeps deterministic sample IDs elsewhere', () => {
+    const real = dto(2);
+    applyGalleryFromApi([real]);
+    expect(PETS).toHaveLength(100);
+    expect(PETS[2]?.id).toBe(real.id);
+    expect(PETS[0]?.id).toBe('pet-sample-1');
+    expect(PETS[2]?.canManage).toBe(true);
+    expect(PETS[2]?.passedDate).toBeUndefined();
+    expect(PETS[2]?.message).toBeUndefined();
+    expect(PETS[2]?.mainUploadId).toBe(real.photos[0]?.uploadId);
+    expect(PETS[2]?.photoUploads?.[0]?.uploadId).toBe(real.photos[1]?.uploadId);
+  });
+
+  it('restores the same sample pet when a real memorial is deleted', () => {
+    const real = dto(2);
+    applyGalleryFromApi([real]);
+    applyGalleryFromApi([]);
+    expect(PETS[2]?.id).toBe('pet-sample-3');
+    expect(PETS[2]?.name).toBe(original[2]?.name);
+  });
+});

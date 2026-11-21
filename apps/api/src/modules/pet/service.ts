@@ -15,98 +15,97 @@ function findFreeSlot(used: number[]): number | null {
 
 export function createPetService(petRepo: PetRepository, uploadRepo: UploadRepository) {
   return {
-  findFreeSlot(used: number[]) {
-    return findFreeSlot(used);
-  },
+    findFreeSlot(used: number[]) {
+      return findFreeSlot(used);
+    },
 
-  async list(viewerUserId?: string | null): Promise<PetDto[]> {
-    const rows = await petRepo.listAllWithPhotos();
-    return rows.map(({ pet: row, photos }) => toPetDto(row, photos, viewerUserId));
-  },
+    async list(viewerUserId?: string | null): Promise<PetDto[]> {
+      const rows = await petRepo.listAllWithPhotos();
+      return rows.map(({ pet: row, photos }) => toPetDto(row, photos, viewerUserId));
+    },
 
-  async get(id: string, viewerUserId?: string | null): Promise<PetDto> {
-    const rows = await petRepo.listAllWithPhotos();
-    const hit = rows.find((r) => r.pet.id === id);
-    if (!hit) throw err.notFound('pet_not_found');
-    return toPetDto(hit.pet, hit.photos, viewerUserId);
-  },
+    async get(id: string, viewerUserId?: string | null): Promise<PetDto> {
+      const rows = await petRepo.listAllWithPhotos();
+      const hit = rows.find((row) => row.pet.id === id);
+      if (!hit) throw err.notFound('pet_not_found');
+      return toPetDto(hit.pet, hit.photos, viewerUserId);
+    },
 
-  async create(ownerId: string, input: CreatePetInput): Promise<PetDto> {
-    const used = await petRepo.listSlots();
-    const slot = findFreeSlot(used);
-    if (slot === null) throw err.galleryFull();
+    async create(ownerId: string, input: CreatePetInput): Promise<PetDto> {
+      const uploadIds = [
+        ...(input.mainUploadId ? [input.mainUploadId] : []),
+        ...(input.galleryUploadIds ?? []),
+      ];
+      await assertCompletedUploads(ownerId, uploadIds, uploadRepo);
 
-    const uploadIds = [
-      ...(input.mainUploadId ? [input.mainUploadId] : []),
-      ...(input.galleryUploadIds ?? []),
-    ];
-    await assertCompletedUploads(ownerId, uploadIds, uploadRepo);
+      // 唯一索引负责最后一道并发保护；冲突时重新找最小空位，而不是误报墙满
+      for (let attempt = 0; attempt < GALLERY_CAPACITY; attempt++) {
+        const used = await petRepo.listSlots();
+        const slot = findFreeSlot(used);
+        if (slot === null) throw err.galleryFull();
+        const id = crypto.randomUUID();
+        const now = new Date();
+        const photoRows = buildPhotoRows(id, input.mainUploadId, input.galleryUploadIds ?? []);
+        try {
+          await petRepo.insertWithPhotos({
+            id,
+            ownerId,
+            slot,
+            name: input.name,
+            species: input.species,
+            breed: input.breed ?? null,
+            birthDate: input.birthDate ?? null,
+            passedDate: input.passedDate ?? '',
+            message: input.message ?? '',
+            createdAt: now,
+            updatedAt: now,
+          }, photoRows);
+          return await this.get(id, ownerId);
+        } catch (error) {
+          if (isSlotUniqueViolation(error)) continue;
+          throw error;
+        }
+      }
+      throw err.galleryFull();
+    },
 
-    const id = crypto.randomUUID();
-    const now = new Date();
-    try {
-      await petRepo.insert({
-        id,
-        ownerId,
-        slot,
-        name: input.name,
-        species: input.species,
-        breed: input.breed ?? null,
-        birthDate: input.birthDate ?? null,
-        passedDate: input.passedDate,
-        message: input.message,
-        createdAt: now,
+    async update(ownerId: string, id: string, input: UpdatePetInput): Promise<PetDto> {
+      const row = await petRepo.getById(id);
+      if (!row) throw err.notFound('pet_not_found');
+      if (row.ownerId !== ownerId) throw err.forbidden();
+
+      const uploadIds = [
+        ...(input.mainUploadId ? [input.mainUploadId] : []),
+        ...(input.galleryUploadIds ?? []),
+      ];
+      if (uploadIds.length) await assertCompletedUploads(ownerId, uploadIds, uploadRepo);
+
+      const now = new Date();
+      const patch = {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.species !== undefined ? { species: input.species } : {}),
+        ...(input.breed !== undefined ? { breed: input.breed ?? null } : {}),
+        ...(input.birthDate !== undefined ? { birthDate: input.birthDate ?? null } : {}),
+        ...(input.passedDate !== undefined ? { passedDate: input.passedDate } : {}),
+        ...(input.message !== undefined ? { message: input.message } : {}),
         updatedAt: now,
-      });
-    } catch (e) {
-      if (isUniqueViolation(e)) throw err.galleryFull();
-      throw e;
-    }
+      };
+      if (input.mainUploadId !== undefined || input.galleryUploadIds !== undefined) {
+        const photoRows = buildPhotoRows(id, input.mainUploadId, input.galleryUploadIds ?? []);
+        await petRepo.updateWithPhotos(id, patch, photoRows);
+      } else {
+        await petRepo.updateWithPhotos(id, patch);
+      }
 
-    const photoRows = buildPhotoRows(id, input.mainUploadId, input.galleryUploadIds ?? []);
-    if (photoRows.length) await petRepo.replacePhotos(id, photoRows);
+      return this.get(id, ownerId);
+    },
 
-    return this.get(id, ownerId);
-  },
-
-  async update(ownerId: string, id: string, input: UpdatePetInput): Promise<PetDto> {
-    const row = await petRepo.getById(id);
-    if (!row) throw err.notFound('pet_not_found');
-    if (row.ownerId !== ownerId) throw err.forbidden();
-
-    const uploadIds = [
-      ...(input.mainUploadId ? [input.mainUploadId] : []),
-      ...(input.galleryUploadIds ?? []),
-    ];
-    if (uploadIds.length) await assertCompletedUploads(ownerId, uploadIds, uploadRepo);
-
-    const now = new Date();
-    await petRepo.update(id, {
-      ...(input.name !== undefined ? { name: input.name } : {}),
-      ...(input.species !== undefined ? { species: input.species } : {}),
-      ...(input.breed !== undefined ? { breed: input.breed ?? null } : {}),
-      ...(input.birthDate !== undefined ? { birthDate: input.birthDate ?? null } : {}),
-      ...(input.passedDate !== undefined ? { passedDate: input.passedDate } : {}),
-      ...(input.message !== undefined ? { message: input.message } : {}),
-      updatedAt: now,
-    });
-
-    if (input.mainUploadId !== undefined || input.galleryUploadIds !== undefined) {
-      const mainId = input.mainUploadId;
-      const galleryIds = input.galleryUploadIds ?? [];
-      const photoRows = buildPhotoRows(id, mainId, galleryIds);
-      await petRepo.replacePhotos(id, photoRows);
-    }
-
-    return this.get(id, ownerId);
-  },
-
-  async remove(ownerId: string, id: string): Promise<void> {
-    const row = await petRepo.getById(id);
-    if (!row) throw err.notFound('pet_not_found');
-    if (row.ownerId !== ownerId) throw err.forbidden();
-    await petRepo.delete(id);
-  },
+    async remove(ownerId: string, id: string): Promise<void> {
+      const row = await petRepo.getById(id);
+      if (!row) throw err.notFound('pet_not_found');
+      if (row.ownerId !== ownerId) throw err.forbidden();
+      await petRepo.delete(id);
+    },
   };
 }
 
@@ -132,13 +131,13 @@ function buildPhotoRows(petId: string, mainUploadId: string | undefined, gallery
   if (mainUploadId) {
     rows.push({ id: crypto.randomUUID(), uploadId: mainUploadId, role: 'main', position: pos++ });
   }
-  for (const uploadId of galleryIds) {
+  for (const uploadId of new Set(galleryIds)) {
     if (uploadId === mainUploadId) continue;
     rows.push({ id: crypto.randomUUID(), uploadId, role: 'gallery', position: pos++ });
   }
   return rows;
 }
 
-function isUniqueViolation(e: unknown) {
-  return e instanceof Error && /unique|UNIQUE|constraint/i.test(e.message);
+function isSlotUniqueViolation(error: unknown) {
+  return error instanceof Error && /pet_slot_unique|UNIQUE constraint failed: pet\.slot/i.test(error.message);
 }

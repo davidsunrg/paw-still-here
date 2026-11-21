@@ -8,6 +8,13 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230b0d24'/%3E%3Cg fill='%23f2b56b' transform='translate(11 13) scale(.78)'%3E%3Cellipse cx='50' cy='66' rx='23' ry='18'/%3E%3Cellipse cx='22' cy='42' rx='8' ry='11' transform='rotate(-20 22 42)'/%3E%3Cellipse cx='40' cy='26' rx='8' ry='11' transform='rotate(-6 40 26)'/%3E%3Cellipse cx='60' cy='26' rx='8' ry='11' transform='rotate(6 60 26)'/%3E%3Cellipse cx='78' cy='42' rx='8' ry='11' transform='rotate(20 78 42)'/%3E%3C/g%3E%3C/svg%3E" />
     <!-- 首屏：style.css 随 JS 才注入，避免 FOUC（白底大黑爪） -->
     <style>
+      :root {
+        --warm-soft: #ffe2b8;
+        --ink-dim: rgba(245, 236, 223, 0.66);
+        --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif;
+        --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        --tracking: 0.2;
+      }
       html,
       body {
         margin: 0;
@@ -15,7 +22,8 @@
         overflow: hidden;
         background: #0b0d24;
         color: #f5ecdf;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-family: var(--sans);
+        font-size: 14px;
       }
       #scene {
         position: fixed;
@@ -45,27 +53,70 @@
       }
       #loader h1 {
         margin: 10px 0 0;
+        padding-left: calc(0.22em * var(--tracking));
+        font-family: var(--serif);
         font-size: 34px;
         font-weight: 600;
-        color: #ffe2b8;
+        letter-spacing: calc(0.22em * var(--tracking));
+        color: var(--warm-soft);
       }
       #loader .sub {
         margin: 0 0 14px;
+        padding-left: calc(0.3em * var(--tracking));
         max-width: min(520px, 86vw);
+        font-size: 14px;
         line-height: 1.5;
-        color: rgba(245, 236, 223, 0.66);
+        text-wrap: balance;
+        font-family: var(--serif);
+        letter-spacing: calc(0.3em * var(--tracking));
+        color: var(--ink-dim);
+      }
+      .loader-action {
+        position: relative;
+        flex-shrink: 0;
+        width: min(260px, 70vw);
+        height: 52px;
       }
       #loader .bar {
-        width: min(260px, 70vw);
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
         height: 3px;
         border-radius: 3px;
         background: rgba(255, 255, 255, 0.12);
         overflow: hidden;
       }
+      #loader.ready .bar {
+        visibility: hidden;
+      }
       #loader .bar i {
         display: block;
         height: 100%;
         width: 0;
+      }
+      #btn-enter {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        margin: 0;
+        padding: 12px 34px;
+        padding-left: calc(34px + 0.2em * var(--tracking));
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: calc(0.2em * var(--tracking));
+        transform: translate(-50%, -50%);
+        white-space: nowrap;
+        color: #3b2410;
+        background: linear-gradient(180deg, #ffd69a, #f2a955);
+        border: none;
+        border-radius: 999px;
+      }
+      @media (max-width: 520px) {
+        #loader h1 {
+          font-size: 26px;
+        }
       }
       #loader .site {
         position: absolute;
@@ -94,8 +145,10 @@
       </svg>
       <h1 data-t="brand">Paw Still Here</h1>
       <p class="sub" data-t="tagline">As long as they're remembered, they're still with us.</p>
-      <div class="bar"><i id="progress"></i></div>
-      <button id="btn-enter" class="primary hidden" data-t="enter"></button>
+      <div class="loader-action">
+        <div class="bar"><i id="progress"></i></div>
+        <button id="btn-enter" class="primary hidden" type="button" data-t="enter">Enter</button>
+      </div>
       <p class="site" data-t="site">pawstillhere.com</p>
     </div>
 
@@ -143,9 +196,6 @@
       <p class="meta" id="detail-meta"></p>
       <p class="meta" id="detail-address"></p>
       <blockquote id="detail-message"></blockquote>
-      <p class="memorial-manage hidden" id="detail-manage">
-        <button type="button" class="danger" id="memorial-delete" data-t="memorialDelete"></button>
-      </p>
       <!-- 去放河灯、去烧信、读信：入口先收起来，不展示 -->
       <div class="rites" id="detail-rites" hidden>
         <button id="btn-rite-river" data-t="riteRiver"></button>
@@ -153,6 +203,9 @@
         <button id="btn-rite-letters" data-t="riteLetters"></button>
       </div>
     </aside>
+    <div class="memorial-manage hidden" id="detail-manage">
+      <button type="button" class="secondary" id="memorial-edit" data-t="memorialEdit"></button>
+    </div>
 
     <div id="ride-bar">
       <button id="btn-ride-lantern" data-t="tipDock"></button>
@@ -297,33 +350,17 @@
         <button class="close" data-close aria-label="close">×</button>
         <h2 data-t="searchTitle"></h2>
         <input id="search-input" autocomplete="off" />
+        <section id="your-memorials" class="your-memorials hidden">
+          <h3 data-t="yourMemorials"></h3>
+          <ul class="results" id="your-results"></ul>
+        </section>
         <ul class="results" id="search-results"></ul>
         <button type="button" class="secondary hidden" id="btn-create-memorial" data-t="createMemorial"></button>
       </div>
     </div>
 
     <div class="modal" id="modal-memorial">
-      <div class="card">
-        <button class="close" data-close aria-label="close">×</button>
-        <h2 data-t="createMemorialTitle"></h2>
-        <label data-t="petName"></label>
-        <input id="memorial-name" autocomplete="off" />
-        <label data-t="speciesLabel"></label>
-        <select id="memorial-species">
-          <option value="cat">Cat</option>
-          <option value="dog">Dog</option>
-          <option value="rabbit">Rabbit</option>
-          <option value="hamster">Hamster</option>
-          <option value="bird">Bird</option>
-        </select>
-        <label data-t="breedLabel"></label>
-        <input id="memorial-breed" autocomplete="off" />
-        <label data-t="passedDateLabel"></label>
-        <input id="memorial-passed" type="date" />
-        <label data-t="messageLabel"></label>
-        <textarea id="memorial-message" rows="4"></textarea>
-        <button type="button" class="primary" id="memorial-save" data-t="memorialSave"></button>
-      </div>
+      <div class="card memorial-card" id="memorial-card"></div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

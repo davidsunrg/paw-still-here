@@ -14,10 +14,14 @@ export interface Pet {
   species: Species;
   breed?: string;
   birthDate?: string;
-  passedDate: string;
+  passedDate?: string;
   photoUrl?: string;
+  /** 主图上传 ID，编辑时用于保留或替换 */
+  mainUploadId?: string;
   photos?: string[];
-  message: string;
+  /** 有序相册的上传 ID 与公开地址 */
+  photoUploads?: Array<{ uploadId: string; url: string }>;
+  message?: string;
   flowers: number;
   candles: number;
   floor: number;

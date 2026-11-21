@@ -4,6 +4,7 @@ import { PHOTO_ROLE, SPECIES } from './constants';
 const isoDate = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD')
+  .or(z.literal(''))
   .optional();
 
 export const createPetSchema = z.object({
@@ -11,8 +12,8 @@ export const createPetSchema = z.object({
   species: z.enum(SPECIES),
   breed: z.string().trim().max(80).optional(),
   birthDate: isoDate,
-  passedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected YYYY-MM-DD'),
-  message: z.string().trim().min(1).max(2000),
+  passedDate: isoDate,
+  message: z.string().trim().max(2000).optional(),
   mainUploadId: z.string().uuid().optional(),
   galleryUploadIds: z.array(z.string().uuid()).max(24).optional(),
 });
@@ -31,6 +32,7 @@ export const presignUploadSchema = z.object({
 
 export const petPhotoDtoSchema = z.object({
   id: z.string().uuid(),
+  uploadId: z.string().uuid(),
   publicUrl: z.string().url(),
   role: z.enum(PHOTO_ROLE),
   position: z.number().int().nonnegative(),
@@ -43,8 +45,8 @@ export const petDtoSchema = z.object({
   species: z.enum(SPECIES),
   breed: z.string().nullable(),
   birthDate: z.string().nullable(),
-  passedDate: z.string(),
-  message: z.string(),
+  passedDate: z.string().nullable(),
+  message: z.string().nullable(),
   photos: z.array(petPhotoDtoSchema),
   isOwner: z.boolean().optional(),
   isReal: z.literal(true),
