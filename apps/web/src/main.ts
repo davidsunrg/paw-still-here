@@ -164,20 +164,6 @@ const ui = new UI({
     if (here) world.shrine.drop('letter');
     audio.chime(false);
   },
-  onGuide(pet) {
-    ui.closeAll();
-    const entry = frameOf(pet);
-    // 在影厅或河边找它：先回到大厅，再沿着光点走
-    travel(() => {
-      guide.show(world.routeTo(pet, player.pos), () => {
-        if (!entry) return ui.toast(STR.guideArrive(pet.name));
-        // 光点把人带到相框前就停下，由访客自己点照片进屋
-        interaction?.setHighlight(entry);
-        ui.toast(STR.photoVisitHint(pet.name));
-      });
-      ui.toast(STR.guideToast(pet.name));
-    });
-  },
   onGoto(pet) {
     ui.closeAll();
     guide.clear();

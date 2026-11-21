@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config';
-import { PETS, type Pet } from '../data/pets';
+import { PETS } from '../data/pets';
 import { STR } from '../i18n';
 import { LabelBatch, PhotoBatch, type PhotoEntry } from './Batches';
 import { buildBonfire, type Bonfire } from './Bonfire';
@@ -16,7 +16,7 @@ import { buildOutdoor } from './Outdoor';
 import { buildRiver, type River } from './River';
 import { MOON_DIR, Sky } from './Sky';
 import { Shrine } from './Shrine';
-import { TREE_POS, TREE_SPAN, type Tree } from './Tree';
+import type { Tree } from './Tree';
 
 export interface Collider {
   minX: number;
@@ -221,72 +221,6 @@ export class World {
     m.visible = false;
     this.scene.add(m);
     this.interact(m, label, onClick);
-  }
-
-  /**
-   * 从当前位置走到某只宠物相框前的大致路线（用于地面光点指引）。
-   * 大厅正中是纪念树和两侧的沙发，直走会穿过去时，改从四周的过道绕。
-   */
-  routeTo(pet: Pet, from: THREE.Vector3): THREE.Vector3[] {
-    const slot = this.slots.get(pet.id);
-    if (!slot) return [];
-    const { center, normal } = slot.entry;
-    const V = (x: number, z: number) => new THREE.Vector3(x, 0, z);
-    const pts = [V(from.x, from.z)];
-    // 还在室外：先进大门
-    if (from.z > 0.5) pts.push(V(0, 1.2), V(0, -3.2));
-    const goal = V(center.x + normal.x * 1.5, center.z + normal.z * 1.5);
-
-    // 中间走不过去的一块：树的底座加上两侧的沙发
-    const halfX = CONFIG.hall.sofaX + 1;
-    const halfZ = TREE_SPAN / 2 + 0.6;
-    // 正站在树和沙发之间：先顺着窄道走出这一块
-    const here = pts[pts.length - 1];
-    if (Math.abs(here.x - TREE_POS.x) < halfX && Math.abs(here.z - TREE_POS.z) < halfZ) {
-      // 在窄道里就朝目的地那一头出去；正对着树的底座时只能往外退
-      const facingTree = Math.abs(here.x - TREE_POS.x) < TREE_SPAN / 2 + 0.4;
-      const side = Math.sign((facingTree ? here.z : goal.z) - TREE_POS.z) || 1;
-      pts.push(V(here.x, TREE_POS.z + side * (halfZ + 0.3)));
-    }
-    const start = pts[pts.length - 1];
-    const crosses = (a: THREE.Vector3, b: THREE.Vector3) => {
-      const n = Math.ceil(a.distanceTo(b) / 0.25);
-      for (let i = 0; i <= n; i++) {
-        const x = a.x + ((b.x - a.x) * i) / Math.max(n, 1);
-        const z = a.z + ((b.z - a.z) * i) / Math.max(n, 1);
-        if (Math.abs(x - TREE_POS.x) < halfX && Math.abs(z - TREE_POS.z) < halfZ) return true;
-      }
-      return false;
-    };
-    // 绕着这一块的四个拐角，按顺时针排列
-    const lane = CONFIG.gallery.lane;
-    const dz = TREE_SPAN / 2 + 2;
-    const corners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([sx, sz]) => V(TREE_POS.x + sx * lane, TREE_POS.z + sz * dz));
-    let best: THREE.Vector3[] = [];
-    let bestLen = Infinity;
-    if (!crosses(start, goal)) bestLen = 0;
-    else {
-      for (let first = 0; first < 4; first++) {
-        for (const dir of [1, -1]) {
-          for (let count = 1; count <= 3; count++) {
-            const via = Array.from({ length: count }, (_, k) => corners[(first + dir * k + 8) % 4]);
-            const path = [start, ...via, goal];
-            let len = 0;
-            let ok = true;
-            for (let i = 1; i < path.length && ok; i++) {
-              ok = !crosses(path[i - 1], path[i]);
-              len += path[i - 1].distanceTo(path[i]);
-            }
-            if (ok && len < bestLen) {
-              bestLen = len;
-              best = via;
-            }
-          }
-        }
-      }
-    }
-    pts.push(...best, goal);
-    return pts;
   }
 
   /** who 是小人的位置：月光阴影范围、点亮哪几盏灯都跟着它走 */

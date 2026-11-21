@@ -43,7 +43,6 @@ export interface UIHooks {
   onTributesChanged(pet: Pet): void;
   /** 渲染一帧并交出 3D 画布，用来画分享图；必须马上画下来，下一帧就没了 */
   onCapture?(): HTMLCanvasElement | null;
-  onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
   /** 坐在船上时点「放河灯」 */
   onRideLantern(): void;
@@ -792,7 +791,7 @@ export class UI {
 
   // ---------- 我的宠物 ----------
 
-  /** 这台浏览器创建的宠物：带我去 / 直接去；还没有的时候只有一句话和创建按钮 */
+  /** 这台浏览器创建的宠物：直接去；还没有的时候只有一句话和创建按钮 */
   openMyPets() {
     const pets = PETS.filter((pet) => pet.canManage);
     $('my-pets-empty').classList.toggle('hidden', pets.length > 0);
@@ -800,13 +799,6 @@ export class UI {
     list.replaceChildren();
     for (const p of pets) {
       const li = document.createElement('li');
-      const guide = document.createElement('button');
-      guide.type = 'button';
-      guide.textContent = STR.searchGuide;
-      guide.addEventListener('click', () => {
-        this.closeModals();
-        this.hooks.onGuide(p);
-      });
       const go = document.createElement('button');
       go.type = 'button';
       go.className = 'primary';
@@ -815,7 +807,7 @@ export class UI {
         this.closeModals();
         this.hooks.onGoto(p);
       });
-      li.append(this.petInfo(p), guide, go);
+      li.append(this.petInfo(p), go);
       list.append(li);
     }
     this.openModal('modal-search');
