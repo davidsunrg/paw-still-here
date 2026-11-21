@@ -27,7 +27,25 @@ cp apps/api/.dev.vars.example apps/api/.dev.vars   # 填 BETTER_AUTH_SECRET；�
 pnpm --filter @paw/api db:migrate:local
 ```
 
+前端环境变量（可选，见下节「环境变量」）：`cp apps/web/.env.example apps/web/.env`。
+
 本项目是 pnpm monorepo：`apps/web` 为 Three.js 前端，`apps/api` 为部署在 **Cloudflare Worker** 上的 Hono API（D1 + Better Auth 匿名登录 + R2 预签名上传），`packages/shared` 为 Zod/DTO 契约。
+
+## 环境变量
+
+按**谁读这个文件**来分，和 TanStack 全栈 Worker 模板（`references/my-template`，未入库）思路相同：Vite 用 `.env*`，Wrangler 用 `.dev.vars` + `vars` + secret。本仓库前后端拆开，所以文件落在不同 app 里。
+
+| 放哪里 | 谁读 | 放什么 |
+| --- | --- | --- |
+| `apps/api/.dev.vars` | `wrangler dev` / Worker | **密钥**：`BETTER_AUTH_SECRET`、R2 API 密钥等（模板见 `.dev.vars.example`） |
+| `apps/api/wrangler.jsonc` → `vars` | 本地与生产 Worker | **非密**、Worker 要读的公开配置，如 `BETTER_AUTH_URL`、`PUBLIC_ASSETS_URL` |
+| `apps/api/wrangler.jsonc` → `d1_databases` / `r2_buckets` | Worker 绑定 | D1、R2 **资源绑定**，不是 `.env` 字符串 |
+| `apps/web/.env` | Vite | 仅 **`VITE_` 开头**、需要进浏览器或 dev server 的变量（模板见 `.env.example`；默认可不建） |
+| 生产 | `wrangler secret put` / Dashboard | 与 `.dev.vars` 同类密钥，**不进 git** |
+
+简易判断：**绝不能进浏览器** → API 的 `.dev.vars` / `wrangler secret`；**前端 JS 要读到** → `apps/web/.env` 且 `VITE_`；**公开且 Worker 用** → `wrangler.jsonc` 的 `vars`。
+
+本地最小配置：只复制并填写 `apps/api/.dev.vars`（至少 `BETTER_AUTH_SECRET`）。前端的 `/api` 由 `apps/web/vite.config.ts` 代理到 `8787`，不依赖 `.env`。
 
 ## 操作
 
@@ -127,8 +145,11 @@ apps/web/            Three.js 前端（Vite）
     systems/           小人、访客、交互、音效
     ui/                界面逻辑与样式
   vite.config.ts       打包时把页面 meta 从语言文件写进 index.html
-apps/api/            Hono API 骨架（/api/health）
-packages/shared/     前后端共用类型（现阶段仅 Health）
+apps/api/            Cloudflare Worker + Hono（D1、Auth、上传）
+  .dev.vars.example  本地密钥模板（复制为 .dev.vars）
+  wrangler.jsonc     绑定与非密 vars
+apps/web/.env.example  可选 VITE_ 配置模板
+packages/shared/     前后端共用 Zod/DTO
 ```
 
 ## 常见修改

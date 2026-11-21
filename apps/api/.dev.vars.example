@@ -1,4 +1,10 @@
+# Wrangler 本地开发（wrangler dev）读取；生产用 `wrangler secret put`，勿提交真实值。
+# 复制：cp apps/api/.dev.vars.example apps/api/.dev.vars
+
+# Better Auth（必填）
 BETTER_AUTH_SECRET=dev-secret-change-me
+
+# R2 预签名上传（本地上传功能需要；只读列表可暂不填）
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
