@@ -284,6 +284,12 @@ export class Shrine {
     uv.setXY(2, u0, v0);
     uv.setXY(3, u1, v0);
     uv.needsUpdate = true;
+    const material = this.roomContext.photoMaterial;
+    const texture = this.world.photos.textureOf(pet);
+    if (material.map !== texture) {
+      material.map = texture;
+      material.needsUpdate = true;
+    }
     this.roomContext.frameMaterial?.color.setHex(roomFrameColor(this.world.slots.get(pet.id)?.frame));
 
     disposeText(this.nameText);

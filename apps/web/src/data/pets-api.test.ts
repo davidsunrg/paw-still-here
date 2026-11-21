@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { PetDto } from '@paw/shared';
+import { GALLERY_CAPACITY, type PetDto } from '@paw/shared';
 import { applyGalleryFromApi } from './pets-api';
 import { PETS, replacePets } from './pets';
 
@@ -32,7 +32,7 @@ describe('gallery merge', () => {
   it('replaces only the real slot and keeps deterministic sample IDs elsewhere', () => {
     const real = dto(2);
     applyGalleryFromApi([real]);
-    expect(PETS).toHaveLength(100);
+    expect(PETS).toHaveLength(GALLERY_CAPACITY);
     expect(PETS[2]?.id).toBe(real.id);
     expect(PETS[0]?.id).toBe('pet-sample-1');
     expect(PETS[2]?.canManage).toBe(true);

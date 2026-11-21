@@ -9,6 +9,8 @@ export interface PhotoEntry {
   rotY: number;
   w: number;
   h: number;
+  /** 它在这套图集的第几页 */
+  page: number;
 }
 
 /** 把一批朝向任意的矩形合并进一个几何体 */
@@ -47,81 +49,111 @@ class QuadBatch {
   }
 }
 
+interface PhotoPage {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  texture: THREE.CanvasTexture;
+  quads: QuadBatch;
+  mesh?: THREE.Mesh;
+  firstEntry: number;
+}
+
 /**
- * 所有宠物照片共用一张图集和一个网格：
- * 每只宠物在图集里占一格，照片墙上的相框和纪念角里的照片都引用同一格。
+ * 所有宠物照片共用一套分页图集：每页 10×10 格，照片墙和纪念角都引用同一格。
+ * 超过一页（100 只）时自动开下一页，容量只受图片数量限制。
  */
 export class PhotoBatch {
   static readonly CELL = 204;
   static readonly COLS = 10;
   static readonly SIZE = 2048;
+  static readonly PER_PAGE = PhotoBatch.COLS * Math.floor(PhotoBatch.SIZE / PhotoBatch.CELL);
 
   readonly entries: PhotoEntry[] = [];
-  mesh?: THREE.Mesh;
-  private quads = new QuadBatch();
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private texture: THREE.CanvasTexture;
-  private cellOf = new Map<string, number>();
+  readonly meshes: THREE.Mesh[] = [];
+  private pages: PhotoPage[] = [];
+  private cellOf = new Map<string, { page: number; index: number }>();
   /** 每一格现在属于哪只宠物：照片异步加载回来时，避免旧照片盖住新宠物 */
   private owner: string[] = [];
 
   constructor(pets: Pet[]) {
-    [this.canvas, this.ctx] = makeCanvas(PhotoBatch.SIZE, PhotoBatch.SIZE);
-    this.texture = canvasTexture(this.canvas);
-    const { CELL, COLS } = PhotoBatch;
     pets.forEach((pet, i) => {
-      this.cellOf.set(pet.id, i);
+      const at = PhotoBatch.location(i);
+      const page = this.ensurePage(at.page);
+      this.cellOf.set(pet.id, at);
       this.owner[i] = pet.id;
-      const x = (i % COLS) * CELL;
-      const y = Math.floor(i / COLS) * CELL;
-      drawPortrait(this.ctx, x, y, CELL, pet);
-      if (pet.photoUrl) this.loadPhoto(pet.photoUrl, x, y, i, pet.id);
+      const { x, y } = PhotoBatch.rect(at.index);
+      drawPortrait(page.ctx, x, y, PhotoBatch.CELL, pet);
+      if (pet.photoUrl) this.loadPhoto(at, pet.photoUrl, i, pet.id);
     });
   }
 
+  private static location(index: number) {
+    return { page: Math.floor(index / PhotoBatch.PER_PAGE), index: index % PhotoBatch.PER_PAGE };
+  }
+
+  private static rect(index: number) {
+    const { CELL, COLS } = PhotoBatch;
+    return { x: (index % COLS) * CELL, y: Math.floor(index / COLS) * CELL };
+  }
+
+  private ensurePage(pageIndex: number) {
+    while (this.pages.length <= pageIndex) {
+      const [canvas, ctx] = makeCanvas(PhotoBatch.SIZE, PhotoBatch.SIZE);
+      this.pages.push({ canvas, ctx, texture: canvasTexture(canvas), quads: new QuadBatch(), firstEntry: -1 });
+    }
+    return this.pages[pageIndex]!;
+  }
+
   /** 真实照片加载完成后，以「裁剪填满」的方式覆盖占位画像 */
-  private loadPhoto(url: string, x: number, y: number, index: number, ownerId: string) {
+  private loadPhoto(at: { page: number; index: number }, url: string, globalIndex: number, ownerId: string) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      if (this.owner[index] !== ownerId) return;
+      if (this.owner[globalIndex] !== ownerId) return;
+      const page = this.pages[at.page];
+      if (!page) return;
       const { CELL } = PhotoBatch;
+      const { x, y } = PhotoBatch.rect(at.index);
       const s = Math.min(img.width, img.height);
-      this.ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, x, y, CELL, CELL);
-      this.texture.needsUpdate = true;
+      page.ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, x, y, CELL, CELL);
+      page.texture.needsUpdate = true;
     };
     img.src = url;
   }
 
   /** 换掉某一格：先画占位画像，再把新照片异步盖上去 */
   replace(slot: number, oldId: string, pet: Pet) {
-    const index = this.cellOf.get(oldId) ?? slot;
-    const { CELL, COLS } = PhotoBatch;
-    const x = (index % COLS) * CELL;
-    const y = Math.floor(index / COLS) * CELL;
+    const at = this.cellOf.get(oldId);
+    if (!at) return;
+    const page = this.pages[at.page];
+    if (!page) return;
+    const { x, y } = PhotoBatch.rect(at.index);
     this.cellOf.delete(oldId);
-    this.cellOf.set(pet.id, index);
-    this.owner[index] = pet.id;
-    drawPortrait(this.ctx, x, y, CELL, pet);
-    this.texture.needsUpdate = true;
+    this.cellOf.set(pet.id, at);
+    this.owner[slot] = pet.id;
+    drawPortrait(page.ctx, x, y, PhotoBatch.CELL, pet);
+    page.texture.needsUpdate = true;
     const entry = this.entries.find((e) => e.pet.id === oldId);
     if (entry) entry.pet = pet;
-    if (pet.photoUrl) this.loadPhoto(pet.photoUrl, x, y, index, pet.id);
+    if (pet.photoUrl) this.loadPhoto(at, pet.photoUrl, slot, pet.id);
   }
 
-  /** 图集纹理，纪念角里的照片也用它 */
+  /** 第一页的纹理；纪念角打开时会按宠物切到它所在的页 */
   get map() {
-    return this.texture;
+    return this.pages[0]!.texture;
   }
 
-  /** 某只宠物在图集里的范围：[u0, vBottom, u1, vTop] */
-  uvOf(pet: Pet): [number, number, number, number] {
+  /** 这只宠物所在的图集页纹理 */
+  textureOf(pet: Pet): THREE.CanvasTexture {
+    const at = this.cellOf.get(pet.id);
+    return (at ? this.pages[at.page] : this.pages[0])!.texture;
+  }
+
+  private uvAt(at: { page: number; index: number }): [number, number, number, number] {
     const { CELL, COLS, SIZE } = PhotoBatch;
-    const i = this.cellOf.get(pet.id) ?? 0;
     const inset = 2;
-    const cx = (i % COLS) * CELL;
-    const cy = Math.floor(i / COLS) * CELL;
+    const cx = (at.index % COLS) * CELL;
+    const cy = Math.floor(at.index / COLS) * CELL;
     return [
       (cx + inset) / SIZE,
       1 - (cy + CELL - inset) / SIZE,
@@ -130,29 +162,44 @@ export class PhotoBatch {
     ];
   }
 
+  /** 某只宠物在图集里的范围：[u0, vBottom, u1, vTop] */
+  uvOf(pet: Pet): [number, number, number, number] {
+    return this.uvAt(this.cellOf.get(pet.id) ?? { page: 0, index: 0 });
+  }
+
   add(pet: Pet, center: THREE.Vector3, rotY: number, w: number, h: number) {
-    this.quads.quad(center, rotY, w, h, this.uvOf(pet));
-    this.entries.push({
+    const at = this.cellOf.get(pet.id) ?? { page: 0, index: 0 };
+    const page = this.ensurePage(at.page);
+    if (page.firstEntry < 0) page.firstEntry = this.entries.length;
+    page.quads.quad(center, rotY, w, h, this.uvAt(at));
+    const entry: PhotoEntry = {
       pet,
       center: center.clone(),
       normal: new THREE.Vector3(Math.sin(rotY), 0, Math.cos(rotY)),
       rotY,
       w,
       h,
-    });
-    return this.entries[this.entries.length - 1];
+      page: at.page,
+    };
+    this.entries.push(entry);
+    return entry;
   }
 
   build(parent: THREE.Object3D) {
-    const mat = new THREE.MeshBasicMaterial({ map: this.texture, color: 0xd8d2cc });
-    this.mesh = new THREE.Mesh(this.quads.geometry(), mat);
-    this.mesh.frustumCulled = false;
-    parent.add(this.mesh);
+    for (const page of this.pages) {
+      const mat = new THREE.MeshBasicMaterial({ map: page.texture, color: 0xd8d2cc });
+      page.mesh = new THREE.Mesh(page.quads.geometry(), mat);
+      page.mesh.frustumCulled = false;
+      parent.add(page.mesh);
+      this.meshes.push(page.mesh);
+    }
   }
 
-  /** 由射线命中的三角面序号反查是哪张照片 */
-  entryOfFace(faceIndex: number) {
-    return this.entries[Math.floor(faceIndex / 2)];
+  /** 由射线命中的图集页和三角面序号反查是哪张照片 */
+  entryOfFace(mesh: THREE.Mesh, faceIndex: number) {
+    const page = this.pages.find((p) => p.mesh === mesh);
+    if (!page || page.firstEntry < 0) return undefined;
+    return this.entries[page.firstEntry + Math.floor(faceIndex / 2)];
   }
 }
 

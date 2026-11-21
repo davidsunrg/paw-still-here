@@ -333,8 +333,8 @@ export const CONFIG = {
     colors: [0x8fa7bf, 0xb99aa6, 0x9bb59a, 0xc2ad8a, 0xa69bc0, 0x8fb3b0, 0xc09a86, 0x9aa0a8],
   },
 
-  /** 宠物数量（上限 100，受照片图集大小限制） */
-  petCount: 96,
+  /** 示例宠物数量：离线时铺满整面墙；在线时用它填满 126 个空格 */
+  petCount: 126,
 
   sky: {
     stars: 2600,

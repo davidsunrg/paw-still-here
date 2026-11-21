@@ -1,3 +1,4 @@
+import { GALLERY_CAPACITY } from '@paw/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { createPetService } from './service';
 import type { PetRepository } from './repository';
@@ -55,7 +56,7 @@ describe('pet slot allocation', () => {
     const service = createPetService(repo, uploads);
     expect(service.findFreeSlot([0, 2])).toBe(1);
     expect(service.findFreeSlot([0, 1, 2])).toBe(3);
-    expect(service.findFreeSlot(Array.from({ length: 100 }, (_, i) => i))).toBeNull();
+    expect(service.findFreeSlot(Array.from({ length: GALLERY_CAPACITY }, (_, i) => i))).toBeNull();
   });
 });
 
@@ -88,7 +89,7 @@ describe('pet creation and updates', () => {
   });
 
   it('rejects gallery_full before writing when every slot is occupied', async () => {
-    const { repo, uploads } = repositories(Array.from({ length: 100 }, (_, i) => ({ pet: row(`pet-${i}`, i) })));
+    const { repo, uploads } = repositories(Array.from({ length: GALLERY_CAPACITY }, (_, i) => ({ pet: row(`pet-${i}`, i) })));
     const service = createPetService(repo, uploads);
     await expect(service.create('owner', { name: 'No space', species: 'bird' })).rejects.toMatchObject({ code: 'gallery_full' });
     expect(repo.insertWithPhotos).not.toHaveBeenCalled();

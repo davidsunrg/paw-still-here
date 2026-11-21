@@ -1,4 +1,4 @@
-export const GALLERY_CAPACITY = 100 as const;
+export const GALLERY_CAPACITY = 126 as const;
 
 export const SPECIES = ['cat', 'dog', 'rabbit', 'hamster', 'bird'] as const;
 export type Species = (typeof SPECIES)[number];
@@ -18,7 +18,7 @@ export const LETTER_MAX = 300;
 export const LETTERS_PER_DAY = 5;
 
 /** 大厅 A/B 区每区格数，与前端 CONFIG 一致 */
-export const SECTION_CELLS = [60, 40] as const;
+export const SECTION_CELLS = [60, 66] as const;
 export const SECTIONS = ['A', 'B'] as const;
 export type GallerySection = (typeof SECTIONS)[number];
 

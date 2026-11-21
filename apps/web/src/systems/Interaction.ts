@@ -91,7 +91,7 @@ export class Interaction {
     );
     this.highlight.visible = false;
     world.scene.add(this.highlight);
-    this.targets = [world.photos.mesh!, ...world.interactables.map((i) => i.object)];
+    this.targets = [...world.photos.meshes, ...world.interactables.map((i) => i.object)];
   }
 
   pick(clientX: number, clientY: number): Hit | null {
@@ -111,8 +111,8 @@ export class Interaction {
       if (c.tall && segmentHits(c, o.x, o.z, ex, ez)) return null;
     }
 
-    if (hit.object === this.world.photos.mesh) {
-      const entry = this.world.photos.entryOfFace(hit.faceIndex ?? 0);
+    if (this.world.photos.meshes.includes(hit.object as THREE.Mesh)) {
+      const entry = this.world.photos.entryOfFace(hit.object as THREE.Mesh, hit.faceIndex ?? 0);
       if (!entry || reach > CONFIG.player.walkRange) return null;
       return { kind: 'pet', entry, label: `${entry.pet.name} · ${STR.tipPet}`, far: reach > CONFIG.player.reachPhoto };
     }
