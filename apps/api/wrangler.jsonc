@@ -16,7 +16,8 @@
   "r2_buckets": [
     {
       "binding": "BUCKET",
-      "bucket_name": "paw-public"
+      "bucket_name": "paw-public",
+      "remote": true
     }
   ],
    "kv_namespaces": [
