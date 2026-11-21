@@ -8,6 +8,7 @@ import { flowerStem, letter, toy } from './gifts';
 import {
   buildBall,
   buildBalloons,
+  buildAromaCandle,
   buildBook,
   buildBowls,
   buildCabinet,
@@ -15,7 +16,6 @@ import {
   buildCup,
   buildCushion,
   buildFloorLamp,
-  buildJarTreat,
   buildPendant,
   buildPetBed,
   buildPhotoFrame,
@@ -24,7 +24,6 @@ import {
   buildRoundRug,
   buildShelf,
   buildSofa,
-  buildTreatJar,
   buildVase,
   buildWindow,
   place,
@@ -37,6 +36,8 @@ const S = CONFIG.shrine;
 const LAYOUT = S.layout;
 const FLOOR = -S.y;
 const POP_TIME = 0.48;
+const CANDLE_PULSE = 0.55;
+const CANDLE_FLAME = new THREE.Color(0xffb45a);
 
 export type ShrineHit = 'letter' | 'niche' | null;
 
@@ -65,7 +66,6 @@ export class Shrine {
   private mainFlowers = new THREE.Group();
   private tableFlowers = new THREE.Group();
   private tableVase = new THREE.Group();
-  private jarContents = new THREE.Group();
   private toys = new THREE.Group();
   private bowls: THREE.Group;
   private balloons: THREE.Group;
@@ -78,6 +78,7 @@ export class Shrine {
   private fakeShadows: THREE.Mesh[] = [];
   private sun: THREE.DirectionalLight;
   private time = 0;
+  private candlePulse = 0;
   private ray = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
 
@@ -113,7 +114,6 @@ export class Shrine {
     this.roomContext = {
       photoMaterial: new THREE.MeshBasicMaterial({ map: world.photos.map, color: 0xffffff }),
       albumPhotos: [],
-      stringBulbs: [],
     };
 
     const shell = buildRoomShell(this.roomContext);
@@ -142,6 +142,7 @@ export class Shrine {
       place(buildFloorLamp(this.roomContext), LAYOUT.floorLamp, FLOOR),
       place(buildShelf(this.roomContext, S.shelf.lowerW), LAYOUT.shelfLower, FLOOR),
       place(buildShelf(this.roomContext, S.shelf.upperW), LAYOUT.shelfUpper, FLOOR),
+      place(buildAromaCandle(this.roomContext), LAYOUT.candle, FLOOR),
       place(buildPlant(this.roomContext), LAYOUT.plant, FLOOR),
       place(buildPhotoFrame(this.roomContext, 0.2), LAYOUT.shelfPhotoA, FLOOR),
       place(buildPhotoFrame(this.roomContext, 0.18), LAYOUT.shelfPhotoB, FLOOR),
@@ -159,9 +160,6 @@ export class Shrine {
 
     place(this.letters, LAYOUT.letters, FLOOR);
     this.root.add(this.letters, this.toys);
-    const jar = place(buildTreatJar(this.roomContext), LAYOUT.snackJar, FLOOR);
-    jar.add(this.jarContents);
-    this.root.add(jar);
 
     // 两盏局部点光属于这间场景，不借用 world.pointLight，也不开阴影
     const floorLamp = new THREE.PointLight(0xffd0a0, S.light.floorLamp, 4.5, 2);
@@ -201,6 +199,7 @@ export class Shrine {
 
   open(entry: PhotoEntry) {
     this.entry = entry;
+    this.candlePulse = 0;
     this.setPet(entry.pet);
     this.rebuild();
     this.root.updateMatrixWorld(true);
@@ -210,12 +209,18 @@ export class Shrine {
   close() {
     this.entry = null;
     this.pops.length = 0;
+    this.candlePulse = 0;
   }
 
   /** 新礼物在所属位置轻轻弹出，不再从照片上方落下 */
   drop(kind: OfferKind) {
     if (!this.entry) return;
     this.rebuild();
+    // 蜡烛永远只有一只：每次送礼只让同一只火苗跳亮，不走新增物件动画
+    if (kind === 'candle') {
+      this.candlePulse = CANDLE_PULSE;
+      return;
+    }
     const list = this.placed[kind];
     const o = list[list.length - 1];
     if (!o) return;
@@ -238,6 +243,19 @@ export class Shrine {
     if (!this.entry) return;
     this.time += dt;
     this.balloons.rotation.z = Math.sin(this.time * 0.75) * 0.025;
+    this.candlePulse = Math.max(0, this.candlePulse - dt);
+    const flame = this.roomContext.candleFlame;
+    const glow = this.roomContext.candleGlow;
+    if (flame?.visible && glow) {
+      const flicker = 0.9 + 0.1 * Math.sin(this.time * 9.1) * Math.sin(this.time * 5.3 + 1.2);
+      const boost = this.candlePulse / CANDLE_PULSE;
+      flame.material.color.copy(CANDLE_FLAME).multiplyScalar(1.35 * flicker + 2.1 * boost);
+      flame.scale.set(0.006 * (1 + boost * 0.3), 0.014 * (0.92 + flicker * 0.08 + boost * 0.5), 0.006 * (1 + boost * 0.3));
+      flame.position.x = Math.sin(this.time * 8.3) * 0.0012;
+      glow.material.opacity = 0.14 * flicker + 0.32 * boost;
+      const size = 0.24 + boost * 0.06;
+      glow.scale.set(size, size, 1);
+    }
     for (let i = this.pops.length - 1; i >= 0; i--) {
       const p = this.pops[i];
       p.t = Math.min(1, p.t + dt / POP_TIME);
@@ -304,7 +322,6 @@ export class Shrine {
     this.letters.clear();
     this.mainFlowers.clear();
     this.tableFlowers.clear();
-    this.jarContents.clear();
     this.toys.clear();
     for (const k of Object.keys(this.placed) as OfferKind[]) this.placed[k] = [];
 
@@ -341,20 +358,10 @@ export class Shrine {
       this.placed.toy.push(o);
     });
 
-    gifts.snack.slice(0, caps.snack).forEach((v, i) => {
-      const spot = S.gifts.jarSpots[i % S.gifts.jarSpots.length];
-      const o = buildJarTreat(v + i);
-      o.position.set(spot[0], spot[1], spot[2]);
-      o.rotation.y = i * 1.3;
-      this.jarContents.add(o);
-      this.placed.snack.push(o);
-    });
-
-    const lit = Math.min(counts.candle, caps.candle);
-    this.roomContext.stringBulbs.forEach((slot, i) => {
-      slot.mesh.material = i < lit ? slot.on : slot.off;
-      if (i < lit) this.placed.candle.push(slot.mesh);
-    });
+    const lit = counts.candle > 0;
+    if (this.roomContext.candleFlame) this.roomContext.candleFlame.visible = lit;
+    if (this.roomContext.candleGlow) this.roomContext.candleGlow.visible = lit;
+    if (lit && this.roomContext.candleFlame) this.placed.candle.push(this.roomContext.candleFlame);
 
     const n = Math.min(counts.letter, caps.letter);
     for (let i = 0; i < n; i++) {

@@ -127,8 +127,8 @@ export const CONFIG = {
       floorLamp: { at: [2.34, 0, -0.82] as [number, number, number], yaw: 0, scale: 1 },
       shelfLower: { at: [-1.72, 1.35, -1.76] as [number, number, number], yaw: 0, scale: 1 },
       shelfUpper: { at: [-1.72, 1.9, -1.76] as [number, number, number], yaw: 0, scale: 1 },
+      candle: { at: [-1.15, 1.39, -1.63] as [number, number, number], yaw: 0, scale: 1 },
       plant: { at: [-2.05, 1.94, -1.66] as [number, number, number], yaw: 0, scale: 1 },
-      snackJar: { at: [-1.32, 1.39, -1.63] as [number, number, number], yaw: 0, scale: 1 },
       shelfPhotoA: { at: [-1.8, 1.39, -1.65] as [number, number, number], yaw: -0.06, scale: 1 },
       shelfPhotoB: { at: [-1.48, 1.94, -1.65] as [number, number, number], yaw: 0.08, scale: 1 },
       window: { at: [0, 0, -1.77] as [number, number, number], yaw: 0, scale: 1 },
@@ -138,7 +138,7 @@ export const CONFIG = {
     sofa: { w: 1.7 },
     bed: { radius: 0.58 },
     floorLamp: { h: 1.72 },
-    window: { w: 1.65, h: 1.45, y: 1.65 },
+    window: { w: 1.65, h: 1.45, y: 1.65, stringBulbs: 6 },
     shelf: { lowerW: 1.18, upperW: 1.02, d: 0.25 },
     /** 灰绿墙、深红棕地板、米白布料、蜂蜜木；橙色只用于靠垫、气球等小面积 */
     palette: {
@@ -159,7 +159,7 @@ export const CONFIG = {
     /** 独立场景的环境反射、背景与雾；HDR 仅在开发环境替换 RoomEnvironment */
     environment: { env: 0.35, background: 0x53645d, fogNear: 9, fogFar: 22 },
     /** 只让太阳、灯泡和灯罩轻微发光，墙和布料自身不超过 1 */
-    glow: { sun: 1.04, shade: 1.02, bulbs: 1.28 },
+    glow: { sun: 1.04, shade: 1.02, bulbs: 1.65 },
     /** 独立灯光：环境光、半球光、窗口平行光、落地灯与吊灯；主光从背墙窗户方向射入 */
     light: {
       ambient: 0.12,
@@ -174,10 +174,9 @@ export const CONFIG = {
     gifts: {
       mainVase: 10,
       toySpots: [[1.02, 0, 0.62], [1.58, 0, 0.58], [1.96, 0, 0.02], [0.94, 0, -0.12]] as Array<[number, number, number]>,
-      jarSpots: [[-0.045, 0.035, 0], [0.04, 0.04, 0.015], [-0.025, 0.09, -0.02], [0.035, 0.095, -0.015]] as Array<[number, number, number]>,
     },
-    /** 每类礼物最多摆出多少件实物，超过后不再增加模型 */
-    caps: { flower: 14, candle: 6, snack: 4, toy: 4, letter: 5 },
+    /** 可摆放礼物的数量上限；candle 和 snack 只由 store 与礼物栏计数，不占这里的摆放名额 */
+    caps: { flower: 14, toy: 4, letter: 5 },
     /** 相册：sample 是示例宠物各有几张，variants 是程序占位画像的画法数量 */
     album: {
       sample: [2, 4] as [number, number],

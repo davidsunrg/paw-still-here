@@ -127,13 +127,13 @@ export const en = {
   riverToastPlain: 'Your lantern is on the water, glowing',
 
   giftFlower: 'Flower',
-  giftCandle: 'Little light',
+  giftCandle: 'Candle',
   giftSnack: 'Treat',
   giftToy: 'Toy',
   giftLetter: 'Letter',
   giftToast: {
     flower: (name: string) => `You left a flower for ${name}`,
-    candle: (name: string) => `You lit a little light in ${name}'s room`,
+    candle: (name: string) => `You brightened the candle in ${name}'s room`,
     snack: (name: string) => `You brought ${name} a treat`,
     toy: (name: string) => `You brought ${name} a toy`,
     letter: (name: string) => `Your letter is now beside ${name}`,

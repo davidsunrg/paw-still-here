@@ -2,16 +2,10 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config';
-import { canvasTexture, makeCanvas } from './textures';
+import { canvasTexture, glowTexture, makeCanvas } from './textures';
 
 const S = CONFIG.shrine;
 const P = S.palette;
-
-export interface BulbSlot {
-  mesh: THREE.Mesh;
-  on: THREE.Material;
-  off: THREE.Material;
-}
 
 export interface RoomContext {
   /** 茶几主照片使用主场景已经加载好的宠物 atlas */
@@ -20,8 +14,9 @@ export interface RoomContext {
   frameMaterial?: THREE.MeshStandardMaterial;
   /** 两块搁板小相框各有独立材质，换宠物时换成相册里的其他照片 */
   albumPhotos: THREE.MeshBasicMaterial[];
-  /** 窗帘杆上的六只灯，蜡烛数只控制它们，不再出现蜡烛模型 */
-  stringBulbs: BulbSlot[];
+  /** 唯一的香薰蜡烛：罐子常驻，火苗和光晕按是否收到过蜡烛显示 */
+  candleFlame?: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  candleGlow?: THREE.Sprite;
 }
 
 type Vec3 = [number, number, number];
@@ -235,7 +230,6 @@ interface Materials {
   sky: THREE.MeshBasicMaterial;
   sun: THREE.MeshBasicMaterial;
   bulbOn: THREE.MeshBasicMaterial;
-  bulbOff: THREE.MeshStandardMaterial;
 }
 
 const MATERIAL_CACHE = new WeakMap<RoomContext, Materials>();
@@ -285,7 +279,6 @@ function materials(ctx: RoomContext): Materials {
     sky: luminous(0xffffff, 0.94, sunsetTexture()),
     sun: luminous(0xffdf9e, S.glow.sun),
     bulbOn: luminous(0xffd19a, S.glow.bulbs),
-    bulbOff: surface(0x9a927f, 0.85),
   };
   MATERIAL_CACHE.set(ctx, made);
   return made;
@@ -364,15 +357,14 @@ export function buildWindow(ctx: RoomContext) {
     p.add(curtain, m.curtain, [cx, y + 0.06, 0.15]);
     for (let i = 0; i < 5; i++) p.add(new THREE.TorusGeometry(0.019, 0.004, 6, 16), m.brass, [cx - panelW * 0.4 + i * panelW * 0.2, rodY - 0.018, 0.12]);
   }
-  // 灯串是礼物状态的一部分：默认全部暗着，由 Shrine 按 candle 数量换材质
+  // 普通装饰灯串：数量和点亮状态都与礼物无关，始终暖暖地亮着
   p.add(new THREE.CylinderGeometry(0.003, 0.003, w + 0.42, 8), m.woodDark, [0, rodY + 0.035, 0.13], [1, 1, 1], [0, 0, Math.PI / 2]);
-  for (let i = 0; i < S.caps.candle; i++) {
-    const x = -w * 0.43 + (i / (S.caps.candle - 1)) * w * 0.86;
+  for (let i = 0; i < S.window.stringBulbs; i++) {
+    const x = -w * 0.43 + (i / (S.window.stringBulbs - 1)) * w * 0.86;
     p.beam(m.woodDark, [x, rodY + 0.035, 0.13], [x, rodY - 0.025, 0.13], 0.0025, 6);
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.024, 18, 12), m.bulbOff);
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.03, 20, 14), m.bulbOn);
     bulb.position.set(x, rodY - 0.04, 0.13);
     bulb.renderOrder = 11;
-    ctx.stringBulbs.push({ mesh: bulb, on: m.bulbOn, off: m.bulbOff });
     p.mesh(bulb);
   }
   return p.finish();
@@ -548,6 +540,40 @@ export function buildFloorLamp(ctx: RoomContext) {
   return p.finish();
 }
 
+/** 唯一的香薰蜡烛：直径 8 厘米、高 9 厘米的玻璃罐，短烛芯和小火苗 */
+export function buildAromaCandle(ctx: RoomContext) {
+  const m = materials(ctx);
+  const p = new Parts();
+  const wax = surface(0xffdfb0, 0.96);
+  p.add(new THREE.CylinderGeometry(0.04, 0.038, 0.09, 36, 1, true), m.glass, [0, 0.045, 0]);
+  p.add(new THREE.CylinderGeometry(0.038, 0.038, 0.008, 36), m.glass, [0, 0.004, 0]);
+  p.add(new THREE.TorusGeometry(0.04, 0.0035, 8, 36), m.glass, [0, 0.09, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
+  p.add(new THREE.CylinderGeometry(0.034, 0.034, 0.064, 36), wax, [0, 0.04, 0]);
+  p.add(new THREE.CylinderGeometry(0.0014, 0.0014, 0.012, 8), m.woodDark, [0, 0.078, 0]);
+  const group = p.finish();
+
+  const flameMaterial = luminous(0xffb45a, 1.35);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), flameMaterial);
+  flame.position.set(0, 0.098, 0);
+  flame.scale.set(0.006, 0.014, 0.006);
+  flame.renderOrder = 11;
+  flame.visible = false;
+  group.add(flame);
+  ctx.candleFlame = flame;
+
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), color: 0xffbd72, transparent: true, opacity: 0.16,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  glow.position.set(0, 0.065, 0);
+  glow.scale.set(0.24, 0.24, 1);
+  glow.renderOrder = 11;
+  glow.visible = false;
+  group.add(glow);
+  ctx.candleGlow = glow;
+  return group;
+}
+
 /** 沙发上方的木搁板，带两三本随意摆放的书 */
 export function buildShelf(ctx: RoomContext, width: number) {
   const m = materials(ctx);
@@ -579,53 +605,6 @@ export function buildPlant(ctx: RoomContext) {
   }
   for (const x of [-0.07, 0.02, 0.08]) p.add(new THREE.SphereGeometry(1, 18, 12), m.leaf, [x, 0.23, 0], [0.045, 0.09, 0.025], [0.2, 0, x * 5]);
   return p.finish();
-}
-
-/** 搁板上的玻璃零食罐，内容物由 Shrine 按 store 添加 */
-export function buildTreatJar(ctx: RoomContext) {
-  const m = materials(ctx);
-  const p = new Parts();
-  p.add(new THREE.CylinderGeometry(0.11, 0.105, 0.27, 40, 1, true), m.glass, [0, 0.14, 0]);
-  p.add(new THREE.CylinderGeometry(0.105, 0.105, 0.012, 40), m.glass, [0, 0.006, 0]);
-  p.add(new THREE.TorusGeometry(0.108, 0.009, 10, 40), m.brass, [0, 0.275, 0], [1, 1, 1], [Math.PI / 2, 0, 0]);
-  return p.finish();
-}
-
-/** 罐内的小饼干，替代罐头和餐盘，四份礼物能逐层填满罐底 */
-const TREAT_GEOMETRY = {
-  bone: new THREE.CapsuleGeometry(0.012, 0.055, 4, 10),
-  end: new THREE.SphereGeometry(0.017, 12, 8),
-  biscuit: new THREE.CylinderGeometry(0.038, 0.038, 0.018, 18),
-};
-const TREAT_MATERIALS = [
-  new THREE.MeshStandardMaterial({ color: 0xb98351, roughness: 0.92 }),
-  new THREE.MeshStandardMaterial({ color: 0xc99b62, roughness: 0.92 }),
-];
-
-export function buildJarTreat(variant: number) {
-  const material = TREAT_MATERIALS[variant % 2];
-  const group = new THREE.Group();
-  if (variant % 3 === 0) {
-    const bone = new THREE.Mesh(TREAT_GEOMETRY.bone, material);
-    bone.rotation.z = Math.PI / 2;
-    group.add(bone);
-    for (const x of [-0.038, 0.038]) for (const z of [-0.012, 0.012]) {
-      const end = new THREE.Mesh(TREAT_GEOMETRY.end, material);
-      end.position.set(x, 0, z);
-      group.add(end);
-    }
-  } else {
-    const biscuit = new THREE.Mesh(TREAT_GEOMETRY.biscuit, material);
-    biscuit.rotation.x = Math.PI / 2;
-    group.add(biscuit);
-  }
-  group.traverse((o) => {
-    if (o instanceof THREE.Mesh) {
-      o.castShadow = true;
-      o.receiveShadow = true;
-    }
-  });
-  return group;
 }
 
 /** 窗边一小束气球，原点为系绳处；整组轻轻摆动 */
