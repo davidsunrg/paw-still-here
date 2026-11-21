@@ -48,7 +48,7 @@ composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window
 composer.addPass(new OutputPass());
 
 // ---------- 世界、玩家与各系统 ----------
-const world = new World(scene);
+const world = new World(scene, renderer);
 const player = new Player(camera, canvas, world.colliders);
 const audio = new AudioSystem();
 const guide = new Guide(scene);
@@ -243,14 +243,19 @@ function frameOf(pet: Pet) {
 
 // ---------- 单宠物视角 ----------
 let selfShow = 1;
-/** 镜头离它的角落多远，才能把桌子和墙上的照片都框进画面 */
+/** 镜头站在小屋门口：按背墙需要的取景距离计算，再换算成离房间中心多远 */
 function shrineDistance() {
-  const { table, view } = CONFIG.shrine;
+  const { room, view } = CONFIG.shrine;
   const t = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
   const aspect = window.innerWidth / window.innerHeight;
-  const byHeight = view.body[1] / view.fill[1] / t;
-  const byWidth = view.body[0] / view.fill[0] / (t * aspect);
-  return Math.max(byHeight, byWidth) + table.d / 2;
+  const portrait = aspect < 0.75;
+  const body = portrait ? view.mobileBody : view.body;
+  const fill = portrait ? view.mobileFill : view.fill;
+  const byHeight = body[1] / fill[1] / t;
+  const byWidth = body[0] / fill[0] / (t * aspect);
+  // body 描述的是背墙，而镜头绕着房间中心转； doorway 防止为了凑宽度退到前墙之外
+  const doorway = portrait ? view.mobileDoorway : view.doorway;
+  return Math.max(room.d * doorway, Math.max(byHeight, byWidth) - room.d / 2);
 }
 
 /** 画面暗着的时候：布置成这只宠物的角落，镜头直接切到它正前方，小人和其他访客藏起来 */

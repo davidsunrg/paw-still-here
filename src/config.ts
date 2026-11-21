@@ -81,26 +81,82 @@ export const CONFIG = {
   },
 
   /**
-   * 单宠物视角：点击相框后画面暗一下，来到它自己的小角落——靠墙的一张木头边桌，
-   * 墙上挂着它的照片，桌上摆着大家留下的东西。全馆只有这一个角落，打开哪只宠物就换成它的照片和礼物。
+   * 单宠物视角：点击相框后画面暗一下，从门口看见它自己的温馨小屋。
+   * 房间坐标以地板中心为基准，+Z 朝门口；下面 layout 的 y 则以每件东西的落地点为基准。
+   * 全馆只有这一间屋子，打开哪只宠物就换成它的照片、相框颜色、墙上的名字和礼物。
    */
   shrine: {
-    /** 桌子：宽、进深、桌面离地多高 */
-    table: { w: 1.5, d: 0.5, h: 0.76 },
-    /** 墙上那张照片的边长（比照片墙上的大一点）、中心离地多高 */
-    photo: 0.6,
-    photoY: 1.6,
-    /** 镜头对准的高度：大约在桌面和照片之间 */
-    y: 1.26,
-    /** 镜头怎么取景：body 是要框进画面的宽、高（桌子到照片顶），占画面宽 / 高的多少（fill） */
-    view: { body: [1.7, 1.34] as [number, number], fill: [0.86, 0.56] as [number, number] },
+    /** 房间内部的宽、进深、高（米）；前墙整个去掉，镜头在门口往里看 */
+    room: { w: 4.8, d: 3.2, h: 2.9 },
+    /** 矮柜：宽、进深、柜面离地多高；所有礼物以柜面中心为锚点摆放 */
+    cabinet: { w: 1.5, d: 0.48, h: 0.72 },
+    /** 主照片边长、照片中心和墙上手写名字的中心离地多高（米） */
+    photo: 0.62,
+    photoY: 1.56,
+    nameY: 2.2,
+    /** 镜头对准的高度：大约在柜面和照片之间 */
+    y: 1.32,
     /**
-     * 周围的布景：暗幕（墙和地面）的颜色；墙上、地上两团暖光的颜色和亮度（0–1）；
-     * 空气里的微尘有多少粒、多亮、往上飘多快（米/秒）。微尘只在高画质下出现。
+     * 取景：body 是背墙在画面中要占的宽、高，fill 是占视口的比例；mobileBody 用在竖屏。
+     * 竖屏按背墙约 1.6 米宽取景，照片、名字、矮柜和礼物都保持在中央安全区内。
      */
-    stage: { color: 0x17100b, glow: 0xffb878, wallGlow: 0.15, floorGlow: 0.1, dust: 34, dustGlow: 0.5, dustSpeed: 0.035 },
-    /** 这个角落自己那盏灯的亮度 */
-    light: 1.3,
+    view: {
+      body: [4.7, 2.75] as [number, number],
+      fill: [0.9, 0.8] as [number, number],
+      mobileBody: [1.6, 2.65] as [number, number],
+      mobileFill: [0.94, 0.68] as [number, number],
+      /** 桌面 / 竖屏镜头最少离房间中心多远（占进深的比例）：站在去掉前墙的门口 */
+      doorway: 0.62,
+      mobileDoorway: 0.46,
+    },
+    /**
+     * 家具布置表：at 是 [x, y, z]，yaw 是绕竖直轴的朝向，scale 是整体缩放。
+     * 每个 at 都对应一件函数模型的落地原点；以后换 GLB 时沿用同一项即可。
+     * 矮柜的礼物和铜牌跟着 cabinet 走；plant 的落地点是搁板面，不是地板。
+     */
+    layout: {
+      cabinet: { at: [0, 0, -1.32] as [number, number, number], yaw: 0, scale: 1 },
+      rug: { at: [-1.43, 0, -0.65] as [number, number, number], yaw: 0, scale: 1 },
+      bed: { at: [-1.43, 0, -0.65] as [number, number, number], yaw: -0.18, scale: 1 },
+      bowls: { at: [-0.75, 0, -0.2] as [number, number, number], yaw: 0.24, scale: 1 },
+      ball: { at: [-0.72, 0, -0.52] as [number, number, number], yaw: 0.4, scale: 1 },
+      floorLamp: { at: [1.86, 0, -0.92] as [number, number, number], yaw: 0, scale: 1 },
+      shelf: { at: [1.22, 0, -1.57] as [number, number, number], yaw: 0, scale: 1 },
+      window: { at: [-2.37, 0, -0.75] as [number, number, number], yaw: Math.PI / 2, scale: 1 },
+      plant: { at: [1.46, 1.41, -1.5] as [number, number, number], yaw: 0, scale: 1 },
+    },
+    /** 宠物窝外径、落地灯总高；搁板和窗的宽度 / 高度 / 中心高度 */
+    bed: { radius: 0.58 },
+    floorLamp: { h: 1.72 },
+    shelf: { w: 1.08, d: 0.24, y: 1.35 },
+    window: { w: 1.25, h: 1.35, y: 1.6 },
+    /**
+     * 三种主色和一个点缀色：灰绿墙、蜂蜜木、米白织物，陶土红只用于小面积。
+     * wallLow 是墙裙的浅灰绿，leaf 只用于植物，brass 用于柜脚小五金和铜牌。
+     */
+    palette: {
+      wall: 0xa9bdb0,
+      wallLow: 0xc7d0c0,
+      ceiling: 0xeee7d8,
+      wood: 0xc18d58,
+      woodDark: 0x825c3d,
+      floor: 0xd0a572,
+      fabric: 0xeee3cf,
+      fabricShade: 0xd8c9ae,
+      accent: 0xbf725b,
+      brass: 0xb39256,
+      leaf: 0x638269,
+      curtain: 0xf1e5cf,
+    },
+    /** RoomEnvironment 只赋给小屋自己的 PBR 材质；env 是环境反射强度 */
+    environment: { env: 0.5 },
+    /** 自发光强度：窗景不超过 1，灯罩临界微亮，只有小灯泡保留明显但局部的辉光 */
+    glow: { window: 0.94, shade: 1.02, bulbs: 1.4 },
+    /** 暗幕只挡房间缝隙外的大厅；微尘数量、亮度和上升速度（高画质才有微尘） */
+    stage: { color: 0x131916, glow: 0xffd6a0, dust: 24, dustGlow: 0.28, dustSpeed: 0.025 },
+    /** 落地灯和窗口补光的强度；其余亮度由每件材质自己的环境贴图均匀提供 */
+    light: 1,
+    windowLight: 0.75,
     /** 每类礼物最多摆出多少件实物，超过后不再增加模型 */
     caps: { flower: 14, candle: 6, snack: 4, toy: 4, letter: 5 },
     /**

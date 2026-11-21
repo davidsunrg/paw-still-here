@@ -475,13 +475,24 @@ body.touch #joystick {
 #detail blockquote::after {
   content: '\201D';
 }
-/* 看纪念角时四角压暗一点，视线收到中间 */
+/* 明亮小屋里沿用浮字，但换成深暖灰，避免白字消失在墙色里 */
+body.in-shrine #detail {
+  text-shadow: 0 1px 8px rgba(255, 250, 238, 0.8);
+}
+body.in-shrine #detail h2 {
+  color: #5a4638;
+}
+body.in-shrine #detail .meta,
+body.in-shrine #detail blockquote {
+  color: #695c50;
+}
+/* 小屋本身明亮通透，只用很轻的边缘暗角把视线收到中间 */
 #shrine-shade {
   position: fixed;
   inset: 0;
   z-index: 8;
   pointer-events: none;
-  background: radial-gradient(ellipse at 50% 46%, transparent 42%, rgba(6, 4, 3, 0.55) 100%);
+  background: radial-gradient(ellipse at 50% 46%, transparent 52%, rgba(20, 24, 20, 0.2) 100%);
   opacity: 0;
   transition: opacity 0.6s;
 }

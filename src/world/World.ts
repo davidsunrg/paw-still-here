@@ -101,7 +101,7 @@ export class World {
   moonLight!: THREE.DirectionalLight;
   private skyLight!: THREE.HemisphereLight;
 
-  constructor(readonly scene: THREE.Scene) {}
+  constructor(readonly scene: THREE.Scene, readonly renderer: THREE.WebGLRenderer) {}
 
   /** 分步搭建，每一步之间可以刷新加载进度 */
   steps(): Array<[keyof typeof STR.loadingSteps, () => void]> {
