@@ -6,6 +6,7 @@ import type { Env } from './env';
 import { DomainError } from './lib/errors';
 import { createRequestDeps, type RequestDeps } from './lib/deps';
 import { mountPetRoutes } from './modules/pet/routes';
+import { mountTributeRoutes } from './modules/tribute/routes';
 import { mountUploadRoutes } from './modules/upload/routes';
 
 type Vars = {
@@ -34,6 +35,7 @@ const app = new Hono<{ Bindings: Env; Variables: Vars }>()
   .on(['POST', 'GET'], '/auth/*', (c) => c.get('deps').auth.handler(c.req.raw));
 
 mountPetRoutes(app);
+mountTributeRoutes(app);
 mountUploadRoutes(app);
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404));

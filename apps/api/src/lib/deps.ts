@@ -3,6 +3,8 @@ import { createDb } from '../db';
 import type { Env } from '../env';
 import { createPetRepository } from '../modules/pet/repository';
 import { createPetService } from '../modules/pet/service';
+import { createTributeRepository } from '../modules/tribute/repository';
+import { createTributeService } from '../modules/tribute/service';
 import { createUploadRepository } from '../modules/upload/repository';
 import { createUploadService } from '../modules/upload/service';
 import { createR2Presigner } from './r2-presign';
@@ -14,7 +16,9 @@ export function createRequestDeps(env: Env) {
   const uploadRepo = createUploadRepository(db);
   const presigner = createR2Presigner(env);
   const uploadService = createUploadService(uploadRepo, presigner, env);
-  const petService = createPetService(petRepo, uploadRepo);
+  const tributeRepo = createTributeRepository(db);
+  const petService = createPetService(petRepo, uploadRepo, tributeRepo);
+  const tributeService = createTributeService(tributeRepo, petRepo);
 
   return {
     db,
@@ -23,6 +27,7 @@ export function createRequestDeps(env: Env) {
     uploadRepo,
     uploadService,
     petService,
+    tributeService,
     env,
   };
 }

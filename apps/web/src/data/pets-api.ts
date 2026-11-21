@@ -1,6 +1,7 @@
 import { GALLERY_CAPACITY, slotToPlacement, type PetDto } from '@paw/shared';
 import type { Pet, Species } from './pets';
 import { buildSamplePetAtSlot, replacePets, buildOfflineGallery } from './pets';
+import { tributes } from './tributes';
 
 const FUR: Record<Species, string[]> = {
   cat: ['#f0a04b', '#9a9aa2', '#f5f0e6', '#4a4442', '#c9a27a'],
@@ -48,6 +49,7 @@ export function applyGalleryFromApi(dtos: PetDto[]): void {
     merged.push(realBySlot.get(slot) ?? buildSamplePetAtSlot(slot));
   }
   replacePets(merged);
+  tributes.seed(dtos);
 }
 
 export function applyOfflineGallery(): void {

@@ -1,8 +1,11 @@
 import { albumOf, petById, PETS, SECTIONS, type Pet } from '../data/pets';
-import { store, type Letter, type OfferKind, type RiteKind } from '../data/store';
+import { ApiError } from '../api/client';
+import { prefs, store, type Letter, type OfferKind, type RiteKind } from '../data/store';
+import { tributes } from '../data/tributes';
 import { applyLocaleStyle, STR } from '../i18n';
 import { portraitDataURL } from '../world/textures';
 import { MemorialEditor } from './MemorialEditor';
+import { makeShareCard } from './share-card';
 
 export type TeleportTarget = 'gate' | 'river' | 'fire' | 'lantern' | 'hall';
 
@@ -33,6 +36,13 @@ export interface UIHooks {
    * here 是访客此刻正开着这只宠物的纪念角（信会落在台面上）
    */
   onLetter(pet: Pet | null, here: boolean): void;
+  /**
+   * 这只宠物收到的礼物或信变了，而且不是访客刚放下的那一下
+   * （从服务器读到了最新的，或者刚放的没存上被拿掉了）：把相框下面和纪念角里摆的东西重摆一遍
+   */
+  onTributesChanged(pet: Pet): void;
+  /** 渲染一帧并交出 3D 画布，用来画分享图；必须马上画下来，下一帧就没了 */
+  onCapture?(): HTMLCanvasElement | null;
   onGuide(pet: Pet): void;
   onGoto(pet: Pet): void;
   /** 坐在船上时点「放河灯」 */
@@ -45,6 +55,9 @@ export interface UIHooks {
   memorialApiEnabled?: boolean;
   onMemorialSaved?(petId?: string, mode?: 'create' | 'edit' | 'delete'): void | Promise<void>;
 }
+
+/** 进来多久之后，才问还没有宠物的访客要不要给自己的宠物留个位置 */
+const INVITE_DELAY = 40_000;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -80,6 +93,9 @@ export class UI {
   private tooltip = $('tooltip');
   private memorialEditor: MemorialEditor;
   private editorReturnFocus: HTMLElement | null = null;
+  /** 分享弹窗现在说的是哪一只 */
+  private sharePet: Pet | null = null;
+  private inviteTimer = 0;
 
   constructor(private hooks: UIHooks) {
     document.body.classList.toggle('touch', this.isTouch);
@@ -105,7 +121,6 @@ export class UI {
     $<HTMLTextAreaElement>('post-input').placeholder = STR.letterPlaceholder;
     $<HTMLInputElement>('post-search').placeholder = STR.pickOptional;
     $<HTMLInputElement>('lantern-input').placeholder = STR.lanternPlaceholder;
-    $<HTMLInputElement>('search-input').placeholder = STR.searchPlaceholder;
     $<HTMLInputElement>('river-search').placeholder = STR.pickOptional;
     $<HTMLInputElement>('lantern-search').placeholder = STR.pickOptional;
     $<HTMLInputElement>('fire-search').placeholder = STR.riverPlaceholder;
@@ -118,6 +133,32 @@ export class UI {
       this.showHint();
       hooks.onEnter();
       $('btn-sound').textContent = STR.soundOn;
+      this.inviteTimer = window.setTimeout(() => this.showInvite(), INVITE_DELAY);
+    });
+
+    // 右上角：给自己的宠物留个位置、自己的宠物、收着设置的菜单
+    const canCreate = !!hooks.memorialApiEnabled;
+    $('btn-add-pet').classList.toggle('hidden', !canCreate);
+    $('btn-add-pet').addEventListener('click', () => this.openMemorialForm());
+    $('btn-my-pets').classList.toggle('hidden', !PETS.some((p) => p.canManage));
+    $('btn-my-pets').addEventListener('click', () => this.openMyPets());
+    const menuBtn = $('btn-menu');
+    menuBtn.setAttribute('aria-label', STR.menu);
+    const setMenu = (open: boolean) => {
+      $('menu-pop').classList.toggle('hidden', !open);
+      menuBtn.setAttribute('aria-expanded', String(open));
+    };
+    menuBtn.addEventListener('click', () => setMenu($('menu-pop').classList.contains('hidden')));
+    // 点菜单外面收起；点菜单里的开关不收，可以连着调几项
+    document.addEventListener('pointerdown', (e) => {
+      const t = e.target as Node;
+      if (!$('menu-pop').contains(t) && !menuBtn.contains(t)) setMenu(false);
+    });
+    $('invite-close').setAttribute('aria-label', STR.inviteClose);
+    $('invite-close').addEventListener('click', () => this.hideInvite());
+    $('invite-go').addEventListener('click', () => {
+      this.hideInvite();
+      this.openMemorialForm();
     });
 
     $('btn-sound').addEventListener('click', () => {
@@ -125,7 +166,10 @@ export class UI {
     });
     $('btn-quality').addEventListener('click', () => this.setQualityLabel(hooks.onToggleQuality()));
     $('btn-solo').addEventListener('click', () => this.setSoloLabel(hooks.onToggleSolo()));
-    $('btn-help').addEventListener('click', () => this.showHint());
+    $('btn-help').addEventListener('click', () => {
+      setMenu(false);
+      this.showHint();
+    });
 
     document.querySelectorAll<HTMLElement>('[data-tp]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -133,17 +177,20 @@ export class UI {
         hooks.onTeleport(b.dataset.tp as TeleportTarget);
       }),
     );
-    $('btn-search').addEventListener('click', () => this.openSearch());
-    const createBtn = document.getElementById('btn-create-memorial');
-    if (createBtn) {
-      createBtn.classList.toggle('hidden', !hooks.memorialApiEnabled);
-      createBtn.addEventListener('click', () => this.openMemorialForm());
-    }
+    $('btn-create-memorial').classList.toggle('hidden', !canCreate);
+    $('btn-create-memorial').addEventListener('click', () => this.openMemorialForm());
     $('btn-letters').addEventListener('click', () => this.openLetters());
     $('btn-ride-lantern').addEventListener('click', () => this.hooks.onRideLantern());
     document.getElementById('memorial-edit')?.addEventListener('click', () => {
       if (this.pet) this.openMemorialEditor(this.pet);
     });
+    $('memorial-share').addEventListener('click', () => {
+      if (this.pet) this.openShare(this.pet);
+    });
+    $('share-copy').addEventListener('click', () => void this.copyShareLink());
+    $('share-send').addEventListener('click', () => void this.sendShareLink());
+    $('share-image').addEventListener('click', () => void this.saveShareImage());
+    $('share-url').addEventListener('focus', () => $<HTMLInputElement>('share-url').select());
     $('btn-ride-leave').addEventListener('click', () => this.hooks.onRideLeave());
 
     // 弹窗：点遮罩或关闭按钮收起
@@ -195,8 +242,18 @@ export class UI {
       const text = input.value.trim();
       if (!text) return;
       const pet = this.ritePet.post;
-      if (pet) store.addLetter(pet, text);
-      else store.addGuestbook(text);
+      if (pet) {
+        store.addLetter(pet, text).then(
+          // 存好了：列表里那封换成正式的（可以拿掉了）
+          () => this.lettersShowing(pet) && this.renderLetters(),
+          (error) => {
+            // 没存上：这封已经拿掉了，把字还给访客，数字和摆着的东西改回去
+            this.tributesChanged(pet);
+            if (!input.value) input.value = text;
+            this.toast(error instanceof ApiError && error.code === 'letter_limit' ? STR.letterLimit : STR.letterFailed);
+          },
+        );
+      } else store.addGuestbook(text);
       input.value = '';
       const here = pet !== null && pet === this.pet;
       // 正开着它的纪念角时写的：收起弹窗，让访客看到信落在台面上；别的时候收起写信的那一块，新写的这封排在最前面
@@ -254,9 +311,6 @@ export class UI {
       hooks.onLantern(text);
       this.toast(STR.lanternToast);
     });
-
-    // 搜索
-    $('search-input').addEventListener('input', () => this.renderSearch());
   }
 
   // ---------- 加载 ----------
@@ -268,6 +322,16 @@ export class UI {
   ready() {
     $('loader').classList.add('ready');
     $('btn-enter').classList.remove('hidden');
+  }
+
+  /** 从某只宠物的链接进来时，入口按钮写「去看它」 */
+  setEnterLabel(text: string) {
+    $('btn-enter').textContent = text;
+  }
+
+  /** 按下入口按钮（创建、编辑之后重新载入时直接进去） */
+  enter() {
+    $('btn-enter').click();
   }
 
   setSoloLabel(solo: boolean) {
@@ -376,9 +440,12 @@ export class UI {
     $('detail-meta').textContent = [STR.species[pet.species], pet.breed, dates].filter(Boolean).join(' · ');
     $('detail-address').textContent = STR.address(pet.floor, pet.section, pet.cell);
     $('detail-message').textContent = pet.message ?? '';
-    const manage = document.getElementById('detail-manage');
-    manage?.classList.toggle('hidden', !(pet.canManage && this.hooks.memorialApiEnabled));
+    $('memorial-share').classList.toggle('hidden', !pet.isReal);
+    $('memorial-edit').classList.toggle('hidden', !(pet.canManage && this.hooks.memorialApiEnabled));
+    this.hideInvite();
+    this.syncAddress(pet);
     this.renderCounts();
+    void this.loadTributes(pet);
     this.renderAlbum(pet);
     $('detail').classList.add('open');
     document.body.classList.add('in-shrine');
@@ -401,8 +468,52 @@ export class UI {
     document.body.classList.remove('in-shrine', 'has-album');
     $('hint').classList.remove('show');
     (document.activeElement as HTMLElement | null)?.blur?.();
+    this.syncAddress(null);
     this.hooks.onDetailClosed();
     this.notify();
+  }
+
+  /** 地址栏跟着走：开着真实宠物的纪念角时是它的专属链接，别的时候不带 */
+  private syncAddress(pet: Pet | null) {
+    const url = new URL(location.href);
+    if (pet?.isReal) url.searchParams.set('pet', pet.id);
+    else url.searchParams.delete('pet');
+    if (url.href !== location.href) history.replaceState(null, '', url);
+  }
+
+  /**
+   * 走进真实宠物的纪念角：向服务器读它收到的礼物和信。
+   * 是自己的宠物时，顺便问一下上次来过之后别人留下了多少，告诉主人。
+   */
+  private async loadTributes(pet: Pet) {
+    if (!pet.isReal) return;
+    const since = pet.canManage ? prefs.lastSeen(pet.id) : undefined;
+    const asked = Date.now();
+    let fresh;
+    try {
+      fresh = await tributes.load(pet.id, since);
+    } catch {
+      // 读不到就先用照片墙带来的数量，不打扰访客
+      return;
+    }
+    if (pet.canManage) prefs.markSeen(pet.id, asked);
+    this.tributesChanged(pet);
+    if (fresh && this.pet === pet) {
+      const n = fresh.flower + fresh.candle + fresh.snack + fresh.toy + fresh.letter;
+      if (n > 0) this.toast(STR.awayToast(pet.name, n));
+    }
+  }
+
+  /** 信的弹窗是不是正开着、而且看得到写给这只宠物的信 */
+  private lettersShowing(pet: Pet) {
+    return $('modal-letters').classList.contains('open') && (this.lettersPet === null || this.lettersPet === pet);
+  }
+
+  /** 这只宠物的礼物或信变了：数字、信的列表、场景里摆的东西都跟上 */
+  private tributesChanged(pet: Pet) {
+    if (this.pet === pet) this.renderCounts();
+    if (this.lettersShowing(pet)) this.renderLetters();
+    this.hooks.onTributesChanged(pet);
   }
 
   /**
@@ -504,7 +615,16 @@ export class UI {
       this.openLetters(pet, true);
       return;
     }
-    store.addGift(pet, kind);
+    // 真实宠物同一种礼物一天一次：今天放过了就直接说，不让东西先出现再消失
+    if (store.givenToday(pet, kind)) {
+      this.toast(STR.giftAlready[kind](pet.name));
+      return;
+    }
+    store.addGift(pet, kind).catch((error) => {
+      // 服务器没收下：这一件已经拿掉了，把数字和摆着的东西改回去
+      this.tributesChanged(pet);
+      this.toast(error instanceof ApiError && error.code === 'already_today' ? STR.giftAlready[kind](pet.name) : STR.giftFailed);
+    });
     this.renderCounts();
     this.hooks.onOffering(pet, kind);
     this.toast(STR.giftToast[kind](pet.name));
@@ -634,6 +754,27 @@ export class UI {
     thread.append(replies, form);
     acts.append(heart, toggle);
 
+    // 保存在服务器上的信：写的人、或者这只宠物的主人可以拿掉
+    if (item.removable) {
+      const remove = el('button', 'report', STR.letterRemove);
+      remove.type = 'button';
+      remove.addEventListener('click', () => {
+        remove.disabled = true;
+        store.removeLetter(item).then(
+          () => {
+            li.remove();
+            this.toast(STR.letterRemoved);
+            if (pet) this.tributesChanged(pet);
+          },
+          () => {
+            remove.disabled = false;
+            this.toast(STR.letterFailed);
+          },
+        );
+      });
+      acts.append(remove);
+    }
+
     // 举报：自己写的不用举报
     if (!item.mine) {
       const report = el('button', 'report', STR.letterReport);
@@ -649,65 +790,127 @@ export class UI {
     return li;
   }
 
-  // ---------- 搜索 ----------
+  // ---------- 我的宠物 ----------
 
-  openSearch() {
-    $<HTMLInputElement>('search-input').value = '';
-    this.renderSearch();
-    this.openModal('modal-search', 'search-input');
-  }
-
-  private renderSearch() {
-    this.renderYourMemorials();
-    const q = $<HTMLInputElement>('search-input').value;
-    const list = $('search-results');
+  /** 这台浏览器创建的宠物：带我去 / 直接去；还没有的时候只有一句话和创建按钮 */
+  openMyPets() {
+    const pets = PETS.filter((pet) => pet.canManage);
+    $('my-pets-empty').classList.toggle('hidden', pets.length > 0);
+    const list = $('your-results');
     list.replaceChildren();
-    const found = this.findPets(q);
-    if (!found.length) {
+    for (const p of pets) {
       const li = document.createElement('li');
-      li.className = 'empty';
-      li.textContent = STR.searchEmpty;
-      list.append(li);
-      return;
-    }
-    for (const p of found) {
-      const li = document.createElement('li');
-      const info = this.petInfo(p);
       const guide = document.createElement('button');
+      guide.type = 'button';
       guide.textContent = STR.searchGuide;
       guide.addEventListener('click', () => {
         this.closeModals();
         this.hooks.onGuide(p);
       });
       const go = document.createElement('button');
+      go.type = 'button';
       go.className = 'primary';
       go.textContent = STR.searchGoto;
       go.addEventListener('click', () => {
         this.closeModals();
         this.hooks.onGoto(p);
       });
-      li.append(info, guide, go);
+      li.append(this.petInfo(p), guide, go);
       list.append(li);
+    }
+    this.openModal('modal-search');
+  }
+
+  /** 大厅前台：有自己的宠物就列出来，没有就直接开始创建（创建不了时也列出来，那里有一句说明） */
+  openReception() {
+    if (!PETS.some((pet) => pet.canManage) && this.hooks.memorialApiEnabled) this.openMemorialForm();
+    else this.openMyPets();
+  }
+
+  // ---------- 创建提示 ----------
+
+  /**
+   * 进来一会儿之后出现一次的小卡片：这里也可以放你的宠物。
+   * 只给还没有宠物、也没见过这张卡片的访客；正在看纪念角、开着弹窗、坐着船时不出来打扰（这一次就不出了）。
+   */
+  private showInvite() {
+    if (!this.hooks.memorialApiEnabled || prefs.inviteSeen || PETS.some((pet) => pet.canManage)) return;
+    if (this.pet || this.modalOpen || document.body.classList.contains('in-ride')) return;
+    prefs.inviteSeen = true;
+    $('invite-card').classList.remove('hidden');
+  }
+
+  private hideInvite() {
+    clearTimeout(this.inviteTimer);
+    $('invite-card').classList.add('hidden');
+  }
+
+  // ---------- 分享 ----------
+
+  private shareUrl(pet: Pet) {
+    return `${location.origin}/?pet=${pet.id}`;
+  }
+
+  /** 打开分享弹窗；created 是刚创建完的那一次，标题和说明不一样，多一行可以随时修改的提示 */
+  openShare(pet: Pet, created = false) {
+    this.sharePet = pet;
+    $('share-title').textContent = created ? STR.shareCreatedTitle(pet.name) : STR.shareTitle(pet.name);
+    $('share-desc').textContent = created ? STR.shareCreatedDesc : STR.shareDesc;
+    $<HTMLInputElement>('share-url').value = this.shareUrl(pet);
+    const note = $('share-note');
+    note.textContent = created ? STR.memorialEditor.editHint : '';
+    note.classList.toggle('hidden', !created);
+    this.openModal('modal-share');
+  }
+
+  private async copyShareLink() {
+    const pet = this.sharePet;
+    if (!pet) return;
+    const input = $<HTMLInputElement>('share-url');
+    try {
+      await navigator.clipboard.writeText(this.shareUrl(pet));
+    } catch {
+      // 不让用剪贴板的环境：选中链接，访客可以自己复制
+      input.focus();
+      input.select();
+      if (!document.execCommand?.('copy')) return;
+    }
+    this.toast(STR.shareCopied);
+  }
+
+  /** 交给系统的分享面板；没有的（多数桌面浏览器）就复制链接 */
+  private async sendShareLink() {
+    const pet = this.sharePet;
+    if (!pet) return;
+    if (!navigator.share) return this.copyShareLink();
+    try {
+      await navigator.share({ title: pet.name, text: STR.shareText(pet.name), url: this.shareUrl(pet) });
+    } catch (error) {
+      // 访客自己关掉了面板不算失败
+      if ((error as DOMException)?.name !== 'AbortError') await this.copyShareLink();
     }
   }
 
-  /** 当前匿名浏览器创建的纪念空间，点击名字沿用普通探访 */
-  private renderYourMemorials() {
-    const pets = PETS.filter((pet) => pet.canManage);
-    $('your-memorials').classList.toggle('hidden', !pets.length);
-    const list = $('your-results');
-    list.replaceChildren();
-    for (const pet of pets) {
-      const li = document.createElement('li');
-      const button = document.createElement('button');
-      button.className = 'secondary';
-      button.textContent = `${pet.name} · ${STR.address(pet.floor, pet.section, pet.cell)}`;
-      button.addEventListener('click', () => {
-        this.closeModals();
-        this.hooks.onGoto(pet);
-      });
-      li.append(button);
-      list.append(li);
+  /** 存一张图：它的纪念角，加上名字和来这里的地址 */
+  private async saveShareImage() {
+    const pet = this.sharePet;
+    if (!pet) return;
+    const button = $<HTMLButtonElement>('share-image');
+    button.disabled = true;
+    try {
+      // 画的是开着的这个纪念角；分享的不是眼前这只时，不拿眼前的画面充数
+      const scene = this.pet === pet ? (this.hooks.onCapture?.() ?? null) : null;
+      const blob = await makeShareCard(pet, scene, location.host);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${pet.name.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'memorial'}.png`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+      this.toast(STR.shareImageSaved);
+    } catch {
+      this.toast(STR.shareImageFailed);
+    } finally {
+      button.disabled = false;
     }
   }
 

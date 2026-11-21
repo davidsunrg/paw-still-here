@@ -22,6 +22,7 @@ function dto(slot: number): PetDto {
       { id: crypto.randomUUID(), uploadId: mainUploadId, publicUrl: 'https://cdn.test/main', role: 'main', position: 0 },
       { id: crypto.randomUUID(), uploadId: galleryUploadId, publicUrl: 'https://cdn.test/gallery', role: 'gallery', position: 1 },
     ],
+    tributes: { flower: 2, candle: 1, snack: 0, toy: 0, letter: 3 },
     isOwner: true,
     isReal: true,
   };

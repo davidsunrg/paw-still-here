@@ -264,6 +264,145 @@ textarea::placeholder {
   padding: 6px 13px;
   font-size: 13px;
 }
+/* 三道杠：收着声音、画质、独自参观、操作说明 */
+.top-right {
+  align-items: center;
+}
+#btn-menu {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+#btn-menu svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+#btn-menu[aria-expanded='true'] {
+  border-color: rgba(255, 220, 170, 0.5);
+}
+.menu-pop {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 168px;
+  padding: 6px;
+  border-radius: 16px;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+.menu-pop.hidden {
+  display: none;
+}
+.top-right .menu-pop button {
+  padding: 8px 12px;
+  border-radius: 11px;
+  border-color: transparent;
+  background: none;
+  text-align: left;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.top-right .menu-pop button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 进来一会儿后出现一次：这里也可以放你的宠物 */
+#invite-card {
+  position: absolute;
+  top: calc(60px + env(safe-area-inset-top));
+  right: 16px;
+  width: min(300px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px 8px;
+  padding: 16px 16px 14px 18px;
+  border-radius: 18px;
+  background: var(--glass-strong);
+  border: 1px solid rgba(255, 200, 130, 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: invite-in 0.6s ease both;
+}
+#invite-card.hidden,
+body.in-shrine #invite-card,
+body.in-ride #invite-card {
+  display: none;
+}
+#invite-card p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--warm-soft);
+}
+#invite-close {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+  border-color: transparent;
+  background: none;
+  color: var(--ink-dim);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+#invite-go {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 7px 16px;
+  font-size: 13px;
+}
+@keyframes invite-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* 分享弹窗 */
+#modal-share .card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#modal-share p {
+  margin: 0;
+}
+.share-link {
+  display: flex;
+  gap: 8px;
+}
+.share-link input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+#my-pets-empty {
+  margin: 0 0 12px;
+  color: var(--ink-dim);
+}
+#modal-search .results:empty {
+  display: none;
+}
+#modal-search .results {
+  margin-bottom: 12px;
+}
 .bottom-bar {
   position: absolute;
   left: 50%;
@@ -1133,7 +1272,7 @@ button:disabled {
   .brand span {
     display: none;
   }
-  /* 右上角四个按钮在窄屏上收紧，不压到左边的爪印 */
+  /* 右上角的按钮在窄屏上收紧，不压到左边的爪印 */
   .top-right {
     right: 10px;
     gap: 5px;
@@ -1184,9 +1323,19 @@ button:disabled {
   #btn-leave {
     left: 10px;
   }
-  /* 窄屏上右上角四个按钮会压到 Back；看纪念角时其他访客本来就不显示，这个开关先收起 */
-  body.in-shrine #btn-solo {
+  /* 窄屏上看纪念角时，左上角是 Back、Share、Edit；右上角只留三道杠，不挤在一起 */
+  body.in-shrine #btn-add-pet,
+  body.in-shrine #btn-my-pets {
     display: none;
+  }
+  #btn-menu {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+  }
+  #invite-card {
+    right: 10px;
+    top: calc(52px + env(safe-area-inset-top));
   }
   body.in-shrine #hint {
     bottom: calc(154px + env(safe-area-inset-bottom));

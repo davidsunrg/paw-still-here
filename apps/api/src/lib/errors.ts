@@ -14,6 +14,17 @@ export class DomainError extends Error {
   }
 }
 
+/**
+ * 错误和它一层层的 cause 里，有没有哪一条消息对得上。
+ * drizzle 会把 D1 的报错包一层（"Failed query: …"），唯一索引冲突的原话在 cause 里。
+ */
+export function errorChainMatches(error: unknown, pattern: RegExp): boolean {
+  for (let e = error, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
+    if (pattern.test(e.message)) return true;
+  }
+  return false;
+}
+
 export const err = {
   unauthorized: () => new DomainError('unauthorized', 401),
   forbidden: () => new DomainError('forbidden', 403),

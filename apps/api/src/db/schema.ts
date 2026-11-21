@@ -113,3 +113,44 @@ export const petPhoto = sqliteTable(
     petPosition: uniqueIndex('pet_photo_position').on(t.petId, t.position),
   }),
 );
+
+/** 访客留在纪念角里的礼物。同一个人、同一只宠物、同一种礼物一天只有一件（day 是 UTC 日期） */
+export const tribute = sqliteTable(
+  'tribute',
+  {
+    id: text('id').primaryKey().notNull(),
+    petId: text('pet_id')
+      .notNull()
+      .references(() => pet.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    variant: integer('variant').notNull(),
+    day: text('day').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({
+    daily: uniqueIndex('tribute_daily_unique').on(t.petId, t.userId, t.kind, t.day),
+    petIdx: index('tribute_pet_idx').on(t.petId, t.createdAt),
+  }),
+);
+
+/** 访客写给一只宠物的信 */
+export const letter = sqliteTable(
+  'letter',
+  {
+    id: text('id').primaryKey().notNull(),
+    petId: text('pet_id')
+      .notNull()
+      .references(() => pet.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({
+    petIdx: index('letter_pet_idx').on(t.petId, t.createdAt),
+  }),
+);

@@ -65,6 +65,10 @@ let crowd: Crowd | null = null;
 let entered = false;
 let blocked = false;
 let quality: 'high' | 'low' = 'high';
+/** 地址里带着某只宠物（?pet=编号）：按下入口按钮后直接去它的相框 */
+let arrival: PhotoEntry | null = null;
+/** 到了它的纪念角之后接着做的事（打开纪念角会先收起所有弹窗，所以要等到那之后） */
+let arrivalThen: (() => void) | null = null;
 
 const ui = new UI({
   memorialApiEnabled: bootstrap.apiOnline && bootstrap.currentUserId !== null,
@@ -77,6 +81,11 @@ const ui = new UI({
   onEnter() {
     entered = true;
     void audio.start().then(() => audio.setMuted(false));
+    // 从某只宠物的链接进来的：直接去它那里
+    const entry = arrival;
+    const then = arrivalThen;
+    arrival = arrivalThen = null;
+    if (entry) visit(entry, then ?? undefined);
   },
   onTeleport(target) {
     guide.clear();
@@ -112,6 +121,17 @@ const ui = new UI({
   onDetailClosed() {
     // 画面暗一下再回到大厅；收起角落的事在 transition 里做
     transition(() => {});
+  },
+  onTributesChanged(pet) {
+    world.gallery.refresh(pet);
+    world.tree.setOwn(store.ownLetters());
+    if (world.shrine.entry?.pet === pet) world.shrine.refresh();
+  },
+  onCapture() {
+    // 现画一帧：平时画完这一帧缓冲区就清掉了，要趁这一刻交出去
+    if (quality === 'high') composer.render(0);
+    else renderer.render(renderPass.scene, camera);
+    return renderer.domElement;
   },
   onOffering(pet, kind) {
     world.shrine.drop(kind);
@@ -176,7 +196,7 @@ const ui = new UI({
 });
 
 world.hooks.tree = () => ui.openLetters();
-world.hooks.reception = () => ui.openSearch();
+world.hooks.reception = () => ui.openReception();
 world.hooks.river = () => ui.openRite('river');
 world.hooks.fire = () => ui.openRite('fire');
 world.hooks.lantern = () => ui.openLantern();
@@ -306,7 +326,7 @@ function openPet(entry: PhotoEntry) {
 }
 
 /** 直接去看这只宠物：离得远（或者在影厅、河边）时，小人同时来到它的相框前 */
-function visit(entry: PhotoEntry) {
+function visit(entry: PhotoEntry, then?: () => void) {
   const { center, normal } = entry;
   transition(() => {
     const near = !inCinema && !inRide && Math.hypot(player.pos.x - center.x, player.pos.z - center.z) < 5;
@@ -314,6 +334,7 @@ function visit(entry: PhotoEntry) {
     if (inRide) exitRide();
     if (!near) player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
     showPet(entry);
+    then?.();
   });
 }
 
@@ -701,22 +722,42 @@ async function boot() {
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));
   ui.ready();
 
-  // 创建或编辑后带着真实 UUID 重载：图集已重建，再复用原来的探访路径
+  // 创建或编辑后带着真实 UUID 重载：图集已重建，直接进去、来到它的纪念角
   const nextPetId = sessionStorage.getItem('paw:visit-next');
   const memorialMode = sessionStorage.getItem('paw:memorial-mode');
   sessionStorage.removeItem('paw:visit-next');
   sessionStorage.removeItem('paw:memorial-mode');
-  if (nextPetId) {
-    const pet = petById.get(nextPetId);
-    const entry = pet ? frameOf(pet) : undefined;
-    if (entry) {
-      document.getElementById('btn-enter')?.click();
-      visit(entry);
-      if (memorialMode === 'create') ui.toast(STR.memorialEditor.editHint);
-      else if (memorialMode === 'edit') ui.toast(STR.memorialUpdated);
-    }
+  const nextPet = nextPetId ? petById.get(nextPetId) : undefined;
+  const nextEntry = nextPet ? frameOf(nextPet) : undefined;
+  if (nextPet && nextEntry) {
+    arrival = nextEntry;
+    // 刚创建完：到了它的纪念角，请主人把链接发给也爱它的人
+    if (memorialMode === 'create') arrivalThen = () => ui.openShare(nextPet, true);
+    else if (memorialMode === 'edit') arrivalThen = () => ui.toast(STR.memorialUpdated);
+    ui.enter();
+    return exposeDev();
   }
 
+  // 专属链接 /?pet=<编号>：入口按钮写它的名字，按下后直接到它那里
+  const linkId = new URLSearchParams(location.search).get('pet');
+  if (linkId) {
+    const pet = petById.get(linkId);
+    const entry = pet?.isReal ? frameOf(pet) : undefined;
+    if (pet && entry) {
+      arrival = entry;
+      ui.setEnterLabel(STR.enterVisit(pet.name));
+    } else {
+      // 它已经不在了（被主人删掉，或者链接不对）：照常进来，说一声，地址改回去
+      const url = new URL(location.href);
+      url.searchParams.delete('pet');
+      history.replaceState(null, '', url);
+      ui.toast(STR.linkMissing);
+    }
+  }
+  exposeDev();
+}
+
+function exposeDev() {
   if (import.meta.env.DEV) {
     Object.assign(window, { __memorial: { player, world, ui, camera, renderer, renderPass, avatar, crowd } });
   }

@@ -10,7 +10,7 @@
     "build": "wrangler deploy --dry-run --outdir dist",
     "test": "vitest run",
     "cf-typegen": "wrangler types --env-interface Env",
-    "db:migrate:local": "wrangler d1 migrations apply paw-still-here --local"
+    "db:migrate:local": "wrangler d1 migrations apply paw --local"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.2",

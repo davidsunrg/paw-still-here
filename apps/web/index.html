@@ -165,10 +165,24 @@
         <span data-t="brand"></span>
       </div>
       <div class="top-right">
-        <button id="btn-sound"></button>
-        <button id="btn-quality"></button>
-        <button id="btn-solo"></button>
-        <button id="btn-help" data-t="help"></button>
+        <button id="btn-add-pet" class="primary hidden" type="button" data-t="addPet"></button>
+        <button id="btn-my-pets" class="hidden" type="button" data-t="myPets"></button>
+        <button id="btn-menu" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-pop">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+        </button>
+        <!-- 不常用的设置收在这里 -->
+        <div id="menu-pop" class="menu-pop hidden">
+          <button id="btn-sound" type="button"></button>
+          <button id="btn-quality" type="button"></button>
+          <button id="btn-solo" type="button"></button>
+          <button id="btn-help" type="button" data-t="help"></button>
+        </div>
+      </div>
+      <!-- 还没有自己的宠物时出现一次的小卡片 -->
+      <div id="invite-card" class="hidden">
+        <p data-t="inviteText"></p>
+        <button id="invite-go" class="primary" type="button" data-t="addPet"></button>
+        <button id="invite-close" type="button">×</button>
       </div>
       <div class="bottom-bar">
         <div class="group">
@@ -179,7 +193,6 @@
           <button data-tp="hall" data-t="tpHall"></button>
         </div>
         <button id="btn-letters" data-t="letters"></button>
-        <button id="btn-search" data-t="search"></button>
       </div>
       <div id="hint"></div>
       <div id="stick-zone"></div>
@@ -203,8 +216,10 @@
         <button id="btn-rite-letters" data-t="riteLetters"></button>
       </div>
     </aside>
-    <div class="memorial-manage hidden" id="detail-manage">
-      <button type="button" class="secondary" id="memorial-edit" data-t="memorialEdit"></button>
+    <!-- 纪念角左上角、返回按钮旁：分享对所有人可见，编辑只给创建者 -->
+    <div class="memorial-manage" id="detail-manage">
+      <button type="button" class="secondary hidden" id="memorial-share" data-t="share"></button>
+      <button type="button" class="secondary hidden" id="memorial-edit" data-t="memorialEdit"></button>
     </div>
 
     <div id="ride-bar">
@@ -348,14 +363,26 @@
     <div class="modal" id="modal-search">
       <div class="card">
         <button class="close" data-close aria-label="close">×</button>
-        <h2 data-t="searchTitle"></h2>
-        <input id="search-input" autocomplete="off" />
-        <section id="your-memorials" class="your-memorials hidden">
-          <h3 data-t="yourMemorials"></h3>
-          <ul class="results" id="your-results"></ul>
-        </section>
-        <ul class="results" id="search-results"></ul>
-        <button type="button" class="secondary hidden" id="btn-create-memorial" data-t="createMemorial"></button>
+        <h2 data-t="myPetsTitle"></h2>
+        <p id="my-pets-empty" class="hidden" data-t="myPetsEmpty"></p>
+        <ul class="results" id="your-results"></ul>
+        <button type="button" class="primary hidden" id="btn-create-memorial" data-t="addPet"></button>
+      </div>
+    </div>
+
+    <!-- 分享：把这只宠物的链接发给别人，或者存一张图 -->
+    <div class="modal" id="modal-share">
+      <div class="card">
+        <button class="close" data-close aria-label="close">×</button>
+        <h2 id="share-title"></h2>
+        <p id="share-desc"></p>
+        <div class="share-link">
+          <input id="share-url" readonly />
+          <button type="button" id="share-copy" data-t="shareCopy"></button>
+        </div>
+        <button type="button" class="primary" id="share-send" data-t="shareSend"></button>
+        <button type="button" id="share-image" data-t="shareImage"></button>
+        <p class="note hidden" id="share-note"></p>
       </div>
     </div>
 

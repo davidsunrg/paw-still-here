@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../../db';
-import { pet, petPhoto, upload } from '../../db/schema';
+import { letter, pet, petPhoto, tribute, upload } from '../../db/schema';
 import type { PetPhotoJoined, PetRow } from './mapper';
 
 type PhotoInsert = Array<{ id: string; uploadId: string; role: string; position: number }>;
@@ -71,6 +71,8 @@ export function createPetRepository(db: Db) {
 
     async delete(id: string) {
       await db.batch([
+        db.delete(tribute).where(eq(tribute.petId, id)),
+        db.delete(letter).where(eq(letter.petId, id)),
         db.delete(petPhoto).where(eq(petPhoto.petId, id)),
         db.delete(pet).where(eq(pet.id, id)),
       ]);

@@ -9,6 +9,14 @@ export type UploadStatus = (typeof UPLOAD_STATUS)[number];
 export const PHOTO_ROLE = ['main', 'gallery'] as const;
 export type PhotoRole = (typeof PHOTO_ROLE)[number];
 
+/** 访客可以留在纪念角里的礼物；每种有几种外观 */
+export const TRIBUTE_KINDS = ['flower', 'candle', 'snack', 'toy'] as const;
+export type TributeKind = (typeof TRIBUTE_KINDS)[number];
+export const TRIBUTE_VARIANTS: Record<TributeKind, number> = { flower: 5, candle: 3, snack: 3, toy: 2 };
+/** 一封信最长多少字；同一个人一天最多给同一只宠物写几封 */
+export const LETTER_MAX = 300;
+export const LETTERS_PER_DAY = 5;
+
 /** 大厅 A/B 区每区格数，与前端 CONFIG 一致 */
 export const SECTION_CELLS = [60, 40] as const;
 export const SECTIONS = ['A', 'B'] as const;

@@ -58,7 +58,6 @@ export const en = {
   tpFire: 'Fire',
   tpLantern: 'Lanterns',
   tpHall: 'Lobby',
-  search: 'Find a pet',
 
   wallTitle: 'Still here.',
   /** 右墙两个入口之间的一行字 */
@@ -69,7 +68,7 @@ export const en = {
   tipBench: 'Sit for a while',
   /** 纪念树：点树 */
   tipTree: 'Read the letters on the tree',
-  tipReception: 'Front desk · Find a pet',
+  tipReception: 'Front desk · A place for your pet',
   tipDock: 'Float a river lantern',
   tipLantern: 'Release a sky lantern',
   /** 影厅：大厅右墙的入口、招牌上的两行字、座位、出口上方的牌子、银幕没有放映时的一行字 */
@@ -216,7 +215,6 @@ export const en = {
   lanternDefault: 'Remembered, and still with us',
   lanternToast: 'Your lantern is rising. Look up',
 
-  createMemorial: 'Create a memorial',
   createMemorialTitle: 'Create a memorial',
   petName: 'Name',
   speciesLabel: 'Species',
@@ -280,9 +278,50 @@ export const en = {
     },
   },
 
-  yourMemorials: 'Your memorials',
-  searchTitle: 'Find a pet',
-  searchPlaceholder: 'Name, breed or section…',
+  /** 右上角：主按钮、自己的宠物、收着设置的菜单 */
+  addPet: 'Add your pet',
+  myPets: 'My pets',
+  menu: 'Settings',
+  myPetsTitle: 'My pets',
+  myPetsEmpty: 'You have not added a pet in this browser yet.',
+  /** 还没有自己的宠物时出现一次的小卡片 */
+  inviteText: 'Every frame here holds someone loved. There is room for yours.',
+  inviteClose: 'Not now',
+
+  /** 真实宠物的礼物和信保存在服务器上：一天一次、失败、写信太多、删信 */
+  giftAlready: {
+    flower: (name: string) => `You already left ${name} a flower today. Come back tomorrow.`,
+    candle: (name: string) => `Your candle for ${name} is still lit today. Come back tomorrow.`,
+    snack: (name: string) => `${name} already has your treat today. Come back tomorrow.`,
+    toy: (name: string) => `${name} already has your toy today. Come back tomorrow.`,
+  },
+  giftFailed: 'That did not reach them. Please try again.',
+  letterLimit: 'You have left several letters here today. Come back tomorrow to write more.',
+  letterFailed: 'Your letter could not be saved. Please try again.',
+  letterRemove: 'Remove',
+  letterRemoved: 'Letter removed.',
+  /** 主人回来时：不在的这段时间里，别人留下了多少东西 */
+  awayToast: (name: string, n: number) =>
+    n === 1 ? `While you were away, someone left something for ${name}` : `While you were away, ${n} things were left for ${name}`,
+
+  /** 专属链接：入口按钮、链接里的宠物已经不在了 */
+  enterVisit: (name: string) => `Visit ${name}`,
+  linkMissing: 'That memorial is no longer here.',
+  /** 分享：按钮、弹窗的标题和说明（平时 / 刚创建完）、各个按钮、做完之后的一行字 */
+  share: 'Share',
+  shareTitle: (name: string) => `Share ${name}'s place`,
+  shareDesc: 'Anyone with this link arrives right here, and can leave a flower or a letter.',
+  shareCreatedTitle: (name: string) => `${name}'s frame is on the wall`,
+  shareCreatedDesc: 'Send this link to the people who loved them, so they can visit too.',
+  shareCopy: 'Copy',
+  shareCopied: 'Link copied',
+  shareSend: 'Send the link',
+  shareImage: 'Save a picture',
+  shareImageSaved: 'Picture saved',
+  shareImageFailed: 'Could not make the picture. Please try again.',
+  shareText: (name: string) => `I made a place to remember ${name}. Come and visit.`,
+  shareCardVisit: (name: string) => `Visit ${name} at`,
+
   searchEmpty: 'Nothing found. Try another name.',
   searchGuide: 'Guide me',
   searchGoto: 'Go there',

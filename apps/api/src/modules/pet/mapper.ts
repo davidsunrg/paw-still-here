@@ -1,4 +1,4 @@
-import type { PetDto } from '@paw/shared';
+import type { PetDto, TributeCounts } from '@paw/shared';
 export type PetRow = {
   id: string;
   ownerId: string;
@@ -25,6 +25,7 @@ export function toPetDto(
   row: PetRow,
   photos: PetPhotoJoined[],
   viewerUserId?: string | null,
+  tributes?: TributeCounts,
 ): PetDto {
   const sorted = [...photos].sort((a, b) => a.position - b.position);
   return {
@@ -43,6 +44,7 @@ export function toPetDto(
       role: p.role as 'main' | 'gallery',
       position: p.position,
     })),
+    tributes: tributes ?? { flower: 0, candle: 0, snack: 0, toy: 0, letter: 0 },
     isReal: true,
     ...(viewerUserId ? { isOwner: row.ownerId === viewerUserId } : {}),
   };

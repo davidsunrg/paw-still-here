@@ -209,6 +209,13 @@ export class Shrine {
     this.candlePulse = 0;
   }
 
+  /** 它收到的东西变了（读到了服务器上最新的，或者刚放的没存上）：照现在的数量重摆一遍，不带动画 */
+  refresh() {
+    if (!this.entry) return;
+    this.pops.length = 0;
+    this.rebuild();
+  }
+
   /** 新礼物在所属位置轻轻弹出，不再从照片上方落下 */
   drop(kind: OfferKind) {
     if (!this.entry) return;

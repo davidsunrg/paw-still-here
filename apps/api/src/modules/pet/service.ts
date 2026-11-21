@@ -1,6 +1,6 @@
-import type { CreatePetInput, PetDto, UpdatePetInput } from '@paw/shared';
+import type { CreatePetInput, PetDto, TributeCounts, UpdatePetInput } from '@paw/shared';
 import { GALLERY_CAPACITY } from '@paw/shared';
-import { err } from '../../lib/errors';
+import { err, errorChainMatches } from '../../lib/errors';
 import type { UploadRepository } from '../upload/repository';
 import type { PetRepository } from './repository';
 import { toPetDto } from './mapper';
@@ -13,22 +13,31 @@ function findFreeSlot(used: number[]): number | null {
   return null;
 }
 
-export function createPetService(petRepo: PetRepository, uploadRepo: UploadRepository) {
+/** 照片墙上要带的礼物数量从哪儿来；不给就都是 0 */
+export type TributeCountsSource = { countsByPet(): Promise<Map<string, TributeCounts>> };
+
+export function createPetService(
+  petRepo: PetRepository,
+  uploadRepo: UploadRepository,
+  tributes?: TributeCountsSource,
+) {
+  const loadCounts = () => (tributes ? tributes.countsByPet() : Promise.resolve(new Map<string, TributeCounts>()));
+
   return {
     findFreeSlot(used: number[]) {
       return findFreeSlot(used);
     },
 
     async list(viewerUserId?: string | null): Promise<PetDto[]> {
-      const rows = await petRepo.listAllWithPhotos();
-      return rows.map(({ pet: row, photos }) => toPetDto(row, photos, viewerUserId));
+      const [rows, counts] = await Promise.all([petRepo.listAllWithPhotos(), loadCounts()]);
+      return rows.map(({ pet: row, photos }) => toPetDto(row, photos, viewerUserId, counts.get(row.id)));
     },
 
     async get(id: string, viewerUserId?: string | null): Promise<PetDto> {
-      const rows = await petRepo.listAllWithPhotos();
+      const [rows, counts] = await Promise.all([petRepo.listAllWithPhotos(), loadCounts()]);
       const hit = rows.find((row) => row.pet.id === id);
       if (!hit) throw err.notFound('pet_not_found');
-      return toPetDto(hit.pet, hit.photos, viewerUserId);
+      return toPetDto(hit.pet, hit.photos, viewerUserId, counts.get(id));
     },
 
     async create(ownerId: string, input: CreatePetInput): Promise<PetDto> {
@@ -139,5 +148,5 @@ function buildPhotoRows(petId: string, mainUploadId: string | undefined, gallery
 }
 
 function isSlotUniqueViolation(error: unknown) {
-  return error instanceof Error && /pet_slot_unique|UNIQUE constraint failed: pet\.slot/i.test(error.message);
+  return errorChainMatches(error, /pet_slot_unique|UNIQUE constraint failed: pet\.slot/i);
 }
