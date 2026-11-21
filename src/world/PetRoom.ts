@@ -401,25 +401,6 @@ export function buildCushion(ctx: RoomContext) {
   return p.finish();
 }
 
-/** 沙发扶手上的小毯子，米白底加一条橙色边 */
-export function buildSofaBlanket(ctx: RoomContext) {
-  const m = materials(ctx);
-  const p = new Parts();
-  const cloth = new THREE.PlaneGeometry(0.28, 0.54, 12, 18);
-  cloth.rotateX(-Math.PI / 2);
-  const a = cloth.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < a.count; i++) {
-    const x = a.getX(i);
-    const z = a.getZ(i);
-    a.setY(i, -Math.max(0, z + 0.02) * 0.72 + Math.sin(x * 25 + z * 9) * 0.009);
-    a.setZ(i, z + 0.1);
-  }
-  cloth.computeVertexNormals();
-  m.fabricShade.side = THREE.DoubleSide;
-  p.add(cloth, m.fabricShade);
-  return p.finish();
-}
-
 /** 米白圆地毯 */
 export function buildRoundRug(ctx: RoomContext) {
   const m = materials(ctx);
@@ -655,7 +636,8 @@ export function buildBalloons(ctx: RoomContext) {
   const positions: Vec3[] = [[-0.12, 1.25, 0], [0.08, 1.43, -0.02], [0.22, 1.18, 0.03]];
   positions.forEach((at, i) => {
     const p = new Parts();
-    p.beam(m.woodDark, [0, 0.5, 0], [at[0], at[1] - 0.16, at[2]], 0.0025, 6);
+    p.beam(m.woodDark, [0, S.cabinet.h, 0], [at[0], at[1] - 0.16, at[2]], 0.0025, 6);
+    if (i === 0) p.add(new THREE.SphereGeometry(0.012, 12, 8), m.woodDark, [0, S.cabinet.h, 0]);
     p.add(new THREE.SphereGeometry(1, 28, 20), colors[i], at, [0.12, 0.16, 0.12]);
     p.add(new THREE.ConeGeometry(0.018, 0.035, 16), colors[i], [at[0], at[1] - 0.17, at[2]], [1, 1, 1], [0, 0, Math.PI]);
     group.add(p.finish());
