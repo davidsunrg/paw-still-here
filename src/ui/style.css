@@ -475,8 +475,9 @@ body.touch #joystick {
 #detail blockquote::after {
   content: '\201D';
 }
-/* 明亮小屋里沿用浮字，但换成深暖灰，避免白字消失在墙色里 */
+/* 客厅只保留返回、相册和礼物栏，不再用年份与寄语覆盖生活场景 */
 body.in-shrine #detail {
+  display: none;
   text-shadow: 0 1px 8px rgba(255, 250, 238, 0.8);
 }
 body.in-shrine #detail h2 {

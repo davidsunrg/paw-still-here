@@ -42,7 +42,8 @@ const composer = new EffectComposer(
   renderer,
   new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, { type: THREE.HalfFloatType, samples: 4 }),
 );
-composer.addPass(new RenderPass(scene, camera));
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
 // 只有亮度超过 1 的自发光物体（灯、烛火、孔明灯）会产生辉光
 composer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.62, 0.7, 1.0));
 composer.addPass(new OutputPass());
@@ -262,7 +263,8 @@ function shrineDistance() {
 function showPet(entry: PhotoEntry) {
   ui.openDetail(entry.pet);
   world.shrine.open(entry);
-  player.refocus(world.shrine.center, entry.normal, shrineDistance(), (x, z) => world.shrine.inside(x, z));
+  renderPass.scene = world.shrine.scene;
+  player.refocus(world.shrine.center, world.shrine.normal, shrineDistance(), (x, z) => world.shrine.inside(x, z));
   player.snapFocus();
   selfShow = 0;
   if (crowd) {
@@ -279,6 +281,7 @@ function leavePet() {
   player.release();
   player.snapFocus();
   world.shrine.close();
+  renderPass.scene = scene;
   selfShow = 1;
   if (crowd) {
     crowd.away = false;
@@ -607,7 +610,7 @@ function resize() {
   camera.updateProjectionMatrix();
   // 窗口变化后重新计算镜头距离，保证纪念角仍然完整可见
   const entry = world.shrine?.entry;
-  if (entry && player.focused) player.focusOn(world.shrine.center, entry.normal, shrineDistance());
+  if (entry && player.focused) player.focusOn(world.shrine.center, world.shrine.normal, shrineDistance());
 }
 window.addEventListener('resize', resize);
 
@@ -640,8 +643,9 @@ function frame() {
   if (!player.walking) marker.hide();
   marker.update(dt, t);
   crowd?.update(dt, t);
-  // 小屋建在远处：开灯和月光阴影跟随小屋中心，其它时候仍跟随小人
-  world.update(dt, t, camera, world.shrine.isOpen ? world.shrine.center : player.pos, pixelRatio());
+  // 主场景始终按原来的玩家状态更新；客厅用自己的场景、灯光和动画循环
+  world.update(dt, t, camera, player.pos, pixelRatio());
+  world.shrine.update(dt);
   guide.update(t, player.pos);
   interaction?.update(t);
   // 走进大厅右墙的门厅就进影厅；在影厅里走进后门的门厅就回大厅
@@ -656,7 +660,7 @@ function frame() {
   updateHover();
 
   if (quality === 'high') composer.render(dt);
-  else renderer.render(scene, camera);
+  else renderer.render(renderPass.scene, camera);
 }
 
 // ---------- 启动 ----------
@@ -687,7 +691,7 @@ async function boot() {
   ui.ready();
 
   if (import.meta.env.DEV) {
-    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, avatar, crowd } });
+    Object.assign(window, { __memorial: { player, world, ui, camera, renderer, renderPass, avatar, crowd } });
   }
 }
 

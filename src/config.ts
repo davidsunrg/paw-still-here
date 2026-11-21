@@ -81,88 +81,105 @@ export const CONFIG = {
   },
 
   /**
-   * 单宠物视角：点击相框后画面暗一下，从门口看见它自己的温馨小屋。
-   * 房间坐标以地板中心为基准，+Z 朝门口；下面 layout 的 y 则以每件东西的落地点为基准。
-   * 全馆只有这一间屋子，打开哪只宠物就换成它的照片、相框颜色、墙上的名字和礼物。
+   * 单宠物视角：一间独立 THREE.Scene 里的温馨客厅，不与主场景共用灯光、背景或雾。
+   * 房间坐标以地板中心为基准，+Z 朝门口；layout 的 y 以家具落点或安装点为基准。
+   * 打开哪只宠物，只换茶几照片、搁板照片、窝边名字牌和礼物。
    */
   shrine: {
-    /** 房间内部的宽、进深、高（米）；前墙整个去掉，镜头在门口往里看 */
-    room: { w: 4.8, d: 3.2, h: 2.9 },
-    /** 矮柜：宽、进深、柜面离地多高；所有礼物以柜面中心为锚点摆放 */
-    cabinet: { w: 1.5, d: 0.48, h: 0.72 },
-    /** 主照片边长、照片中心和墙上手写名字的中心离地多高（米） */
-    photo: 0.62,
-    photoY: 1.56,
-    nameY: 2.2,
-    /** 镜头对准的高度：大约在柜面和照片之间 */
-    y: 1.32,
-    /**
-     * 取景：body 是背墙在画面中要占的宽、高，fill 是占视口的比例；mobileBody 用在竖屏。
-     * 竖屏按背墙约 1.6 米宽取景，照片、名字、矮柜和礼物都保持在中央安全区内。
-     */
+    /** 客厅内部的宽、进深、高（米）；镜头固定在前墙外的门口 */
+    room: { w: 5.2, d: 3.6, h: 2.9 },
+    /** 圆茶几的半径和台面高度；窗边小矮柜的宽、深、高 */
+    table: { radius: 0.66, h: 0.4 },
+    cabinet: { w: 0.62, d: 0.4, h: 0.52 },
+    /** 茶几主照片的边长、镜头注视高度 */
+    photo: 0.34,
+    y: 1.25,
+    /** 取景：doorway 控制桌面 / 竖屏门口距离；body 与 fill 用于背墙辅助校正 */
     view: {
-      body: [4.7, 2.75] as [number, number],
-      fill: [0.9, 0.8] as [number, number],
-      mobileBody: [1.6, 2.65] as [number, number],
+      body: [4.8, 2.8] as [number, number],
+      fill: [0.9, 0.78] as [number, number],
+      mobileBody: [1.65, 2.75] as [number, number],
       mobileFill: [0.94, 0.68] as [number, number],
-      /** 桌面 / 竖屏镜头最少离房间中心多远（占进深的比例）：站在去掉前墙的门口 */
-      doorway: 0.62,
-      mobileDoorway: 0.46,
+      doorway: 0.72,
+      mobileDoorway: 0.76,
     },
     /**
      * 家具布置表：at 是 [x, y, z]，yaw 是绕竖直轴的朝向，scale 是整体缩放。
-     * 每个 at 都对应一件函数模型的落地原点；以后换 GLB 时沿用同一项即可。
-     * 矮柜的礼物和铜牌跟着 cabinet 走；plant 的落地点是搁板面，不是地板。
+     * 桌面物件的 y 是茶几面，搁板物件的 y 是搁板面；其它家具原点在地板落点。
      */
     layout: {
-      cabinet: { at: [0, 0, -1.32] as [number, number, number], yaw: 0, scale: 1 },
-      rug: { at: [-1.43, 0, -0.65] as [number, number, number], yaw: 0, scale: 1 },
-      bed: { at: [-1.43, 0, -0.65] as [number, number, number], yaw: -0.18, scale: 1 },
-      bowls: { at: [-0.75, 0, -0.2] as [number, number, number], yaw: 0.24, scale: 1 },
-      ball: { at: [-0.72, 0, -0.52] as [number, number, number], yaw: 0.4, scale: 1 },
-      floorLamp: { at: [1.86, 0, -0.92] as [number, number, number], yaw: 0, scale: 1 },
-      shelf: { at: [1.22, 0, -1.57] as [number, number, number], yaw: 0, scale: 1 },
-      window: { at: [-2.37, 0, -0.75] as [number, number, number], yaw: Math.PI / 2, scale: 1 },
-      plant: { at: [1.46, 1.41, -1.5] as [number, number, number], yaw: 0, scale: 1 },
+      sofa: { at: [-1.72, 0, -1.2] as [number, number, number], yaw: 0, scale: 1 },
+      cushionLeft: { at: [-2.14, 0.48, -1.28] as [number, number, number], yaw: -0.12, scale: 1 },
+      cushionRight: { at: [-1.3, 0.48, -1.28] as [number, number, number], yaw: 0.14, scale: 1 },
+      blanket: { at: [-2.43, 0.54, -1.02] as [number, number, number], yaw: 0.08, scale: 1 },
+      rug: { at: [0, 0, 0.18] as [number, number, number], yaw: 0, scale: 1 },
+      coffeeTable: { at: [0, 0, 0.18] as [number, number, number], yaw: 0, scale: 1 },
+      photo: { at: [0.23, 0.4, 0.03] as [number, number, number], yaw: -0.22, scale: 1 },
+      book: { at: [-0.25, 0.405, 0.08] as [number, number, number], yaw: -0.14, scale: 1 },
+      cup: { at: [0.02, 0.4, 0.36] as [number, number, number], yaw: 0, scale: 1 },
+      letters: { at: [-0.24, 0.415, 0.31] as [number, number, number], yaw: 0.08, scale: 1 },
+      tableVase: { at: [-0.43, 0.4, -0.16] as [number, number, number], yaw: 0, scale: 1 },
+      cabinet: { at: [1.28, 0, -1.48] as [number, number, number], yaw: 0, scale: 1 },
+      mainVase: { at: [1.28, 0.52, -1.48] as [number, number, number], yaw: 0, scale: 1 },
+      balloons: { at: [1.7, 0, -1.3] as [number, number, number], yaw: 0, scale: 1 },
+      bed: { at: [1.32, 0, -0.45] as [number, number, number], yaw: 0.12, scale: 1 },
+      bowls: { at: [1.55, 0, 0.3] as [number, number, number], yaw: -0.18, scale: 1 },
+      ball: { at: [1.12, 0, 0.52] as [number, number, number], yaw: 0.4, scale: 1 },
+      floorLamp: { at: [2.34, 0, -0.82] as [number, number, number], yaw: 0, scale: 1 },
+      shelfLower: { at: [-1.72, 1.35, -1.76] as [number, number, number], yaw: 0, scale: 1 },
+      shelfUpper: { at: [-1.72, 1.9, -1.76] as [number, number, number], yaw: 0, scale: 1 },
+      plant: { at: [-2.05, 1.94, -1.66] as [number, number, number], yaw: 0, scale: 1 },
+      snackJar: { at: [-1.32, 1.39, -1.63] as [number, number, number], yaw: 0, scale: 1 },
+      shelfPhotoA: { at: [-1.8, 1.39, -1.65] as [number, number, number], yaw: -0.06, scale: 1 },
+      shelfPhotoB: { at: [-1.48, 1.94, -1.65] as [number, number, number], yaw: 0.08, scale: 1 },
+      window: { at: [0, 0, -1.77] as [number, number, number], yaw: 0, scale: 1 },
+      pendant: { at: [0, 0, -0.2] as [number, number, number], yaw: 0, scale: 1 },
     },
-    /** 宠物窝外径、落地灯总高；搁板和窗的宽度 / 高度 / 中心高度 */
+    /** 沙发净宽、宠物窝半径、落地灯高；大窗宽 / 高 / 中心高；上下搁板宽度 */
+    sofa: { w: 1.7 },
     bed: { radius: 0.58 },
     floorLamp: { h: 1.72 },
-    shelf: { w: 1.08, d: 0.24, y: 1.35 },
-    window: { w: 1.25, h: 1.35, y: 1.6 },
-    /**
-     * 三种主色和一个点缀色：灰绿墙、蜂蜜木、米白织物，陶土红只用于小面积。
-     * wallLow 是墙裙的浅灰绿，leaf 只用于植物，brass 用于柜脚小五金和铜牌。
-     */
+    window: { w: 1.65, h: 1.45, y: 1.65 },
+    shelf: { lowerW: 1.18, upperW: 1.02, d: 0.25 },
+    /** 灰绿墙、深红棕地板、米白布料、蜂蜜木；橙色只用于靠垫、气球等小面积 */
     palette: {
-      wall: 0xa9bdb0,
-      wallLow: 0xc7d0c0,
-      ceiling: 0xeee7d8,
-      wood: 0xc18d58,
-      woodDark: 0x825c3d,
-      floor: 0xd0a572,
-      fabric: 0xeee3cf,
-      fabricShade: 0xd8c9ae,
-      accent: 0xbf725b,
-      brass: 0xb39256,
-      leaf: 0x638269,
-      curtain: 0xf1e5cf,
+      wall: 0x91aaa0,
+      wallLow: 0xb9c8ba,
+      ceiling: 0xece5d8,
+      trim: 0xf2ecdf,
+      wood: 0xb77a45,
+      woodDark: 0x75503a,
+      floor: 0x704238,
+      fabric: 0xeee4d3,
+      fabricShade: 0xd7c7ae,
+      accent: 0xd57a3d,
+      brass: 0xa8834c,
+      leaf: 0x5d7f60,
+      curtain: 0xf4ead9,
     },
-    /** RoomEnvironment 只赋给小屋自己的 PBR 材质；env 是环境反射强度 */
-    environment: { env: 0.5 },
-    /** 自发光强度：窗景不超过 1，灯罩临界微亮，只有小灯泡保留明显但局部的辉光 */
-    glow: { window: 0.94, shade: 1.02, bulbs: 1.4 },
-    /** 小屋在主场景外的中心 x / z；暗幕颜色；微尘数量、亮度和上升速度（高画质才有微尘） */
-    stage: { x: 600, z: 0, color: 0x131916, glow: 0xffd6a0, dust: 24, dustGlow: 0.28, dustSpeed: 0.025 },
-    /** 落地灯和窗口补光的强度；其余亮度由每件材质自己的环境贴图均匀提供 */
-    light: 1,
-    windowLight: 0.75,
+    /** 独立场景的环境反射、背景与雾；HDR 仅在开发环境替换 RoomEnvironment */
+    environment: { env: 0.35, background: 0x53645d, fogNear: 9, fogFar: 22 },
+    /** 只让太阳、灯泡和灯罩轻微发光，墙和布料自身不超过 1 */
+    glow: { sun: 1.04, shade: 1.02, bulbs: 1.28 },
+    /** 独立灯光：环境光、半球光、窗口平行光、落地灯与吊灯；主光从背墙窗户方向射入 */
+    light: {
+      ambient: 0.12,
+      hemi: 0.28,
+      sun: 1.15,
+      sunPosition: [-2, 6, -4] as [number, number, number],
+      floorLamp: 0.65,
+      pendant: 0.55,
+      shadowSize: 1024,
+    },
+    /** 主花瓶先插满 10 枝，剩余花才进茶几小花瓶；玩具散点全部位于窝边地毯 / 地板 */
+    gifts: {
+      mainVase: 10,
+      toySpots: [[1.02, 0, 0.62], [1.58, 0, 0.58], [1.96, 0, 0.02], [0.94, 0, -0.12]] as Array<[number, number, number]>,
+      jarSpots: [[-0.045, 0.035, 0], [0.04, 0.04, 0.015], [-0.025, 0.09, -0.02], [0.035, 0.095, -0.015]] as Array<[number, number, number]>,
+    },
     /** 每类礼物最多摆出多少件实物，超过后不再增加模型 */
     caps: { flower: 14, candle: 6, snack: 4, toy: 4, letter: 5 },
-    /**
-     * 相册：这只宠物另外的几张照片，不挂在墙上，在画面右侧的一列缩略图里看。
-     * sample 是示例宠物各有几张，variants 是占位画像一共有几种画法（和 textures 里的 POSES 一致）。
-     */
+    /** 相册：sample 是示例宠物各有几张，variants 是程序占位画像的画法数量 */
     album: {
       sample: [2, 4] as [number, number],
       variants: 4,

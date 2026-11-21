@@ -1,86 +1,45 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CONFIG } from '../config';
-import type { Pet } from '../data/pets';
+import { albumOf, type Pet } from '../data/pets';
 import { store, type OfferKind } from '../data/store';
 import type { PhotoEntry } from './Batches';
-import { candle, flowerStem, letter, snack, toy, vase } from './gifts';
+import { flowerStem, letter, toy } from './gifts';
 import {
   buildBall,
+  buildBalloons,
+  buildBook,
   buildBowls,
   buildCabinet,
+  buildCoffeeTable,
+  buildCup,
+  buildCushion,
   buildFloorLamp,
+  buildJarTreat,
+  buildPendant,
   buildPetBed,
+  buildPhotoFrame,
   buildPlant,
   buildRoomShell,
   buildRoundRug,
   buildShelf,
+  buildSofa,
+  buildSofaBlanket,
+  buildTreatJar,
+  buildVase,
   buildWindow,
   place,
   type RoomContext,
 } from './PetRoom';
-import { canvasTexture, glowTexture, makeCanvas, textMesh } from './textures';
-import type { Lamp, World } from './World';
+import { canvasTexture, drawPortrait, makeCanvas, textMesh } from './textures';
+import type { World } from './World';
 
 const S = CONFIG.shrine;
-const CAB = S.cabinet;
 const LAYOUT = S.layout;
-
-/** 布景的地面比大厅地面高一点，把大厅地砖挡在下面 */
-const GROUND = 0.115;
-/** root 的原点是镜头对准的房间中心；家具函数自己的原点都在各自落地处 */
-const FLOOR = GROUND - S.y;
-const BACK = -S.room.d / 2;
-const TOP = CAB.h;
-const PLAQUE_Y = CAB.h * 0.69;
-
-/** 柜面上的礼物位置（相对矮柜中心）：后排蜡烛，前排小物，花瓶只占左右两角 */
-const VASE_SPOTS: Array<[number, number]> = [[-0.57, -0.1], [0.57, -0.1]];
-const FLOWERS_PER_VASE = 7;
-const SPOTS: Record<'candle' | 'snack' | 'toy', Array<[number, number]>> = {
-  candle: [[-0.27, -0.11], [-0.09, -0.12], [0.09, -0.12], [0.27, -0.11], [-0.18, -0.01], [0.18, -0.01]],
-  snack: [[-0.57, 0.11], [-0.43, 0.14], [-0.29, 0.14], [-0.48, 0.01]],
-  toy: [[0.32, 0.13], [0.47, 0.12], [0.6, 0.08], [0.48, -0.01]],
-};
-const LETTER_SPOT: [number, number] = [0, 0.12];
-
-/** 礼物落下的高度和时长 */
-const DROP_H = 0.28;
-const DROP_TIME = 0.6;
-
-/** 暗幕在远处把整间小屋封闭起来；房间自身的墙、地板和天花板挡住大部分视线 */
-const VEIL = { w: 9, h: 12, d: 10 };
-/** 暗幕背面比房间背墙再靠后 8 厘米，避免两个面共面 */
-const VEIL_BACK = -S.room.d / 2 - 0.08;
-const DUST_Y = [0.35, 2.65] as const;
+const FLOOR = -S.y;
+const POP_TIME = 0.48;
 
 export type ShrineHit = 'letter' | 'niche' | null;
-
-/** 墙上的手写名字由宠物数据生成，画布最大 512，透明文字画在暗幕之后 */
-function wallName(name: string) {
-  const fontFamily = '"Bradley Hand", "Segoe Script", "Brush Script MT", cursive';
-  const [measure, mctx] = makeCanvas(4, 4);
-  void measure;
-  let size = 78;
-  mctx.font = `600 ${size}px ${fontFamily}`;
-  const measured = mctx.measureText(name).width;
-  if (measured > 470) size *= 470 / measured;
-  const width = Math.min(512, Math.ceil(Math.min(measured, 470) + 36));
-  const [canvas, ctx] = makeCanvas(width, 128);
-  ctx.font = `600 ${size}px ${fontFamily}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = new THREE.Color(S.palette.accent).getStyle();
-  ctx.fillText(name, width / 2, 65);
-  const material = new THREE.MeshBasicMaterial({ map: canvasTexture(canvas), transparent: true, depthWrite: false });
-  const height = 0.25;
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry((height * width) / 128, height), material);
-  const fit = Math.min(1, 1.35 / ((height * width) / 128));
-  mesh.scale.setScalar(fit);
-  mesh.renderOrder = 11;
-  return mesh;
-}
 
 function disposeText(mesh: THREE.Mesh | null) {
   if (!mesh) return;
@@ -91,208 +50,184 @@ function disposeText(mesh: THREE.Mesh | null) {
   mesh.geometry.dispose();
 }
 
-/**
- * 单宠物视角：一间明亮、温暖的小屋。
- * 背墙是名字、照片和矮柜，左侧是窝与碗，右侧是落地灯和搁板，左墙有傍晚的窗。
- * 整间小屋和影厅一样建在主场景之外，避免大厅灯光叠加；Shrine 对外的入口、镜头中心、
- * 礼物和拾取接口保持不变；家具搭建与布置表在 PetRoom / config 里。
- */
+/** 单宠物视角：独立场景里的日常客厅。家具只搭一次，打开时只换照片、名字和礼物 */
 export class Shrine {
-  /** 当前打开的是哪张相框；没打开时是 null */
+  readonly scene = new THREE.Scene();
+  readonly center = new THREE.Vector3(0, S.y, 0);
+  readonly normal = new THREE.Vector3(0, 0, 1);
   entry: PhotoEntry | null = null;
-  /** 镜头对准的那一点 */
-  readonly center = new THREE.Vector3();
 
-  /** 可点击的家具、照片和礼物 */
+  /** 可点击的家具和礼物；房间壳体不参与拾取 */
   private root = new THREE.Group();
-  private cabinet: THREE.Group;
-  private items = new THREE.Group();
-  private letters = new THREE.Group();
-  /** 房间壳体、窗和微尘：点这些地方算点在小屋外，可以返回 */
-  private stage = new THREE.Group();
-  private veil: THREE.Mesh<THREE.BoxGeometry, THREE.MeshBasicMaterial>;
-  private photo: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private architecture = new THREE.Group();
   private roomContext: RoomContext;
-  private frame: THREE.MeshStandardMaterial;
-  private plaqueText: THREE.Mesh | null = null;
+  private mainPhoto: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private letters = new THREE.Group();
+  private mainFlowers = new THREE.Group();
+  private tableFlowers = new THREE.Group();
+  private tableVase = new THREE.Group();
+  private jarContents = new THREE.Group();
+  private toys = new THREE.Group();
+  private bowls: THREE.Group;
+  private balloons: THREE.Group;
+  private sofa: THREE.Group;
+  private cushionLeft: THREE.Group;
+  private cushionRight: THREE.Group;
   private nameText: THREE.Mesh | null = null;
-  private lamp: Lamp;
-  private windowLamp: Lamp;
   private placed: Record<OfferKind, THREE.Object3D[]> = { flower: [], candle: [], snack: [], toy: [], letter: [] };
-  private drops: Array<{ o: THREE.Object3D; y: number; t: number }> = [];
-  private dust: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
-  private motes: Array<{ x: number; z: number; phase: number; speed: number }> = [];
+  private pops: Array<{ o: THREE.Object3D; t: number; scale: THREE.Vector3; y: number }> = [];
+  private fakeShadows: THREE.Mesh[] = [];
+  private sun: THREE.DirectionalLight;
   private time = 0;
-  /** 高画质才有微尘 */
-  dusty = true;
   private ray = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
 
   constructor(private world: World) {
-    // 只生成一次环境贴图，并显式赋给本屋材质；绝不写 scene.environment
+    this.scene.background = new THREE.Color(S.environment.background);
+    this.scene.fog = new THREE.Fog(S.environment.background, S.environment.fogNear, S.environment.fogFar);
+
+    // 同步生成可永远使用的环境；开发 HDR 只在到达后替换这一间场景
     const pmrem = new THREE.PMREMGenerator(world.renderer);
     const environment = new RoomEnvironment();
-    const target = pmrem.fromScene(environment, 0.04);
+    const fallback = pmrem.fromScene(environment, 0.04);
+    this.scene.environment = fallback.texture;
+    this.scene.environmentIntensity = S.environment.env;
     environment.dispose();
     pmrem.dispose();
 
-    const photoMaterial = new THREE.MeshBasicMaterial({ map: world.photos.map, color: 0xf7f3ed });
-    this.roomContext = { env: target.texture, photoMaterial, photos: [] };
+    this.scene.add(new THREE.AmbientLight(0xfff6e8, S.light.ambient));
+    this.scene.add(new THREE.HemisphereLight(0xfff1dd, 0x6d5a50, S.light.hemi));
+    this.sun = new THREE.DirectionalLight(0xffdfb5, S.light.sun);
+    this.sun.position.fromArray(S.light.sunPosition);
+    this.sun.target.position.set(0, 0, 0);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.setScalar(S.light.shadowSize);
+    Object.assign(this.sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.5, far: 18 });
+    this.sun.shadow.bias = -0.0005;
+    this.sun.shadow.normalBias = 0.025;
+    this.sun.shadow.radius = 4;
+    this.scene.add(this.sun, this.sun.target);
 
-    // 主照片：圆润外框 + 米白卡纸；外框颜色会换成照片墙上对应那一格
-    const F = S.photo;
-    const photoY = S.photoY - S.y;
-    this.frame = new THREE.MeshStandardMaterial({
-      color: S.palette.woodDark, roughness: 0.76, envMap: target.texture, envMapIntensity: S.environment.env,
-    });
-    const frameBack = new THREE.Mesh(new RoundedBoxGeometry(F + 0.12, F + 0.12, 0.055, 4, 0.035), this.frame);
-    frameBack.position.set(0, photoY, BACK + 0.035);
-    this.root.add(frameBack);
-    const matBoard = new THREE.Mesh(
-      new RoundedBoxGeometry(F + 0.055, F + 0.055, 0.02, 3, 0.018),
-      new THREE.MeshStandardMaterial({ color: S.palette.fabric, roughness: 0.95, envMap: target.texture, envMapIntensity: S.environment.env }),
-    );
-    matBoard.position.set(0, photoY, BACK + 0.067);
-    this.root.add(matBoard);
-    this.photo = new THREE.Mesh(new THREE.PlaneGeometry(F, F), photoMaterial);
-    this.photo.position.set(0, photoY, BACK + 0.079);
-    this.root.add(this.photo);
-    this.roomContext.photos.push(this.photo);
+    this.root.position.copy(this.center);
+    this.architecture.position.copy(this.center);
+    this.scene.add(this.root, this.architecture);
+    this.roomContext = {
+      photoMaterial: new THREE.MeshBasicMaterial({ map: world.photos.map, color: 0xffffff }),
+      albumPhotos: [],
+      stringBulbs: [],
+    };
 
-    // 每件家具独立搭建、按布置表落位；以后换 GLB 只替换同一个 Group 里的模型
-    this.cabinet = place(buildCabinet(this.roomContext), LAYOUT.cabinet, FLOOR);
-    this.root.add(this.cabinet);
-    this.items.add(this.letters);
-    this.cabinet.add(this.items);
+    const shell = buildRoomShell(this.roomContext);
+    shell.position.y = FLOOR;
+    this.architecture.add(shell);
+    this.architecture.add(place(buildWindow(this.roomContext), LAYOUT.window, FLOOR));
+
+    this.sofa = place(buildSofa(this.roomContext), LAYOUT.sofa, FLOOR);
+    this.cushionLeft = place(buildCushion(this.roomContext), LAYOUT.cushionLeft, FLOOR);
+    this.cushionRight = place(buildCushion(this.roomContext), LAYOUT.cushionRight, FLOOR);
+    this.balloons = place(buildBalloons(this.roomContext), LAYOUT.balloons, FLOOR);
+    this.bowls = place(buildBowls(this.roomContext), LAYOUT.bowls, FLOOR);
     this.root.add(
+      this.sofa,
+      this.cushionLeft,
+      this.cushionRight,
+      place(buildSofaBlanket(this.roomContext), LAYOUT.blanket, FLOOR),
       place(buildRoundRug(this.roomContext), LAYOUT.rug, FLOOR),
+      place(buildCoffeeTable(this.roomContext), LAYOUT.coffeeTable, FLOOR),
+      place(buildPhotoFrame(this.roomContext, S.photo, true), LAYOUT.photo, FLOOR),
+      place(buildBook(this.roomContext), LAYOUT.book, FLOOR),
+      place(buildCup(this.roomContext), LAYOUT.cup, FLOOR),
+      place(buildCabinet(this.roomContext), LAYOUT.cabinet, FLOOR),
       place(buildPetBed(this.roomContext), LAYOUT.bed, FLOOR),
-      place(buildBowls(this.roomContext), LAYOUT.bowls, FLOOR),
+      this.bowls,
       place(buildBall(this.roomContext), LAYOUT.ball, FLOOR),
       place(buildFloorLamp(this.roomContext), LAYOUT.floorLamp, FLOOR),
-      place(buildShelf(this.roomContext), LAYOUT.shelf, FLOOR),
+      place(buildShelf(this.roomContext, S.shelf.lowerW), LAYOUT.shelfLower, FLOOR),
+      place(buildShelf(this.roomContext, S.shelf.upperW), LAYOUT.shelfUpper, FLOOR),
       place(buildPlant(this.roomContext), LAYOUT.plant, FLOOR),
+      place(buildPhotoFrame(this.roomContext, 0.2), LAYOUT.shelfPhotoA, FLOOR),
+      place(buildPhotoFrame(this.roomContext, 0.18), LAYOUT.shelfPhotoB, FLOOR),
+      this.balloons,
+      place(buildPendant(this.roomContext), LAYOUT.pendant, FLOOR),
     );
+    this.mainPhoto = this.roomContext.mainPhoto!;
 
-    this.stage.add(buildRoomShell(this.roomContext));
-    this.stage.children[0].position.y = FLOOR;
-    this.stage.add(place(buildWindow(this.roomContext), LAYOUT.window, FLOOR));
+    // 两只花瓶一直保留各自锚点；茶几花瓶只在主花瓶插满后出现
+    const mainVase = place(new THREE.Group(), LAYOUT.mainVase, FLOOR);
+    mainVase.add(buildVase(this.roomContext), this.mainFlowers);
+    this.tableVase = place(new THREE.Group(), LAYOUT.tableVase, FLOOR);
+    this.tableVase.add(buildVase(this.roomContext, true), this.tableFlowers);
+    this.root.add(mainVase, this.tableVase);
 
-    this.root.visible = false;
-    world.scene.add(this.root);
+    place(this.letters, LAYOUT.letters, FLOOR);
+    this.root.add(this.letters, this.toys);
+    const jar = place(buildTreatJar(this.roomContext), LAYOUT.snackJar, FLOOR);
+    jar.add(this.jarContents);
+    this.root.add(jar);
 
-    // 很少的暖色微尘，只让傍晚的光有一点空气感
-    const pos = new Float32Array(S.stage.dust * 3);
-    for (let i = 0; i < S.stage.dust; i++) {
-      const x = (Math.random() - 0.5) * (S.room.w - 0.5);
-      const z = BACK + 0.25 + Math.random() * (S.room.d - 0.65);
-      this.motes.push({ x, z, phase: Math.random() * 6.28, speed: 0.6 + Math.random() * 0.8 });
-      pos.set([x, DUST_Y[0] + Math.random() * (DUST_Y[1] - DUST_Y[0]) - S.y, z], i * 3);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.dust = new THREE.Points(
-      geo,
-      new THREE.PointsMaterial({
-        map: glowTexture(), color: S.stage.glow, size: 0.021, transparent: true, opacity: S.stage.dustGlow,
-        depthWrite: false, fog: false, blending: THREE.AdditiveBlending,
-      }),
-    );
-    this.dust.renderOrder = 12.5;
-    this.dust.frustumCulled = false;
-    this.stage.add(this.dust);
-    this.stage.visible = false;
-    world.scene.add(this.stage);
+    // 两盏局部点光属于这间场景，不借用 world.pointLight，也不开阴影
+    const floorLamp = new THREE.PointLight(0xffd0a0, S.light.floorLamp, 4.5, 2);
+    floorLamp.position.copy(this.root.localToWorld(new THREE.Vector3(LAYOUT.floorLamp.at[0] - 0.42, FLOOR + S.floorLamp.h - 0.25, LAYOUT.floorLamp.at[2])));
+    const pendant = new THREE.PointLight(0xffd6a8, S.light.pendant, 5, 2);
+    pendant.position.copy(this.root.localToWorld(new THREE.Vector3(LAYOUT.pendant.at[0], FLOOR + 2.15, LAYOUT.pendant.at[2])));
+    this.scene.add(floorLamp, pendant);
 
-    this.veil = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshBasicMaterial({ color: S.stage.color, transparent: true, depthWrite: false, fog: false, side: THREE.BackSide }),
-    );
-    this.veil.renderOrder = 10;
-    this.veil.visible = false;
-    world.scene.add(this.veil);
+    this.root.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.userData.contactShadow) this.fakeShadows.push(o);
+    });
+    this.dusty = true;
 
-    // 两盏灯都走 World 的灯位分配；不用真实阴影
-    this.lamp = world.pointLight(1e6, 0, 0, 0, 6, 0xffd7a6);
-    this.windowLamp = world.pointLight(1e6, 0, 0, 0, 6.5, 0xffc8a0);
-    world.updaters.push((dt) => this.update(dt));
+    // 正式构建不会执行这里；素材缺失、404 或解码失败都继续显示上面的代码版
+    if (import.meta.env.DEV) void this.loadDevAssets();
   }
 
-  /** 镜头能不能到 (x, z)：得待在远处暗幕盒子里面，否则会看到盒子外面的主场景 */
-  inside(x: number, z: number, margin = 0.3) {
-    const e = this.entry;
-    if (!e) return true;
-    const dx = x - this.center.x;
-    const dz = z - this.center.z;
-    const along = dx * e.normal.z - dz * e.normal.x;
-    const out = dx * e.normal.x + dz * e.normal.z;
-    return Math.abs(along) < VEIL.w / 2 - margin && out > VEIL_BACK + margin && out < VEIL_BACK + VEIL.d - margin;
+  /** dusty 沿用原接口名，现在表示高画质阴影；低画质使用家具下的模糊圆斑 */
+  get dusty() {
+    return this.sun.castShadow;
+  }
+
+  set dusty(on: boolean) {
+    this.sun.castShadow = on;
+    for (const mesh of this.fakeShadows) mesh.visible = !on;
   }
 
   get isOpen() {
     return this.entry !== null;
   }
 
-  /** 布置成这只宠物的小屋。调用时画面应该是暗的，这里不做过渡 */
+  /** 镜头始终在这间独立客厅的门口范围内 */
+  inside(x: number, z: number, margin = 0.3) {
+    if (!this.entry) return true;
+    return Math.abs(x - this.center.x) < S.room.w / 2 + 0.4 - margin && z > -S.room.d / 2 + margin && z < S.room.d / 2 + 1.8 - margin;
+  }
+
   open(entry: PhotoEntry) {
     this.entry = entry;
-    // 和影厅一样建在主场景之外：大厅的灯随距离自然衰减，不会叠进这间浅色小屋
-    this.center.set(S.stage.x, S.y, S.stage.z);
-
-    for (const g of [this.root, this.stage]) {
-      g.position.copy(this.center);
-      g.rotation.y = entry.rotY;
-      g.visible = true;
-      g.updateMatrixWorld(true);
-    }
-    this.veil.scale.set(VEIL.w, VEIL.h, VEIL.d);
-    this.veil.position.copy(this.center).addScaledVector(entry.normal, VEIL_BACK + VEIL.d / 2);
-    this.veil.position.y = 0.1 + VEIL.h / 2;
-    this.veil.rotation.y = entry.rotY;
-    this.veil.visible = true;
-
-    const up = new THREE.Vector3(0, 1, 0);
-    const lampPlace = LAYOUT.floorLamp;
-    const lp = lampPlace.at;
-    const lampOffset = new THREE.Vector3(0, S.floorLamp.h - 0.47, 0.12).multiplyScalar(lampPlace.scale).applyAxisAngle(up, lampPlace.yaw);
-    this.root.localToWorld(this.lamp.pos.set(lp[0] + lampOffset.x, FLOOR + lp[1] + lampOffset.y, lp[2] + lampOffset.z));
-    this.lamp.intensity = S.light;
-    const windowPlace = LAYOUT.window;
-    const wp = windowPlace.at;
-    const windowOffset = new THREE.Vector3(0, S.window.y, 0.42).multiplyScalar(windowPlace.scale).applyAxisAngle(up, windowPlace.yaw);
-    this.root.localToWorld(this.windowLamp.pos.set(wp[0] + windowOffset.x, FLOOR + wp[1] + windowOffset.y, wp[2] + windowOffset.z));
-    this.windowLamp.intensity = S.windowLight;
-    this.dust.visible = this.dusty;
-
     this.setPet(entry.pet);
     this.rebuild();
+    this.root.updateMatrixWorld(true);
+    this.architecture.updateMatrixWorld(true);
   }
 
-  /** 收起来，同样在画面暗着的时候调用 */
   close() {
     this.entry = null;
-    this.root.visible = false;
-    this.stage.visible = false;
-    this.veil.visible = false;
-    this.drops.length = 0;
-    this.lamp.pos.x = 1e6;
-    this.windowLamp.pos.x = 1e6;
+    this.pops.length = 0;
   }
 
-  /** 访客放下一件礼物（数据已写入 store）：重新摆放，并让新的那件轻轻落下 */
+  /** 新礼物在所属位置轻轻弹出，不再从照片上方落下 */
   drop(kind: OfferKind) {
     if (!this.entry) return;
     this.rebuild();
     const list = this.placed[kind];
     const o = list[list.length - 1];
     if (!o) return;
-    this.drops.push({ o, y: o.position.y, t: 0 });
-    o.position.y += DROP_H;
+    const scale = o.scale.clone();
+    this.pops.push({ o, t: 0, scale, y: o.position.y });
+    o.scale.copy(scale).multiplyScalar(0.25);
   }
 
-  /** 点击落在什么位置：那摞信、这间屋子里的家具 / 照片，还是空白墙面 / 外面 */
   pick(clientX: number, clientY: number, camera: THREE.Camera): ShrineHit {
-    if (!this.root.visible) return null;
+    if (!this.entry) return null;
     this.ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
     this.ray.setFromCamera(this.ndc, camera);
     const hit = this.ray.intersectObject(this.root, true)[0];
@@ -301,108 +236,197 @@ export class Shrine {
     return 'niche';
   }
 
-  private update(dt: number) {
-    if (!this.root.visible) return;
-    this.dust.visible = this.dusty;
-    this.drift(dt);
-    for (let i = this.drops.length - 1; i >= 0; i--) {
-      const d = this.drops[i];
-      d.t = Math.min(1, d.t + dt / DROP_TIME);
-      d.o.position.y = d.y + DROP_H * Math.pow(1 - d.t, 3);
-      if (d.t >= 1) this.drops.splice(i, 1);
-    }
-  }
-
-  private drift(dt: number) {
-    if (!this.dust.visible) return;
+  update(dt: number) {
+    if (!this.entry) return;
     this.time += dt;
-    const a = this.dust.geometry.attributes.position as THREE.BufferAttribute;
-    this.motes.forEach((m, i) => {
-      let y = a.getY(i) + S.stage.dustSpeed * m.speed * dt;
-      if (y > DUST_Y[1] - S.y) y = DUST_Y[0] - S.y;
-      a.setXYZ(i, m.x + Math.sin(this.time * 0.3 * m.speed + m.phase) * 0.06, y, m.z);
-    });
-    a.needsUpdate = true;
+    this.balloons.rotation.z = Math.sin(this.time * 0.75) * 0.025;
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i];
+      p.t = Math.min(1, p.t + dt / POP_TIME);
+      const ease = 1 - Math.pow(1 - p.t, 3);
+      const bounce = 1 + Math.sin(p.t * Math.PI) * 0.1;
+      p.o.scale.copy(p.scale).multiplyScalar((0.25 + ease * 0.75) * bounce);
+      p.o.position.y = p.y + Math.sin(p.t * Math.PI) * 0.025;
+      if (p.t >= 1) {
+        p.o.scale.copy(p.scale);
+        p.o.position.y = p.y;
+        this.pops.splice(i, 1);
+      }
+    }
   }
 
   private setPet(pet: Pet) {
-    const uv = this.world.photos.uvOf(pet);
-    for (const photo of this.roomContext.photos) {
-      const attr = photo.geometry.attributes.uv as THREE.BufferAttribute;
-      const [u0, v0, u1, v1] = uv;
-      attr.setXY(0, u0, v1);
-      attr.setXY(1, u1, v1);
-      attr.setXY(2, u0, v0);
-      attr.setXY(3, u1, v0);
-      attr.needsUpdate = true;
-    }
-    this.frame.color.setHex(this.world.slots.get(pet.id)?.frame ?? S.palette.woodDark).multiplyScalar(0.88);
+    const [u0, v0, u1, v1] = this.world.photos.uvOf(pet);
+    const uv = this.mainPhoto.geometry.attributes.uv as THREE.BufferAttribute;
+    uv.setXY(0, u0, v1);
+    uv.setXY(1, u1, v1);
+    uv.setXY(2, u0, v0);
+    uv.setXY(3, u1, v0);
+    uv.needsUpdate = true;
+    this.roomContext.frameMaterial?.color.setHex(this.world.slots.get(pet.id)?.frame ?? S.palette.woodDark).multiplyScalar(0.9);
 
-    disposeText(this.plaqueText);
     disposeText(this.nameText);
-    const years = [pet.birthDate?.slice(0, 4), pet.passedDate.slice(0, 4)].filter(Boolean).join(' – ');
-    this.plaqueText = textMesh(`${pet.name} · ${years}`, { height: 0.048, color: '#2e2010', maxWidth: 0.46 });
-    this.plaqueText.position.set(0, PLAQUE_Y, CAB.d / 2 + 0.064);
-    this.plaqueText.renderOrder = 11;
-    this.cabinet.add(this.plaqueText);
-
-    this.nameText = wallName(pet.name);
-    this.nameText.position.set(0, S.nameY - S.y, BACK + 0.07);
-    this.root.add(this.nameText);
+    this.nameText = textMesh(pet.name, { height: 0.042, color: '#fff3df', maxWidth: 0.18 });
+    this.nameText.position.set(-0.16, 0.058, 0.137);
+    this.nameText.renderOrder = 11;
+    this.bowls.add(this.nameText);
+    this.setAlbumPhotos(pet);
   }
 
-  /** 按 store 里的数据把礼物重新摆到矮柜上；items 是柜子的子节点，会跟布置表一起移动 */
+  /** 搁板小相框使用相册其他照片；真实图片未到时先画同一张占位画像 */
+  private setAlbumPhotos(pet: Pet) {
+    const shots = albumOf(pet);
+    this.roomContext.albumPhotos.forEach((material, i) => {
+      const shot = shots[i];
+      const [canvas, ctx] = makeCanvas(256, 256);
+      drawPortrait(ctx, 0, 0, 256, pet, shot?.variant ?? i + 1);
+      const apply = (texture: THREE.Texture) => {
+        material.map?.dispose();
+        material.map = texture;
+        material.needsUpdate = true;
+      };
+      apply(canvasTexture(canvas));
+      if (shot?.url) {
+        new THREE.TextureLoader().load(shot.url, (texture) => {
+          if (this.entry?.pet !== pet) {
+            texture.dispose();
+            return;
+          }
+          texture.colorSpace = THREE.SRGBColorSpace;
+          apply(texture);
+        });
+      }
+    });
+  }
+
   private rebuild() {
     const pet = this.entry?.pet;
     if (!pet) return;
-    this.drops.length = 0;
+    this.pops.length = 0;
     this.letters.clear();
-    this.items.clear();
-    this.items.add(this.letters);
+    this.mainFlowers.clear();
+    this.tableFlowers.clear();
+    this.jarContents.clear();
+    this.toys.clear();
     for (const k of Object.keys(this.placed) as OfferKind[]) this.placed[k] = [];
 
     const gifts = store.gifts(pet);
+    const counts = store.counts(pet);
     const caps = S.caps;
-
     const flowers = gifts.flower.slice(0, caps.flower);
-    for (let vi = 0; vi * FLOWERS_PER_VASE < flowers.length; vi++) {
-      const [vx, vz] = VASE_SPOTS[vi % VASE_SPOTS.length];
-      const pot = vase();
-      pot.position.set(vx, TOP, vz);
-      flowers.slice(vi * FLOWERS_PER_VASE, (vi + 1) * FLOWERS_PER_VASE).forEach((v, j) => {
-        const stem = flowerStem(v, 0.21 + 0.03 * (j % 4));
-        stem.rotation.z = j === 0 ? 0 : 0.17 + 0.07 * (j % 3);
+    this.tableVase.visible = flowers.length > S.gifts.mainVase;
+    const addFlowers = (list: number[], target: THREE.Group, small: boolean) => {
+      list.forEach((v, j) => {
+        const angle = j * 2.4;
+        const radius = small ? 0.022 : 0.04;
         const holder = new THREE.Group();
+        const stem = flowerStem(v, (small ? 0.18 : 0.25) + 0.025 * (j % 4));
+        stem.scale.setScalar(small ? 1 : 1.15);
+        stem.rotation.z = j === 0 ? 0 : 0.16 + 0.06 * (j % 3);
         holder.add(stem);
-        holder.position.y = 0.03;
-        holder.rotation.y = j * 2.4 + vi;
-        pot.add(holder);
+        holder.position.set(Math.cos(angle) * radius, small ? 0.06 : 0.08, Math.sin(angle) * radius);
+        holder.rotation.y = angle;
+        target.add(holder);
         this.placed.flower.push(holder);
       });
-      this.items.add(pot);
-    }
-
-    const placeGift = (kind: 'candle' | 'snack' | 'toy', make: (v: number, i: number) => THREE.Object3D) => {
-      gifts[kind].slice(0, caps[kind]).forEach((v, i) => {
-        const [x, z] = SPOTS[kind][i % SPOTS[kind].length];
-        const o = make(v, i);
-        o.position.set(x, TOP, z);
-        if (kind !== 'candle') o.rotation.y = i * 1.7 + 0.4;
-        this.items.add(o);
-        this.placed[kind].push(o);
-      });
     };
-    placeGift('candle', (v) => candle(v));
-    placeGift('snack', snack);
-    placeGift('toy', toy);
+    addFlowers(flowers.slice(0, S.gifts.mainVase), this.mainFlowers, false);
+    addFlowers(flowers.slice(S.gifts.mainVase), this.tableFlowers, true);
 
-    const n = Math.min(store.counts(pet).letter, caps.letter);
+    gifts.toy.slice(0, caps.toy).forEach((v, i) => {
+      const spot = S.gifts.toySpots[i % S.gifts.toySpots.length];
+      const o = toy(v, i);
+      o.position.set(spot[0], FLOOR + spot[1] + 0.002, spot[2]);
+      o.rotation.y = i * 1.7 + 0.4;
+      o.scale.setScalar(1.15);
+      this.toys.add(o);
+      this.placed.toy.push(o);
+    });
+
+    gifts.snack.slice(0, caps.snack).forEach((v, i) => {
+      const spot = S.gifts.jarSpots[i % S.gifts.jarSpots.length];
+      const o = buildJarTreat(v + i);
+      o.position.set(spot[0], spot[1], spot[2]);
+      o.rotation.y = i * 1.3;
+      this.jarContents.add(o);
+      this.placed.snack.push(o);
+    });
+
+    const lit = Math.min(counts.candle, caps.candle);
+    this.roomContext.stringBulbs.forEach((slot, i) => {
+      slot.mesh.material = i < lit ? slot.on : slot.off;
+      if (i < lit) this.placed.candle.push(slot.mesh);
+    });
+
+    const n = Math.min(counts.letter, caps.letter);
     for (let i = 0; i < n; i++) {
       const o = letter();
-      o.position.set(LETTER_SPOT[0] + (i % 2 ? 0.012 : -0.01), TOP + i * 0.0068, LETTER_SPOT[1] - (i % 3) * 0.006);
+      o.position.set((i % 2 ? 0.012 : -0.01), i * 0.0068, -(i % 3) * 0.006);
       o.rotation.y = ((i * 0.37) % 1 - 0.5) * 0.5;
       this.letters.add(o);
       this.placed.letter.push(o);
     }
+  }
+
+  /** 开发环境的渐进增强；任何 Promise 失败都不会影响代码替代版 */
+  private async loadDevAssets() {
+    const [{ GLTFLoader }, { DRACOLoader }, { RGBELoader }] = await Promise.all([
+      import('three/addons/loaders/GLTFLoader.js'),
+      import('three/addons/loaders/DRACOLoader.js'),
+      import('three/addons/loaders/RGBELoader.js'),
+    ]);
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('/node_modules/three/examples/jsm/libs/draco/gltf/');
+    draco.setWorkerLimit(2);
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(draco);
+    const load = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, (gltf) => resolve(gltf.scene), undefined, reject));
+    const jobs = [
+      load('/references/xiaowu/assets/tripo-room/sofa.glb').then((model) => this.swapDevModel(this.sofa, model, S.sofa.w)),
+      load('/references/xiaowu/assets/tripo-room/cushion.glb').then((model) => {
+        this.swapDevModel(this.cushionLeft, model.clone(true), 0.44, S.palette.accent);
+        this.swapDevModel(this.cushionRight, model, 0.44, S.palette.accent);
+      }),
+    ];
+    void Promise.allSettled(jobs).then(() => draco.dispose());
+
+    new RGBELoader().load('/references/xiaowu/assets/hero/studio-256.hdr', (hdr) => {
+      const generator = new THREE.PMREMGenerator(this.world.renderer);
+      const target = generator.fromEquirectangular(hdr);
+      this.scene.environment = target.texture;
+      this.scene.environmentRotation.set(0, 1.9, 0);
+      hdr.dispose();
+      generator.dispose();
+    });
+  }
+
+  /** 保留落地假阴影，只替换代码家具本体；GLB 统一成底面中心原点 */
+  private swapDevModel(anchor: THREE.Group, model: THREE.Group, width: number, tint?: number) {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    if (!Number.isFinite(size.x) || size.x <= 0) return;
+    model.scale.setScalar(width / size.x);
+    box.setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    model.position.add(new THREE.Vector3(-center.x, -box.min.y, -center.z));
+    model.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      o.castShadow = true;
+      o.receiveShadow = true;
+      if (tint !== undefined) {
+        const tintMaterial = (source: THREE.Material) => {
+          const material = source.clone();
+          if ('color' in material && material.color instanceof THREE.Color) material.color.setHex(tint);
+          // 参考靠垫的旧贴图会把橙色压成暗棕，染色版本只保留几何与布料粗糙度
+          if ('map' in material) material.map = null;
+          if ('roughness' in material) material.roughness = 0.9;
+          return material;
+        };
+        // 单材质网格不能包成数组，否则没有 geometry groups 时会被整个跳过
+        o.material = Array.isArray(o.material) ? o.material.map(tintMaterial) : tintMaterial(o.material);
+      }
+    });
+    for (const child of [...anchor.children]) if (!child.userData.contactShadow) anchor.remove(child);
+    anchor.add(model);
   }
 }
