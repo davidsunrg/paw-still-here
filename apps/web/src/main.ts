@@ -679,8 +679,8 @@ async function boot() {
   player.heightAt = guide.heightAt = (x, z) => world.heightAt(x, z);
   const steps = world.steps();
   for (let i = 0; i < steps.length; i++) {
-    const [key, run] = steps[i];
-    ui.setProgress(i / steps.length, STR.loadingSteps[key]);
+    const [, run] = steps[i];
+    ui.setProgress(i / steps.length);
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     run();
   }
@@ -691,7 +691,7 @@ async function boot() {
   crowd.hidden = prefs.solo;
   ui.setSoloLabel(prefs.solo);
   applyQuality();
-  ui.setProgress(1, '');
+  ui.setProgress(1);
   renderer.setAnimationLoop(frame);
   // 等第一帧（着色器编译）结束后再显示入口按钮
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))));

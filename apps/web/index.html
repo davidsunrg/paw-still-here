@@ -6,6 +6,78 @@
     <meta name="theme-color" content="#0b0d24" />
     <!-- title、description、分享卡片和 canonical 在打包时从语言文件写进来，见 vite.config.ts -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230b0d24'/%3E%3Cg fill='%23f2b56b' transform='translate(11 13) scale(.78)'%3E%3Cellipse cx='50' cy='66' rx='23' ry='18'/%3E%3Cellipse cx='22' cy='42' rx='8' ry='11' transform='rotate(-20 22 42)'/%3E%3Cellipse cx='40' cy='26' rx='8' ry='11' transform='rotate(-6 40 26)'/%3E%3Cellipse cx='60' cy='26' rx='8' ry='11' transform='rotate(6 60 26)'/%3E%3Cellipse cx='78' cy='42' rx='8' ry='11' transform='rotate(20 78 42)'/%3E%3C/g%3E%3C/svg%3E" />
+    <!-- 首屏：style.css 随 JS 才注入，避免 FOUC（白底大黑爪） -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0d24;
+        color: #f5ecdf;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      #scene {
+        position: fixed;
+        inset: 0;
+        display: block;
+      }
+      .hidden {
+        display: none !important;
+      }
+      #loader {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: radial-gradient(ellipse at 50% 30%, #1d2050 0%, #0b0d24 62%);
+        text-align: center;
+        padding: 24px;
+      }
+      #loader .paw {
+        width: 72px;
+        height: 72px;
+        fill: #ffc47a;
+      }
+      #loader h1 {
+        margin: 10px 0 0;
+        font-size: 34px;
+        font-weight: 600;
+        color: #ffe2b8;
+      }
+      #loader .sub {
+        margin: 0 0 14px;
+        max-width: min(520px, 86vw);
+        line-height: 1.5;
+        color: rgba(245, 236, 223, 0.66);
+      }
+      #loader .bar {
+        width: min(260px, 70vw);
+        height: 3px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+      }
+      #loader .bar i {
+        display: block;
+        height: 100%;
+        width: 0;
+      }
+      #loader .site {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(22px + env(safe-area-inset-bottom));
+        margin: 0;
+        font-size: 12px;
+        opacity: 0.75;
+        color: rgba(245, 236, 223, 0.66);
+      }
+    </style>
   </head>
   <body>
     <canvas id="scene"></canvas>
@@ -20,12 +92,11 @@
         <ellipse cx="60" cy="26" rx="8" ry="11" transform="rotate(6 60 26)" />
         <ellipse cx="78" cy="42" rx="8" ry="11" transform="rotate(20 78 42)" />
       </svg>
-      <h1 data-t="brand"></h1>
-      <p class="sub" data-t="tagline"></p>
+      <h1 data-t="brand">Paw Still Here</h1>
+      <p class="sub" data-t="tagline">As long as they're remembered, they're still with us.</p>
       <div class="bar"><i id="progress"></i></div>
-      <p class="step" id="load-step"></p>
       <button id="btn-enter" class="primary hidden" data-t="enter"></button>
-      <p class="site" data-t="site"></p>
+      <p class="site" data-t="site">pawstillhere.com</p>
     </div>
 
     <!-- 常驻界面 -->

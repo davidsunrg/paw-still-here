@@ -249,13 +249,11 @@ export class UI {
 
   // ---------- 加载 ----------
 
-  setProgress(ratio: number, label: string) {
+  setProgress(ratio: number, _label?: string) {
     $('progress').style.width = `${Math.round(ratio * 100)}%`;
-    $('load-step').textContent = label;
   }
 
   ready() {
-    $('load-step').textContent = '';
     document.querySelector('#loader .bar')?.classList.add('hidden');
     $('btn-enter').classList.remove('hidden');
   }
