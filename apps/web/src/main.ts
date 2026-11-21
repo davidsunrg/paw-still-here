@@ -5,7 +5,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { CONFIG } from './config';
-import { buildSamplePetAtSlot, petById, PETS, type Pet } from './data/pets';
+import { buildSamplePetAtSlot, petById, PETS, replaceSlotPet } from './data/pets';
 import { petFromDto } from './data/pets-api';
 import { prefs, store } from './data/store';
 import { tributes } from './data/tributes';
@@ -67,43 +67,51 @@ let crowd: Crowd | null = null;
 let entered = false;
 let blocked = false;
 let quality: 'high' | 'low' = 'high';
-/** 地址里带着某只宠物（?pet=编号）：按下入口按钮后直接去它的相框 */
-let arrival: PhotoEntry | null = null;
+/** 地址里带着某只宠物（?pet=编号）：按下入口按钮后直接去它的 slot */
+let arrival: number | null = null;
 
 const ui = new UI({
   memorialApiEnabled: bootstrap.apiOnline && bootstrap.currentUserId !== null,
   onMemorialSaved: async (dto, mode) => {
     const pet = petFromDto(dto);
     tributes.seed([dto]);
-    const entry = world.replacePetAtSlot(dto.slot, pet);
-    if (!entry) {
-      location.reload();
-      return;
-    }
-    if (mode === 'edit') {
-      // 编辑通常是在它的小窝里打开的：原地换掉照片和名字，不离开
-      if (world.shrine.isOpen) {
-        world.shrine.refreshPet();
-        ui.openDetail(pet);
-      } else {
-        visit(entry, () => ui.toast(STR.memorialUpdated));
+    if (pet.floor === world.activeFloor) {
+      const entry = world.replacePetAtSlot(dto.slot, pet);
+      if (entry) {
+        syncFloorUi();
+        if (mode === 'edit') {
+          if (world.shrine.isOpen) {
+            world.shrine.refreshPet();
+            ui.openDetail(pet);
+          } else {
+            visit(entry, () => ui.toast(STR.memorialUpdated));
+          }
+          return;
+        }
+        if (world.shrine.isOpen) ui.closeDetail();
+        visit(entry, () => ui.openShare(pet, true));
+        return;
       }
-      return;
     }
-    // 刚创建：先到照片墙上的新相框，再打开分享
-    if (world.shrine.isOpen) ui.closeDetail();
-    visit(entry, () => ui.openShare(pet, true));
+    // 新宠物落在另一层：先更新数据，再在淡入淡出里换层
+    replaceSlotPet(dto.slot, pet);
+    syncFloorUi();
+    visitSlot(dto.slot, () => ui.openShare(pet, true));
   },
   onMemorialDeleted: (slot) => {
     world.replacePetAtSlot(slot, buildSamplePetAtSlot(slot));
+    syncFloorUi();
+  },
+  onFloor(floor) {
+    switchFloor(floor);
   },
   onEnter() {
     entered = true;
     void audio.start().then(() => audio.setMuted(false));
     // 从某只宠物的链接进来的：直接去它那里
-    const entry = arrival;
+    const slot = arrival;
     arrival = null;
-    if (entry) visit(entry);
+    if (slot !== null) visitSlot(slot);
   },
   onTeleport(target) {
     guide.clear();
@@ -185,8 +193,7 @@ const ui = new UI({
   onGoto(pet) {
     ui.closeAll();
     guide.clear();
-    const entry = frameOf(pet);
-    if (entry) visit(entry);
+    visitSlot(pet.slot);
   },
   onRideLantern() {
     if (inRide && player.riding) ui.openRite('river');
@@ -274,11 +281,6 @@ function updateDiscovery() {
   hintedAt = now;
 }
 
-/** 宠物在照片墙上的那张相框 */
-function frameOf(pet: Pet) {
-  return world.slots.get(pet.id)?.entry;
-}
-
 // ---------- 单宠物视角 ----------
 let selfShow = 1;
 /** 镜头站在小屋门口：按背墙需要的取景距离计算，再换算成离房间中心多远 */
@@ -364,6 +366,59 @@ function transition(mid: () => void) {
     run();
     ui.veil(false);
   }, CONFIG.fade * 1000);
+}
+
+// ---------- 楼层：共享 3D 空间，只换内容层 ----------
+/** 已经有真实宠物的最高楼层；至少包含当前层 */
+function maxFloor() {
+  let max = world.activeFloor;
+  for (const pet of PETS) if (pet.isReal && pet.floor > max) max = pet.floor;
+  return Math.max(1, max);
+}
+
+function syncFloorUi() {
+  ui.setFloors(maxFloor(), world.activeFloor);
+}
+
+/** 在淡入淡出里换一层内容；不重建墙体，也不移动楼层 */
+function switchFloor(floor: number) {
+  if (floor === world.activeFloor || pending || ui.detailOpen) return;
+  transition(() => {
+    if (inCinema) exitCinema();
+    if (inRide) exitRide();
+    world.showFloor(floor);
+    interaction?.refreshTargets();
+    syncFloorUi();
+    marker.hide();
+    guide.clear();
+    clearHover();
+  });
+}
+
+/** 按全局 slot 去看某只宠物：必要时先换层，再走到它的相框前 */
+function visitSlot(slot: number, then?: () => void) {
+  const pet = PETS[slot];
+  if (!pet) return;
+  const floor = pet.floor;
+  transition(() => {
+    if (inCinema) exitCinema();
+    if (inRide) exitRide();
+    if (floor !== world.activeFloor) {
+      world.showFloor(floor);
+      interaction?.refreshTargets();
+      syncFloorUi();
+    }
+    const entry = world.entryOfSlot(slot);
+    if (!entry) return;
+    const { center, normal } = entry;
+    player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
+    interaction?.setHighlight(entry);
+    ui.toast(STR.photoVisitHint(entry.pet.name));
+    marker.hide();
+    guide.clear();
+    clearHover();
+    then?.();
+  });
 }
 
 // ---------- 进出影厅 ----------
@@ -734,9 +789,8 @@ async function boot() {
   const linkId = new URLSearchParams(location.search).get('pet');
   if (linkId) {
     const pet = petById.get(linkId);
-    const entry = pet?.isReal ? frameOf(pet) : undefined;
-    if (pet && entry) {
-      arrival = entry;
+    if (pet?.isReal) {
+      arrival = pet.slot;
       ui.setEnterLabel(STR.enterVisit(pet.name));
     } else {
       // 它已经不在了（被主人删掉，或者链接不对）：照常进来，说一声，地址改回去
@@ -746,6 +800,7 @@ async function boot() {
       ui.toast(STR.linkMissing);
     }
   }
+  syncFloorUi();
   exposeDev();
 }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { slotToPlacement } from '@paw/shared';
+import { FLOOR_CAPACITY, slotToPlacement } from '@paw/shared';
 import { CONFIG } from '../config';
 import { PETS, replaceSlotPet, type Pet } from '../data/pets';
 import { STR } from '../i18n';
@@ -12,6 +12,7 @@ import { buildLanternTerrace } from './LanternTerrace';
 import { buildGallery, type Gallery } from './Gallery';
 import { tickFlames } from './gifts';
 import { buildHall } from './Hall';
+import type { FloorMapHandle } from './FloorMap';
 import { Kit } from './Kit';
 import { buildOutdoor } from './Outdoor';
 import { buildRiver, type River } from './River';
@@ -75,12 +76,14 @@ type Updater = (dt: number, t: number, player: THREE.Vector3) => void;
 
 export class World {
   readonly kit = new Kit();
-  readonly photos = new PhotoBatch(PETS);
-  readonly labels = new LabelBatch();
+  photos!: PhotoBatch;
+  labels!: LabelBatch;
   readonly colliders: Collider[] = [];
   readonly interactables: Interactable[] = [];
   readonly updaters: Updater[] = [];
-  readonly slots = new Map<string, SlotInfo>();
+  slots = new Map<string, SlotInfo>();
+  activeFloor = 1;
+  floorMap?: FloorMapHandle;
   readonly seats: Seat[] = [];
   readonly uTime = { value: 0 };
   /** 由 main 注入：点击纪念树 / 接待台 / 影厅入口 / 河的洞口 / 沙发时触发；sit 收到的是这张沙发上的座位 */
@@ -113,7 +116,10 @@ export class World {
       ['fire', () => (this.bonfire = buildBonfire(this))],
       ['lantern', () => buildLanternTerrace(this)],
       ['hall', () => buildHall(this)],
-      ['gallery', () => (this.gallery = buildGallery(this))],
+      ['gallery', () => {
+        this.gallery = buildGallery(this);
+        this.showFloor(1);
+      }],
       ['shrine', () => (this.shrine = new Shrine(this))],
       ['cinema', () => (this.cinema = buildCinema(this))],
       ['cave', () => {
@@ -154,24 +160,41 @@ export class World {
       this.pool.push(l);
     }
     this.kit.build(this.scene);
-    this.photos.build(this.scene);
-    this.labels.build(this.scene);
+  }
+
+  /** 换楼层：只换照片、铭牌、痕迹和 slots，共享的墙和相框不动 */
+  showFloor(floor: number) {
+    const offset = (floor - 1) * FLOOR_CAPACITY;
+    const pets = PETS.slice(offset, offset + FLOOR_CAPACITY);
+    this.activeFloor = floor;
+    const content = this.gallery.showFloor(floor, pets);
+    this.photos = content.photos;
+    this.labels = content.labels;
+    this.slots = content.slots;
+    this.floorMap?.setFloor(floor);
+  }
+
+  /** 当前楼层某个 slot 的照片墙格子（用于跨层搜索/分享） */
+  entryOfSlot(slot: number): PhotoEntry | null {
+    const pet = PETS[slot];
+    return pet ? this.slots.get(pet.id)?.entry ?? null : null;
   }
 
   /** 刚创建/编辑完：把某一格换成新宠物，照片、铭牌和石台痕迹原地更新 */
   replacePetAtSlot(slot: number, pet: Pet): PhotoEntry | null {
+    const local = slot - (this.activeFloor - 1) * FLOOR_CAPACITY;
     const old = PETS[slot];
     const info = old ? this.slots.get(old.id) : undefined;
-    if (!old || !info) return null;
-    this.photos.replace(slot, old.id, pet);
+    if (local < 0 || local >= FLOOR_CAPACITY || !old || !info) return null;
+    this.photos.replace(local, old.id, pet);
     const { cell } = slotToPlacement(slot);
     const years = pet.passedDate ? ` · ${pet.passedDate.slice(0, 4)}` : '';
-    this.labels.update(slot, `${pet.name}${years}`, String(cell), false);
+    this.labels.update(local, `${pet.name}${years}`, String(cell), false);
     info.entry.pet = pet;
     this.slots.delete(old.id);
     this.slots.set(pet.id, info);
     replaceSlotPet(slot, pet);
-    this.gallery.refreshSlot(slot, pet);
+    this.gallery.refreshSlot(local, pet);
     return info.entry;
   }
 

@@ -20,6 +20,7 @@ export function petFromDto(dto: PetDto): Pet {
   const fur = FUR[species][dto.slot % FUR[species].length]!;
   return {
     id: dto.id,
+    slot: dto.slot,
     name: dto.name,
     species,
     breed: dto.breed ?? undefined,

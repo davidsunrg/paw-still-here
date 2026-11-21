@@ -14,7 +14,7 @@ const DIM = 'rgba(233,211,162,0.55)';
  * 本层总览图的贴图：按进门时的方向画（大门在下，石门在上，左手是 A 区）。
  * 位置都从 CONFIG 里取，大厅改了尺寸图也跟着变。
  */
-function mapTexture() {
+function mapTexture(floor: number) {
   const W = 1000;
   const H = 800;
   const [c, ctx] = makeCanvas(W, H);
@@ -49,7 +49,7 @@ function mapTexture() {
     ctx.stroke();
   };
 
-  text(STR.map.title, W / 2, 62, 60);
+  text(STR.map.floorTitle(floor), W / 2, 62, 60);
 
   // 外墙：下面留出大门，上面是合着的石门
   const hw = L.w / 2;
@@ -145,18 +145,28 @@ function mapTexture() {
   return canvasTexture(c);
 }
 
-/** 电梯旁的本层总览图，挂在门墙里侧 */
-export function buildFloorMap(w: World) {
+export interface FloorMapHandle {
+  setFloor(floor: number): void;
+}
+
+/** 电梯旁的本层总览图，挂在门墙里侧；换楼层时只换贴图 */
+export function buildFloorMap(w: World): FloorMapHandle {
   const { kit } = w;
   const x = CONFIG.hall.mapX;
   const face = -CONFIG.wallT / 2;
   kit.box(x, BOARD.y, face - 0.025, BOARD.w + 0.12, BOARD.h + 0.12, 0.05, CONFIG.colors.woodDark);
-  const board = new THREE.Mesh(
-    new THREE.PlaneGeometry(BOARD.w, BOARD.h),
-    new THREE.MeshBasicMaterial({ map: mapTexture() }),
-  );
+  const material = new THREE.MeshBasicMaterial({ map: mapTexture(1) });
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(BOARD.w, BOARD.h), material);
   board.position.set(x, BOARD.y, face - 0.052);
   board.rotation.y = Math.PI;
   w.scene.add(board);
   kit.glowBox(x, BOARD.y + BOARD.h / 2 + 0.11, face - 0.1, BOARD.w * 0.6, 0.02, 0.03, CONFIG.colors.warm, 2.2);
+  return {
+    setFloor(floor: number) {
+      const old = material.map;
+      material.map = mapTexture(floor);
+      material.needsUpdate = true;
+      old?.dispose();
+    },
+  };
 }

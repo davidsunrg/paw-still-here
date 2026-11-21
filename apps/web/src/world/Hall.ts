@@ -196,8 +196,8 @@ export function buildHall(w: World) {
   kit.box(ex, 1.14, faceZ - 0.125, 0.02, 2.2, 0.01, 0x2b2824);
   kit.glowBox(ex, 2.28, faceZ - 0.11, 2.0, 0.02, 0.02, C.warm, 1.6);
   // 门楣上的楼层数字
-  kit.box(ex, 2.95, faceZ - 0.04, 0.62, 0.44, 0.06, 0x2b2824);
-  const floorNo = textMesh(STR.floorNumber, { height: 0.3, color: '#ffd9a0', glow: 2.0 });
+  kit.box(ex, 2.95, faceZ - 0.04, 1.0, 0.36, 0.06, 0x2b2824);
+  const floorNo = textMesh(STR.floorNumber, { height: 0.2, color: '#ffd9a0', glow: 2.0, maxWidth: 0.9 });
   floorNo.position.set(ex, 2.95, faceZ - 0.08);
   floorNo.rotation.y = Math.PI;
   scene.add(floorNo);
@@ -206,7 +206,7 @@ export function buildHall(w: World) {
   kit.glowBall(ex - 1.5, 1.2, faceZ - 0.06, 0.022, C.warm, 1.6);
   w.collide(ex, faceZ - 0.08, 2.5, 0.16);
 
-  buildFloorMap(w);
+  w.floorMap = buildFloorMap(w);
 
   for (const s of [-1, 1]) plant(w, s * 2.85, -0.95, 1.15);
 }

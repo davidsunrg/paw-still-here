@@ -1,4 +1,4 @@
-import { placementToSlot, type PetDto } from '@paw/shared';
+import type { PetDto } from '@paw/shared';
 import type { Pet } from '../data/pets';
 import { STR } from '../i18n';
 import { ApiError } from '../api/client';
@@ -112,7 +112,7 @@ export class MemorialEditor {
     this.resetObjectUrls();
     this.mode = 'edit';
     this.petId = pet.id;
-    this.petSlot = placementToSlot(pet.section, pet.cell) ?? 0;
+    this.petSlot = pet.slot;
     this.state = memorialFormFromPet(pet);
     this.root.querySelector<HTMLElement>('#memorial-details')!.hidden = false;
     this.root.querySelector<HTMLElement>('#memorial-delete-zone')!.hidden = false;

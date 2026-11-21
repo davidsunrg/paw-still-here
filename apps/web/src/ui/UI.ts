@@ -45,6 +45,8 @@ export interface UIHooks {
   /** 渲染一帧并交出 3D 画布，用来画分享图；必须马上画下来，下一帧就没了 */
   onCapture?(): HTMLCanvasElement | null;
   onGoto(pet: Pet): void;
+  /** 顶部楼层选择器：切到另一层（只换内容，不换 3D 空间） */
+  onFloor(floor: number): void;
   /** 坐在船上时点「放河灯」 */
   onRideLantern(): void;
   /** 中途下船 */
@@ -98,6 +100,8 @@ export class UI {
   /** 分享弹窗现在说的是哪一只 */
   private sharePet: Pet | null = null;
   private inviteTimer = 0;
+  private floor = 1;
+  private maxFloor = 1;
 
   constructor(private hooks: UIHooks) {
     document.body.classList.toggle('touch', this.isTouch);
@@ -150,11 +154,22 @@ export class UI {
       $('menu-pop').classList.toggle('hidden', !open);
       menuBtn.setAttribute('aria-expanded', String(open));
     };
-    menuBtn.addEventListener('click', () => setMenu($('menu-pop').classList.contains('hidden')));
+    menuBtn.addEventListener('click', () => {
+      this.setFloorOpen(false);
+      setMenu($('menu-pop').classList.contains('hidden'));
+    });
+    // 楼层选择：只在有第二层时出现
+    const floorBtn = $('btn-floor');
+    floorBtn.addEventListener('click', () => {
+      const open = $('floor-pop').classList.contains('hidden');
+      setMenu(false);
+      this.setFloorOpen(open);
+    });
     // 点菜单外面收起；点菜单里的开关不收，可以连着调几项
     document.addEventListener('pointerdown', (e) => {
       const t = e.target as Node;
       if (!$('menu-pop').contains(t) && !menuBtn.contains(t)) setMenu(false);
+      if (!$('floor-pop').contains(t) && !floorBtn.contains(t)) this.setFloorOpen(false);
     });
     $('invite-close').setAttribute('aria-label', STR.inviteClose);
     $('invite-close').addEventListener('click', () => this.hideInvite());
@@ -344,6 +359,51 @@ export class UI {
     $('btn-quality').textContent = q === 'high' ? STR.qualityHigh : STR.qualityLow;
   }
 
+  // ---------- 楼层 ----------
+
+  /** 更新顶部楼层按钮和弹窗；只有超过一层时才出现 */
+  setFloors(max: number, floor = this.floor) {
+    this.maxFloor = Math.max(1, max);
+    this.floor = Math.min(this.maxFloor, Math.max(1, floor));
+    const button = $('btn-floor');
+    button.classList.toggle('hidden', this.maxFloor <= 1);
+    button.textContent = STR.floorButton(this.floor);
+    button.setAttribute('aria-label', STR.floorButton(this.floor));
+    if (this.maxFloor <= 1) this.setFloorOpen(false);
+    else if (!$('floor-pop').classList.contains('hidden')) this.renderFloorList();
+  }
+
+  setFloor(floor: number) {
+    this.setFloors(Math.max(this.maxFloor, floor), floor);
+  }
+
+  private renderFloorList() {
+    const list = $('floor-list');
+    list.replaceChildren();
+    for (let floor = 1; floor <= this.maxFloor; floor++) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = STR.floorButton(floor);
+      button.classList.toggle('on', floor === this.floor);
+      button.disabled = floor === this.floor;
+      button.addEventListener('click', () => {
+        this.setFloorOpen(false);
+        this.hooks.onFloor(floor);
+      });
+      list.append(button);
+    }
+  }
+
+  private setFloorOpen(open: boolean) {
+    $('floor-pop').classList.toggle('hidden', !open);
+    $('btn-floor').setAttribute('aria-expanded', String(open));
+    if (open) this.renderFloorList();
+  }
+
+  closeFloorPop() {
+    this.setFloorOpen(false);
+  }
+
   // ---------- 提示 ----------
 
   showHint() {
@@ -419,6 +479,7 @@ export class UI {
     const editorWasOpen = $('modal-memorial').classList.contains('open');
     document.querySelectorAll('.modal.open').forEach((m) => m.classList.remove('open'));
     document.querySelectorAll('#album .on').forEach((b) => b.classList.remove('on'));
+    this.closeFloorPop();
     (document.activeElement as HTMLElement | null)?.blur?.();
     if (editorWasOpen && this.editorReturnFocus) {
       this.editorReturnFocus.focus();

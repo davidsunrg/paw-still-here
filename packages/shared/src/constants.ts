@@ -1,4 +1,7 @@
-export const GALLERY_CAPACITY = 342 as const;
+/** 每层的位置数（A 60 + B 66 + C–H 6×36），以及最多几层 */
+export const FLOOR_CAPACITY = 342 as const;
+export const MAX_FLOORS = 6 as const;
+export const GALLERY_CAPACITY = FLOOR_CAPACITY * MAX_FLOORS;
 
 export const SPECIES = ['cat', 'dog', 'rabbit', 'hamster', 'bird'] as const;
 export type Species = (typeof SPECIES)[number];
@@ -27,19 +30,23 @@ export function slotToPlacement(slot: number): {
   section: GallerySection;
   cell: number;
 } {
-  let remaining = slot;
+  const floor = Math.min(MAX_FLOORS, Math.floor(slot / FLOOR_CAPACITY) + 1);
+  let remaining = slot - (floor - 1) * FLOOR_CAPACITY;
+  if (remaining < 0 || remaining >= FLOOR_CAPACITY) remaining = 0;
   let sec = 0;
   while (sec < SECTION_CELLS.length && remaining >= SECTION_CELLS[sec]!) {
     remaining -= SECTION_CELLS[sec]!;
     sec++;
   }
-  return { floor: 1, section: SECTIONS[sec] ?? 'A', cell: remaining + 1 };
+  return { floor, section: SECTIONS[sec] ?? 'A', cell: remaining + 1 };
 }
 
-export function placementToSlot(section: GallerySection, cell: number): number | null {
+export function placementToSlot(floor: number, section: GallerySection, cell: number): number | null {
+  const floorIdx = Math.floor(floor) - 1;
+  if (floorIdx < 0 || floorIdx >= MAX_FLOORS) return null;
   const secIdx = SECTIONS.indexOf(section);
   if (secIdx < 0) return null;
-  const base = SECTION_CELLS.slice(0, secIdx).reduce((a, b) => a + b, 0);
-  const slot = base + (cell - 1);
-  return slot >= 0 && slot < GALLERY_CAPACITY ? slot : null;
+  const local = SECTION_CELLS.slice(0, secIdx).reduce((a, b) => a + b, 0) + (cell - 1);
+  if (local < 0 || local >= FLOOR_CAPACITY) return null;
+  return floorIdx * FLOOR_CAPACITY + local;
 }

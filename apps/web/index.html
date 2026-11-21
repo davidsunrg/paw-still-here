@@ -167,9 +167,14 @@
       <div class="top-right">
         <button id="btn-add-pet" class="primary hidden" type="button" data-t="addPet"></button>
         <button id="btn-my-pets" class="hidden" type="button" data-t="myPets"></button>
+        <button id="btn-floor" class="hidden" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="floor-pop"></button>
         <button id="btn-menu" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-pop">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
         </button>
+        <div id="floor-pop" class="menu-pop hidden">
+          <span class="floor-title" data-t="floorsTitle"></span>
+          <div id="floor-list"></div>
+        </div>
         <!-- 不常用的设置收在这里 -->
         <div id="menu-pop" class="menu-pop hidden">
           <button id="btn-sound" type="button"></button>

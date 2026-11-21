@@ -286,6 +286,52 @@ textarea::placeholder {
 #btn-menu[aria-expanded='true'] {
   border-color: rgba(255, 220, 170, 0.5);
 }
+#btn-floor::after {
+  content: '▾';
+  margin-left: 6px;
+  opacity: 0.7;
+}
+#btn-floor[aria-expanded='true'] {
+  border-color: rgba(255, 220, 170, 0.5);
+}
+#floor-pop {
+  right: 44px;
+  min-width: 148px;
+}
+#floor-pop .floor-title {
+  padding: 6px 11px 2px;
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+#floor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#floor-list button {
+  padding: 8px 12px;
+  border-radius: 11px;
+  border-color: transparent;
+  background: none;
+  text-align: left;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+#floor-list button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+#floor-list button.on {
+  color: var(--warm);
+}
+#floor-list button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+body.in-shrine #btn-floor {
+  display: none;
+}
 .menu-pop {
   position: absolute;
   z-index: 5;
@@ -1325,7 +1371,8 @@ button:disabled {
   }
   /* 窄屏上看纪念角时，左上角是 Back、Share、Edit；右上角只留三道杠，不挤在一起 */
   body.in-shrine #btn-add-pet,
-  body.in-shrine #btn-my-pets {
+  body.in-shrine #btn-my-pets,
+  body.in-shrine #btn-floor {
     display: none;
   }
   #btn-menu {

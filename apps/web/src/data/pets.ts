@@ -10,6 +10,8 @@ export type Section = (typeof SECTIONS)[number];
 
 export interface Pet {
   id: string;
+  /** 全局 slot：0–2051，楼层和格子都由它推出来 */
+  slot: number;
   name: string;
   species: Species;
   breed?: string;
@@ -100,6 +102,7 @@ export function buildSamplePetAtSlot(slot: number): Pet {
   const { section, cell, floor } = slotToPlacement(slot);
   return {
     id: `pet-sample-${slot + 1}`,
+    slot,
     name,
     species,
     breed: pick(sample.breeds[species]),

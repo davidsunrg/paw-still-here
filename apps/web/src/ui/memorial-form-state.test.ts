@@ -11,6 +11,7 @@ import {
 function pet(): Pet {
   return {
     id: crypto.randomUUID(),
+    slot: 0,
     name: 'Mochi',
     species: 'cat',
     breed: 'Ragdoll',

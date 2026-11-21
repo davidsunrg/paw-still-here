@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { CONFIG, ZONES } from '../config';
-import { PETS, SECTION_CELLS, SECTIONS, type Pet, type Section } from '../data/pets';
+import { SECTION_CELLS, SECTIONS, type Pet, type Section } from '../data/pets';
 import { store } from '../data/store';
 import { STR } from '../i18n';
+import { LabelBatch, PhotoBatch } from './Batches';
 import { TRACE } from './gifts';
 import { plankTexture, textMesh } from './textures';
-import type { World } from './World';
+import type { SlotInfo, World } from './World';
 
 const G = CONFIG.gallery;
 
@@ -142,6 +143,41 @@ function buildWing(w: World) {
  * 住了宠物的格子有照片、有灯；空格子是一块素面石板，只有格号。
  * 返回的 refresh 在有人为某只宠物放下礼物之后调用，更新它石台上的痕迹。
  */
+/** 共享墙面上的一格：相框、石台、灯和铭牌底板只建一次 */
+interface ShellCell {
+  section: Section;
+  cell: number;
+  rotY: number;
+  /** 照片中心 */
+  photoAt: THREE.Vector3;
+  /** 铭牌文字中心 */
+  labelAt: THREE.Vector3;
+  labelW: number;
+  labelH: number;
+  /** 石台台面，用来放花和蜡烛 */
+  ledge: THREE.Vector3;
+  frame: number;
+}
+
+export interface FloorContent {
+  photos: PhotoBatch;
+  labels: LabelBatch;
+  slots: Map<string, SlotInfo>;
+}
+
+export interface Gallery {
+  /** 换一层内容：只换照片、铭牌、痕迹和 slots，墙上的框架不动 */
+  showFloor(floor: number, pets: Pet[]): FloorContent;
+  /** 这只宠物收到了新的礼物：更新它石台上的痕迹 */
+  refresh(pet: Pet): void;
+  /** 某一格换成了另一只宠物：把痕迹移到同一格 */
+  refreshSlot(localSlot: number, pet: Pet): void;
+}
+
+/**
+ * 大厅两面墙和后展区共用的照片墙框架：石板、相框、石台、灯、区名牌只建一次。
+ * 每一层的照片、铭牌、痕迹由 showFloor 换上。
+ */
 export function buildGallery(w: World): Gallery {
   const { kit } = w;
   const C = CONFIG.colors;
@@ -169,9 +205,9 @@ export function buildGallery(w: World): Gallery {
     kit.glowBox(gx, y1 + 0.02, gz, s.len - 0.3, 0.025, 0.025, C.warm, 1.5, s.rotY);
   }
 
-  const occupants = new Map<string, Pet>(PETS.map((p) => [`${p.section}-${p.cell}`, p]));
   const frameColors = [0x3b2a20, 0xd9c7a0, 0xf2efe8, 0xb08d57, 0x5a4636];
   const F = G.frame;
+  const shellCells: ShellCell[] = [];
   cells.forEach((cell, i) => {
     const { at, rotY } = cell;
     const nx = Math.sin(rotY);
@@ -179,30 +215,27 @@ export function buildGallery(w: World): Gallery {
     /** 离墙面 d 米、比相框中心高 dy 米的位置 */
     const p = (d: number, dy = 0) => new THREE.Vector3(at.x + nx * d, at.y + dy, at.z + nz * d);
     const box = (v: THREE.Vector3, sx: number, sy: number, sz: number, color: number) => kit.box(v.x, v.y, v.z, sx, sy, sz, color, rotY);
-    const pet = occupants.get(`${cell.section}-${cell.cell}`);
     const T = G.slabT;
 
-    // 相框下的小石台，和石台下面的名牌
+    const frame = frameColors[i % frameColors.length]!;
     const ledge = p(T + 0.06, -F / 2 - 0.065);
     box(ledge, F + 0.1, 0.03, 0.12, 0xb3ada2);
-    const plate = p(T + 0.008, -F / 2 - 0.137);
-    box(plate, F - 0.06, 0.115, 0.014, pet ? 0x6b4a2a : 0x6f6b65);
-    const label = p(T + 0.017, -F / 2 - 0.137);
-
-    if (!pet) {
-      // 空格子：一块略深的素面石板，等着以后住进来
-      box(p(T + 0.004), F, F, 0.01, 0x8a857d);
-      w.labels.add('', label, rotY, F - 0.08, 0.105, String(cell.cell), true);
-      return;
-    }
-    const frame = frameColors[i % frameColors.length];
+    box(p(T + 0.008, -F / 2 - 0.137), F - 0.06, 0.115, 0.014, 0x6b4a2a);
     box(p(T + 0.02), F + 0.06, F + 0.06, 0.04, frame);
-    const entry = w.photos.add(pet, p(T + 0.045), rotY, F, F);
     const lamp = p(T + 0.07, F / 2 + 0.045);
     kit.glowBox(lamp.x, lamp.y, lamp.z, F * 0.6, 0.016, 0.03, C.warm, 2.3, rotY);
-    const years = pet.passedDate ? ` · ${pet.passedDate.slice(0, 4)}` : '';
-    w.labels.add(`${pet.name}${years}`, label, rotY, F - 0.08, 0.105, String(cell.cell));
-    w.slots.set(pet.id, { entry, ledge: ledge.clone().setY(ledge.y + 0.015), frame });
+
+    shellCells.push({
+      section: cell.section,
+      cell: cell.cell,
+      rotY,
+      photoAt: p(T + 0.045),
+      labelAt: p(T + 0.017, -F / 2 - 0.137),
+      labelW: F - 0.08,
+      labelH: 0.105,
+      ledge: ledge.clone().setY(ledge.y + 0.015),
+      frame,
+    });
   });
 
   // 每个区两端的铭牌：区名和这个区的格号范围
@@ -211,15 +244,14 @@ export function buildGallery(w: World): Gallery {
     const mine = cells.filter((c) => c.section === id);
     const ends = [mine[0], mine[mine.length - 1]];
     ends.forEach((cell, k) => {
+      if (!cell) return;
       const { rotY } = cell;
-      // 铭牌在石板上方，从最外面的一列往里收半列
       const along = (k === 0 ? 1 : -1) * G.pitch * 0.9;
       const x = cell.at.x + Math.cos(rotY) * along;
       const z = cell.at.z - Math.sin(rotY) * along;
       const nx = Math.sin(rotY);
       const nz = Math.cos(rotY);
       const text = textMesh(STR.sectionPlaque(id, count), { height: 0.26, color: '#ffd9a0', glow: 1.3, maxWidth: 2.2 });
-      // 牌子跟着字的宽度走
       kit.box(x + nx * 0.02, G.plaqueY, z + nz * 0.02, text.userData.width + 0.1, 0.34, 0.04, 0x5a4636, rotY);
       text.position.set(x + nx * 0.045, G.plaqueY, z + nz * 0.045);
       text.rotation.y = rotY;
@@ -227,26 +259,63 @@ export function buildGallery(w: World): Gallery {
     });
   });
 
-  return buildTraces(w);
+  let active: { photos: PhotoBatch; labels: LabelBatch; slots: Map<string, SlotInfo>; traces: Traces } | null = null;
+
+  const disposeActive = () => {
+    if (!active) return;
+    active.photos.dispose();
+    active.labels.dispose();
+    active.traces.dispose();
+    active = null;
+  };
+
+  return {
+    showFloor(_floor: number, pets: Pet[]): FloorContent {
+      disposeActive();
+      const photos = new PhotoBatch(pets);
+      const labels = new LabelBatch();
+      const slots = new Map<string, SlotInfo>();
+      shellCells.forEach((shell, i) => {
+        const pet = pets[i];
+        if (!pet) return;
+        const entry = photos.add(pet, shell.photoAt, shell.rotY, F, F);
+        const years = pet.passedDate ? ` · ${pet.passedDate.slice(0, 4)}` : '';
+        labels.add(`${pet.name}${years}`, shell.labelAt, shell.rotY, shell.labelW, shell.labelH, String(shell.cell));
+        slots.set(pet.id, { entry, ledge: shell.ledge, frame: shell.frame });
+      });
+      photos.build(w.scene);
+      labels.build(w.scene);
+      const traces = buildTraces(w, pets, slots);
+      active = { photos, labels, slots, traces };
+      return { photos, labels, slots };
+    },
+    refresh(pet: Pet) {
+      active?.traces.refresh(pet);
+    },
+    refreshSlot(localSlot: number, pet: Pet) {
+      active?.traces.refreshSlot(localSlot, pet);
+    },
+  };
 }
 
-export interface Gallery {
-  /** 这只宠物收到了新的礼物：更新它石台上的痕迹 */
+interface Traces {
   refresh(pet: Pet): void;
-  /** 某一格换成了另一只宠物：把痕迹移到同一格 */
-  refreshSlot(slot: number, pet: Pet): void;
+  refreshSlot(localSlot: number, pet: Pet): void;
+  dispose(): void;
 }
 
 /**
  * 石台上的痕迹：有人放过花，就横着一枝花；点过蜡烛，就立着一点烛光。
  * 每只宠物在四个实例化网格里各占一个位置，没有的时候缩成零。
  */
-function buildTraces(w: World) {
-  const ids = PETS.map((pet) => pet.id);
+function buildTraces(w: World, pets: Pet[], slots: Map<string, SlotInfo>): Traces {
+  const ids = pets.map((pet) => pet.id);
+  const meshes: THREE.InstancedMesh[] = [];
   const make = (part: { geo: THREE.BufferGeometry; mat: THREE.Material }) => {
     const mesh = new THREE.InstancedMesh(part.geo, part.mat, Math.max(1, ids.length));
     mesh.frustumCulled = false;
     w.scene.add(mesh);
+    meshes.push(mesh);
     return mesh;
   };
   const stems = make(TRACE.stem);
@@ -271,7 +340,7 @@ function buildTraces(w: World) {
 
   const refresh = (pet: Pet) => {
     const i = ids.indexOf(pet.id);
-    const slot = w.slots.get(pet.id);
+    const slot = slots.get(pet.id);
     if (i < 0 || !slot) return;
     const { ledge, entry } = slot;
     const flowers = store.gifts(pet).flower;
@@ -279,7 +348,6 @@ function buildTraces(w: World) {
     const hasCandle = store.counts(pet).candle > 0;
     tangent.set(Math.cos(entry.rotY), 0, -Math.sin(entry.rotY));
 
-    // 花横放在石台右半边，花朵朝外
     q.setFromUnitVectors(UP, tangent);
     pos.copy(ledge).addScaledVector(tangent, 0.05).setY(ledge.y + 0.006);
     set(stems, i, hasFlower, q, 0.004, 0.15, 0.004);
@@ -288,16 +356,25 @@ function buildTraces(w: World) {
     blooms.setColorAt(i, color.set(TRACE.bloomColors[(flowers[flowers.length - 1] ?? 0) % TRACE.bloomColors.length]));
     if (blooms.instanceColor) blooms.instanceColor.needsUpdate = true;
 
-    // 蜡烛立在左半边
     pos.copy(ledge).addScaledVector(tangent, -0.2);
     set(waxes, i, hasCandle, upright, 0.015, 0.05, 0.015);
     pos.y += 0.072;
     set(flames, i, hasCandle, upright, 0.009, 0.019, 0.009);
   };
-  const refreshSlot = (slot: number, pet: Pet) => {
-    ids[slot] = pet.id;
+  const refreshSlot = (localSlot: number, pet: Pet) => {
+    ids[localSlot] = pet.id;
     refresh(pet);
   };
-  for (const pet of PETS) refresh(pet);
-  return { refresh, refreshSlot };
+  for (const pet of pets) refresh(pet);
+  return {
+    refresh,
+    refreshSlot,
+    dispose() {
+      for (const mesh of meshes) {
+        mesh.removeFromParent();
+        mesh.dispose();
+      }
+      meshes.length = 0;
+    },
+  };
 }

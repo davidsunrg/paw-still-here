@@ -201,6 +201,21 @@ export class PhotoBatch {
     if (!page || page.firstEntry < 0) return undefined;
     return this.entries[page.firstEntry + Math.floor(faceIndex / 2)];
   }
+
+  /** 换楼层时把这一层的照片网格和纹理整个释放 */
+  dispose() {
+    for (const page of this.pages) {
+      page.mesh?.removeFromParent();
+      page.mesh?.geometry.dispose();
+      (page.mesh?.material as THREE.Material | undefined)?.dispose();
+      page.texture.dispose();
+    }
+    this.pages = [];
+    this.meshes.length = 0;
+    this.entries.length = 0;
+    this.cellOf.clear();
+    this.owner.length = 0;
+  }
 }
 
 /** 相框下方的小名牌，按页合并成图集；超过一页自动开下一页 */
@@ -209,6 +224,7 @@ interface LabelPage {
   ctx: CanvasRenderingContext2D;
   quads: QuadBatch;
   texture?: THREE.CanvasTexture;
+  mesh?: THREE.Mesh;
 }
 
 export class LabelBatch {
@@ -296,6 +312,19 @@ export class LabelBatch {
       const mesh = new THREE.Mesh(page.quads.geometry(), mat);
       mesh.frustumCulled = false;
       parent.add(mesh);
+      page.mesh = mesh;
     }
+  }
+
+  /** 换楼层时释放这一层的铭牌网格和纹理 */
+  dispose() {
+    for (const page of this.pages) {
+      page.mesh?.removeFromParent();
+      page.mesh?.geometry.dispose();
+      (page.mesh?.material as THREE.Material | undefined)?.dispose();
+      page.texture?.dispose();
+    }
+    this.pages = [];
+    this.count = 0;
   }
 }

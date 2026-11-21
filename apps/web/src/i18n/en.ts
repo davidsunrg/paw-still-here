@@ -186,13 +186,14 @@ export const en = {
   /** 一只宠物的地址 */
   address: (floor: number, section: Section, cell: number) => `Floor ${floor} · Section ${section} · No. ${cell}`,
   /** 电梯门上方的楼层数字 */
-  floorNumber: '1',
+  floorNumber: 'FLOORS',
   sectionName: (section: Section) => `Section ${section}`,
   /** 每个区两端的铭牌 */
   sectionPlaque: (section: Section, cells: number) => `Section ${section} · 1–${cells}`,
   /** 电梯旁的本层总览图 */
   map: {
     title: 'Floor 1 · Lobby',
+    floorTitle: (floor: number) => `Floor ${floor} · Lobby`,
     tree: 'Tree',
     reception: 'Front desk',
     elevator: 'Elevator',
@@ -288,6 +289,10 @@ export const en = {
   menu: 'Settings',
   myPetsTitle: 'My pets',
   myPetsEmpty: 'You have not added a pet in this browser yet.',
+  /** 顶部楼层入口 */
+  floorButton: (floor: number) => `Floor ${floor}`,
+  floorsTitle: 'Floors',
+  floorOpen: (floor: number) => `Floor ${floor} is open`,
   /** 还没有自己的宠物时出现一次的小卡片 */
   inviteText: 'Every frame here holds someone loved. There is room for yours.',
   inviteClose: 'Not now',

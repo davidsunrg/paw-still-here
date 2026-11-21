@@ -91,7 +91,12 @@ export class Interaction {
     );
     this.highlight.visible = false;
     world.scene.add(this.highlight);
-    this.targets = [...world.photos.meshes, ...world.interactables.map((i) => i.object)];
+    this.refreshTargets();
+  }
+
+  /** 换楼层后重新收集当前层的照片网格 */
+  refreshTargets() {
+    this.targets = [...this.world.photos.meshes, ...this.world.interactables.map((i) => i.object)];
   }
 
   pick(clientX: number, clientY: number): Hit | null {
