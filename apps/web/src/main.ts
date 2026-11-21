@@ -170,8 +170,10 @@ const ui = new UI({
     // 在影厅或河边找它：先回到大厅，再沿着光点走
     travel(() => {
       guide.show(world.routeTo(pet, player.pos), () => {
-        ui.toast(STR.guideArrive(pet.name));
-        if (entry) openPet(entry);
+        if (!entry) return ui.toast(STR.guideArrive(pet.name));
+        // 光点把人带到相框前就停下，由访客自己点照片进屋
+        interaction?.setHighlight(entry);
+        ui.toast(STR.photoVisitHint(pet.name));
       });
       ui.toast(STR.guideToast(pet.name));
     });
@@ -325,15 +327,17 @@ function openPet(entry: PhotoEntry) {
   transition(() => showPet(entry));
 }
 
-/** 直接去看这只宠物：离得远（或者在影厅、河边）时，小人同时来到它的相框前 */
+/** 去看这只宠物：先来到照片墙上它的相框前，再由访客点相框走进客厅 */
 function visit(entry: PhotoEntry, then?: () => void) {
   const { center, normal } = entry;
+  const { name } = entry.pet;
   transition(() => {
-    const near = !inCinema && !inRide && Math.hypot(player.pos.x - center.x, player.pos.z - center.z) < 5;
     if (inCinema) exitCinema();
     if (inRide) exitRide();
-    if (!near) player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
-    showPet(entry);
+    player.teleport(center.x + normal.x * 1.5, center.z + normal.z * 1.5, Math.atan2(normal.x, normal.z));
+    // 相框亮一下、说一句，让访客知道接下来点照片就能进去
+    interaction?.setHighlight(entry);
+    ui.toast(STR.photoVisitHint(name));
     then?.();
   });
 }

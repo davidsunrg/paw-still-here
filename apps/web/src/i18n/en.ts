@@ -327,6 +327,8 @@ export const en = {
   searchGoto: 'Go there',
   guideToast: (name: string) => `Follow the lights on the ground to find ${name}`,
   guideArrive: (name: string) => `${name} is right here`,
+  /** 从信或专属链接去看某只宠物：先站到相框前，提示点照片进屋 */
+  photoVisitHint: (name: string) => `${name} is right here — click the photo to step inside`,
 
   /**
    * 示例宠物的内容。各个列表的条数不要改：示例宠物是用固定的随机数从里面挑的，
