@@ -27,6 +27,7 @@ import {
   buildVase,
   buildWindow,
   place,
+  roomFrameColor,
   type RoomContext,
 } from './PetRoom';
 import { canvasTexture, drawPortrait, makeCanvas, textMesh } from './textures';
@@ -283,7 +284,7 @@ export class Shrine {
     uv.setXY(2, u0, v0);
     uv.setXY(3, u1, v0);
     uv.needsUpdate = true;
-    this.roomContext.frameMaterial?.color.setHex(this.world.slots.get(pet.id)?.frame ?? S.palette.woodDark).multiplyScalar(0.9);
+    this.roomContext.frameMaterial?.color.setHex(roomFrameColor(this.world.slots.get(pet.id)?.frame));
 
     disposeText(this.nameText);
     this.nameText = textMesh(pet.name, { height: 0.042, color: '#fff3df', maxWidth: 0.18 });

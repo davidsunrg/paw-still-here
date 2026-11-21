@@ -419,24 +419,54 @@ export function buildCoffeeTable(ctx: RoomContext) {
   return p.finish();
 }
 
-/** 茶几或搁板上的立式相框；主照片和相册照片共用同一圆润做法 */
+/** 大厅给每只宠物留的框色偏深时，小屋里换成蜂蜜木，免得暖光下看起来像黑框 */
+export function roomFrameColor(frame: number | undefined) {
+  if (frame === undefined) return P.wood;
+  const { l } = new THREE.Color(frame).getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+  return l < 0.34 ? P.wood : frame;
+}
+
+/** 茶几或搁板上的立式相框：相框后仰，背面两根斜撑腿落在台面上 */
 export function buildPhotoFrame(ctx: RoomContext, size: number, main = false) {
   const m = materials(ctx);
   const p = new Parts();
-  const frameMaterial = main ? surface(P.woodDark, 0.74) : m.wood;
+  const frameMaterial = main ? m.wood.clone() : m.wood;
   if (main) ctx.frameMaterial = frameMaterial;
-  const centerY = size / 2 + 0.035;
-  p.add(rounded(size + 0.055, size + 0.055, 0.032, 0.022), frameMaterial, [0, centerY, 0]);
-  p.add(rounded(size + 0.018, size + 0.018, 0.015, 0.012), m.fabric, [0, centerY, 0.023]);
-  p.beam(m.woodDark, [0, 0.02, -0.09], [0, centerY, -0.025], 0.012, 12);
+
+  const boardW = size + 0.055;
+  const boardH = size + 0.055;
+  const tilt = 0.2;
+  const lift = 0.008;
+
+  // 相框板单独成组，绕底边后仰，底边仍贴着台面
+  const panel = new Parts();
+  panel.add(rounded(boardW, boardH, 0.032, 0.022), frameMaterial, [0, boardH / 2, 0]);
+  panel.add(rounded(size + 0.018, size + 0.018, 0.015, 0.012), m.fabric, [0, boardH / 2, 0.023]);
   const material = main ? ctx.photoMaterial : new THREE.MeshBasicMaterial({ color: 0xffffff });
   const photo = new THREE.Mesh(new THREE.PlaneGeometry(size - 0.012, size - 0.012), material);
-  photo.position.set(0, centerY, 0.032);
-  p.mesh(photo);
+  photo.position.set(0, boardH / 2, 0.032);
+  panel.mesh(photo);
   if (main) ctx.mainPhoto = photo;
   else ctx.albumPhotos.push(material as THREE.MeshBasicMaterial);
+  const board = panel.finish();
+  board.position.set(0, lift, 0);
+  board.rotation.x = -tilt;
+
+  // 背面两条斜撑腿：从板背中上部落到台面外侧，正面也能看出相框是靠它立着的
+  const hingeY = boardH * 0.64;
+  const hingeX = size * 0.5 + 0.005;
+  const hingeZ = -0.017;
+  const hy = lift + hingeY * Math.cos(tilt) - hingeZ * Math.sin(tilt);
+  const hz = -hingeY * Math.sin(tilt) + hingeZ * Math.cos(tilt);
+  const footX = size * 0.5 + 0.12;
+  const footZ = -(0.06 + size * 0.3);
+  for (const side of [-1, 1]) {
+    p.beam(m.woodDark, [side * hingeX, hy, hz], [side * footX, 0.004, footZ], 0.008, 10);
+    p.add(new THREE.CylinderGeometry(0.011, 0.011, 0.026, 10), m.brass, [side * hingeX, hy, hz], [1, 1, 1], [0, 0, Math.PI / 2]);
+  }
+
   const group = p.finish();
-  group.rotation.x = -0.1;
+  group.add(board);
   return group;
 }
 
