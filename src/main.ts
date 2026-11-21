@@ -640,7 +640,8 @@ function frame() {
   if (!player.walking) marker.hide();
   marker.update(dt, t);
   crowd?.update(dt, t);
-  world.update(dt, t, camera, player.pos, pixelRatio());
+  // 小屋建在远处：开灯和月光阴影跟随小屋中心，其它时候仍跟随小人
+  world.update(dt, t, camera, world.shrine.isOpen ? world.shrine.center : player.pos, pixelRatio());
   guide.update(t, player.pos);
   interaction?.update(t);
   // 走进大厅右墙的门厅就进影厅；在影厅里走进后门的门厅就回大厅

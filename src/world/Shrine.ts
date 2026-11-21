@@ -49,10 +49,10 @@ const LETTER_SPOT: [number, number] = [0, 0.12];
 const DROP_H = 0.28;
 const DROP_TIME = 0.6;
 
-/** 暗幕只负责挡住房间缝隙外的大厅；房间本身有完整的墙、地板和天花板 */
-const VEIL = { h: 20, d: 14, inset: 0.6, half: 3, gap: 0.45 };
-/** 背墙位于房间中心后方 d/2，暗幕背面仍留在大厅照片墙前 */
-const OFFSET = VEIL.gap + S.room.d / 2 + 0.08;
+/** 暗幕在远处把整间小屋封闭起来；房间自身的墙、地板和天花板挡住大部分视线 */
+const VEIL = { w: 9, h: 12, d: 10 };
+/** 暗幕背面比房间背墙再靠后 8 厘米，避免两个面共面 */
+const VEIL_BACK = -S.room.d / 2 - 0.08;
 const DUST_Y = [0.35, 2.65] as const;
 
 export type ShrineHit = 'letter' | 'niche' | null;
@@ -94,7 +94,8 @@ function disposeText(mesh: THREE.Mesh | null) {
 /**
  * 单宠物视角：一间明亮、温暖的小屋。
  * 背墙是名字、照片和矮柜，左侧是窝与碗，右侧是落地灯和搁板，左墙有傍晚的窗。
- * Shrine 对外的入口、镜头中心、礼物和拾取接口保持不变；家具搭建与布置表在 PetRoom / config 里。
+ * 整间小屋和影厅一样建在主场景之外，避免大厅灯光叠加；Shrine 对外的入口、镜头中心、
+ * 礼物和拾取接口保持不变；家具搭建与布置表在 PetRoom / config 里。
  */
 export class Shrine {
   /** 当前打开的是哪张相框；没打开时是 null */
@@ -124,7 +125,6 @@ export class Shrine {
   private time = 0;
   /** 高画质才有微尘 */
   dusty = true;
-  private room: { axis: 'x' | 'z'; lo: number; hi: number } = { axis: 'x', lo: 0, hi: 0 };
   private ray = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
 
@@ -218,14 +218,15 @@ export class Shrine {
     world.updaters.push((dt) => this.update(dt));
   }
 
-  /** 镜头能不能到 (x, z)：得待在暗幕盒子里面，否则会看到盒子外面的大厅 */
+  /** 镜头能不能到 (x, z)：得待在远处暗幕盒子里面，否则会看到盒子外面的主场景 */
   inside(x: number, z: number, margin = 0.3) {
     const e = this.entry;
     if (!e) return true;
-    const { axis, lo, hi } = this.room;
-    const along = axis === 'x' ? x : z;
-    const out = (x - e.center.x) * e.normal.x + (z - e.center.z) * e.normal.z;
-    return along > lo + margin && along < hi - margin && out > VEIL.gap + margin && out < VEIL.gap + VEIL.d - margin;
+    const dx = x - this.center.x;
+    const dz = z - this.center.z;
+    const along = dx * e.normal.z - dz * e.normal.x;
+    const out = dx * e.normal.x + dz * e.normal.z;
+    return Math.abs(along) < VEIL.w / 2 - margin && out > VEIL_BACK + margin && out < VEIL_BACK + VEIL.d - margin;
   }
 
   get isOpen() {
@@ -235,13 +236,8 @@ export class Shrine {
   /** 布置成这只宠物的小屋。调用时画面应该是暗的，这里不做过渡 */
   open(entry: PhotoEntry) {
     this.entry = entry;
-    this.center.copy(entry.center).addScaledVector(entry.normal, OFFSET);
-    this.center.y = S.y;
-    const H = CONFIG.hall;
-    const axis = Math.abs(entry.normal.z) > 0.5 ? 'x' : 'z';
-    const [lo, hi] = axis === 'x' ? [-H.w / 2 + VEIL.inset, H.w / 2 - VEIL.inset] : [-H.d + VEIL.inset, -VEIL.inset];
-    this.center[axis] = THREE.MathUtils.clamp(this.center[axis], lo + VEIL.half, hi - VEIL.half);
-    this.room = { axis, lo, hi };
+    // 和影厅一样建在主场景之外：大厅的灯随距离自然衰减，不会叠进这间浅色小屋
+    this.center.set(S.stage.x, S.y, S.stage.z);
 
     for (const g of [this.root, this.stage]) {
       g.position.copy(this.center);
@@ -249,9 +245,8 @@ export class Shrine {
       g.visible = true;
       g.updateMatrixWorld(true);
     }
-    this.veil.scale.set(hi - lo, VEIL.h, VEIL.d);
-    this.veil.position.copy(entry.center).addScaledVector(entry.normal, VEIL.gap + VEIL.d / 2);
-    this.veil.position[axis] = (lo + hi) / 2;
+    this.veil.scale.set(VEIL.w, VEIL.h, VEIL.d);
+    this.veil.position.copy(this.center).addScaledVector(entry.normal, VEIL_BACK + VEIL.d / 2);
     this.veil.position.y = 0.1 + VEIL.h / 2;
     this.veil.rotation.y = entry.rotY;
     this.veil.visible = true;

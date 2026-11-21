@@ -64,7 +64,7 @@ export interface Lamp {
   intensity: number;
   distance: number;
   color: THREE.Color;
-  /** 到玩家的水平距离（减去 reach），每帧更新 */
+  /** 到玩家或独立场景中心的水平距离（减去 reach），每帧更新 */
   d: number;
   /** 这盏灯比别的灯多远还亮着（大山洞里照远处洞壁的灯）。不写就是 0 */
   reach?: number;

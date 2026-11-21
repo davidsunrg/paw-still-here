@@ -152,8 +152,8 @@ export const CONFIG = {
     environment: { env: 0.5 },
     /** 自发光强度：窗景不超过 1，灯罩临界微亮，只有小灯泡保留明显但局部的辉光 */
     glow: { window: 0.94, shade: 1.02, bulbs: 1.4 },
-    /** 暗幕只挡房间缝隙外的大厅；微尘数量、亮度和上升速度（高画质才有微尘） */
-    stage: { color: 0x131916, glow: 0xffd6a0, dust: 24, dustGlow: 0.28, dustSpeed: 0.025 },
+    /** 小屋在主场景外的中心 x / z；暗幕颜色；微尘数量、亮度和上升速度（高画质才有微尘） */
+    stage: { x: 600, z: 0, color: 0x131916, glow: 0xffd6a0, dust: 24, dustGlow: 0.28, dustSpeed: 0.025 },
     /** 落地灯和窗口补光的强度；其余亮度由每件材质自己的环境贴图均匀提供 */
     light: 1,
     windowLight: 0.75,

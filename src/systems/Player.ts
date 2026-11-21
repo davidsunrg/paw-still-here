@@ -65,7 +65,7 @@ interface Focus {
   dist: number;
   turn: number;
   turnTo: number;
-  /** 镜头转的时候能不能到某个位置（除了不进墙之外的限制） */
+  /** 镜头转的时候能不能到某个位置；提供时完全负责边界，可用于主场景之外的独立房间 */
   allow?: (x: number, z: number) => boolean;
   /** 小人站到哪里、面向哪里 */
   stand: THREE.Vector3;
@@ -211,7 +211,9 @@ export class Player {
     const to = THREE.MathUtils.clamp(f.turnTo + by, -CAM.focusTurn, CAM.focusTurn);
     const x = f.look.x + Math.sin(f.base + to) * f.dist;
     const z = f.look.z + Math.cos(f.base + to) * f.dist;
-    if (!this.blocked(x, z) && (f.allow?.(x, z) ?? true)) f.turnTo = to;
+    // 有 allow 的特写（宠物小屋）建在主场景之外，由它自己的封闭空间判断边界；
+    // 没有 allow 时仍沿用主场景的墙和步行范围
+    if (f.allow ? f.allow(x, z) : !this.blocked(x, z)) f.turnTo = to;
   }
 
   private pinchSpan() {
